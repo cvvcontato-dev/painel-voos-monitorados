@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import logo from './assets/logo.png';
 
 const API_URL = '/api/flights';
 
@@ -111,9 +112,7 @@ function App() {
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-500/20 p-3 rounded-xl border border-indigo-500/30">
-            <Plane className="w-8 h-8 text-indigo-400" />
-          </div>
+          <img src={logo} alt="Clube do Voo Viagens" className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/20" />
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
               Monitoramento de Voos
