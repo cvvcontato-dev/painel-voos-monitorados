@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+backend/database.sqlite
+backend/node_modules
+frontend/node_modules
+frontend/dist
+.agent
+.env
