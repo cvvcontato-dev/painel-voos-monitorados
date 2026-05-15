@@ -112,7 +112,7 @@ const frontendPath = path.join(__dirname, 'public');
 app.use(express.static(frontendPath));
 
 // All non-API routes serve the React app (SPA fallback)
-app.get('*', (req, res) => {
+app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
