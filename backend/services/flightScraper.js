@@ -33,38 +33,140 @@ async function detectBlock(page) {
 }
 
 /**
- * Extract flight prices from a Google Flights page.
- * Returns the lowest price found between R$100 and R$50,000.
+ * Dismiss suggestion popups (e.g. "Viaje em X por R$ Y") and other overlays
+ * that contain prices from different dates.
+ */
+async function dismissSuggestions(page) {
+    try {
+        // Close any "suggested dates" popup — look for close/dismiss buttons
+        const closeButtons = await page.$$('button[aria-label="Fechar"], button[aria-label="Close"], button[aria-label="Dispensar"]');
+        for (const btn of closeButtons) {
+            try { await btn.click({ timeout: 1000 }); } catch (e) { /* ignore */ }
+        }
+
+        // Also try to click X buttons inside suggestion banners
+        const xButtons = await page.$$('[role="dialog"] button, [class*="suggestion"] button, [class*="banner"] button');
+        for (const btn of xButtons) {
+            try {
+                const text = await btn.textContent();
+                if (text && text.trim().length <= 3) { // small buttons like "X" or "✕"
+                    await btn.click({ timeout: 1000 });
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        await page.waitForTimeout(500);
+    } catch (e) {
+        console.log('[SCRAPER] Aviso ao fechar sugestões:', e.message);
+    }
+}
+
+/**
+ * Extract flight prices ONLY from actual flight result rows.
+ * Ignores suggestion popups, calendar views, and promotional banners.
  */
 async function extractPrices(page) {
     return await page.evaluate(() => {
         const prices = [];
-        const selectors = [
-            '[data-gs] span',
-            '[jsname="YdtKid"]',
-            'span[data-gs]',
-            '.YMlIz span', // common Google Flights price container
-            'span'
-        ];
-
         const seen = new Set();
 
-        for (const selector of selectors) {
-            const elements = document.querySelectorAll(selector);
-            for (const el of elements) {
-                const text = el.textContent.trim();
-                // Match R$ patterns: R$ 1.234, R$ 1234, R$1.234,56
-                const match = text.match(/R\$\s*([\d.,]+)/);
-                if (match) {
-                    // Parse Brazilian number format: 1.234,56 -> 1234.56
-                    let numStr = match[1]
-                        .replace(/\./g, '')  // remove thousand separators
-                        .replace(',', '.');  // decimal comma to dot
-                    const num = parseFloat(numStr);
-                    if (!isNaN(num) && num >= 100 && num <= 50000 && !seen.has(num)) {
-                        seen.add(num);
-                        prices.push({ value: num, selector, text: text.substring(0, 60) });
+        // Strategy 1: Target flight result list items specifically
+        // Google Flights uses list items (li) inside an ordered/unordered list for results
+        const flightRows = document.querySelectorAll(
+            'li[class*="pIav2d"], ' +       // flight result item
+            'div[class*="yR1fYc"], ' +       // result row container
+            'div[class*="Rk10dc"], ' +       // result container
+            '[data-ved] li, ' +              // results with tracking
+            'ul[class*="Rk10dc"] > li, ' +   // list of flight results
+            'ol > li'                         // ordered list items
+        );
+
+        // Function to extract R$ value from text
+        function parsePrice(text) {
+            const match = text.match(/R\$\s*([\d.,]+)/);
+            if (!match) return null;
+            let numStr = match[1].replace(/\./g, '').replace(',', '.');
+            const num = parseFloat(numStr);
+            if (isNaN(num) || num < 100 || num > 50000) return null;
+            return num;
+        }
+
+        // If we found flight row containers, extract prices ONLY from those
+        if (flightRows.length > 0) {
+            for (const row of flightRows) {
+                // Skip if this row is inside a suggestion/promotion area
+                const parent = row.closest('[class*="suggestion"], [class*="banner"], [role="dialog"], [class*="calendar"]');
+                if (parent) continue;
+
+                // Check if this row contains flight-like content (airline, time, duration)
+                const rowText = row.textContent || '';
+                const hasFlightIndicators = (
+                    /\d{1,2}:\d{2}/.test(rowText) ||          // has time like 06:05
+                    /sem escala|escala/i.test(rowText) ||      // has "sem escalas"
+                    /\d+h\s*\d*\s*min/i.test(rowText) ||      // has duration like "1h 40 min"
+                    /ida e volta/i.test(rowText)               // has "ida e volta"
+                );
+
+                if (!hasFlightIndicators) continue;
+
+                // Extract price from this specific row
+                const priceEls = row.querySelectorAll('span, div');
+                for (const el of priceEls) {
+                    const text = el.textContent.trim();
+                    // Skip if this element contains suggestion text
+                    if (/viaje em|alterar data|sugest|qualquer data/i.test(text)) continue;
+                    // Skip very long text blocks (not a price element)
+                    if (text.length > 30) continue;
+
+                    const price = parsePrice(text);
+                    if (price && !seen.has(price)) {
+                        seen.add(price);
+                        prices.push({
+                            value: price,
+                            selector: 'flight-row',
+                            text: text.substring(0, 60)
+                        });
                     }
+                }
+            }
+        }
+
+        // Strategy 2: If Strategy 1 found nothing, fall back to targeted selectors
+        // but EXCLUDE suggestion/promotion areas
+        if (prices.length === 0) {
+            const excludeSelectors = [
+                '[class*="suggestion"]',
+                '[class*="banner"]',
+                '[class*="calendar"]',
+                '[role="dialog"]',
+                '[class*="promo"]'
+            ].join(', ');
+
+            const allSpans = document.querySelectorAll('span');
+            for (const el of allSpans) {
+                // Skip elements inside suggestion/promotion areas
+                if (el.closest(excludeSelectors)) continue;
+
+                const text = el.textContent.trim();
+                // Skip if contains suggestion keywords
+                if (/viaje em|alterar data|sugest|qualquer data|monitorar preço/i.test(text)) continue;
+                if (text.length > 30) continue;
+
+                const price = parsePrice(text);
+                if (price && !seen.has(price)) {
+                    // Check if this price is near flight-related content
+                    const parentRow = el.closest('li, tr, [role="listitem"]');
+                    if (parentRow) {
+                        const rowText = parentRow.textContent || '';
+                        if (/viaje em|alterar data|sugest/i.test(rowText)) continue;
+                    }
+
+                    seen.add(price);
+                    prices.push({
+                        value: price,
+                        selector: 'fallback-span',
+                        text: text.substring(0, 60)
+                    });
                 }
             }
         }
@@ -124,7 +226,10 @@ async function scrapeFlightPrice(url) {
                 return { preco: null, bloqueado: true, motivo: blockCheck.motivo };
             }
 
-            // Extract prices
+            // Dismiss any suggestion popups before extracting prices
+            await dismissSuggestions(page);
+
+            // Extract prices from actual flight results only
             const prices = await extractPrices(page);
 
             if (prices.length === 0) {
@@ -141,7 +246,8 @@ async function scrapeFlightPrice(url) {
             prices.sort((a, b) => a.value - b.value);
             const lowest = prices[0];
 
-            console.log(`[SCRAPER] ✓ Preço encontrado: R$ ${lowest.value.toFixed(2)} | Seletor: ${lowest.selector} | Texto: "${lowest.text}"`);
+            console.log(`[SCRAPER] ✓ Preço encontrado: R$ ${lowest.value.toFixed(2)} | Via: ${lowest.selector} | Texto: "${lowest.text}"`);
+            console.log(`[SCRAPER]   Todos os preços: ${prices.map(p => `R$ ${p.value}`).join(', ')}`);
 
             return { preco: lowest.value, bloqueado: false };
 
@@ -153,11 +259,7 @@ async function scrapeFlightPrice(url) {
             }
         } finally {
             if (browser) {
-                try {
-                    await browser.close();
-                } catch (e) {
-                    console.error('[SCRAPER] Erro ao fechar browser:', e.message);
-                }
+                try { await browser.close(); } catch (e) { /* ignore */ }
             }
         }
     }
