@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, ArrowUp, ArrowDown } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import logo from './assets/logo.png';
 
@@ -11,6 +11,7 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('manual');
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
@@ -38,7 +39,14 @@ function App() {
       });
     } else {
       setEditingFlight(null);
-      reset();
+      reset({
+        cliente: '',
+        mes_viagem: '',
+        prioridade: '',
+        preco_esperado: '',
+        link_voo: '',
+        quantidade_pax: 1
+      });
     }
     setIsModalOpen(true);
   };
@@ -54,12 +62,16 @@ function App() {
       const payload = {
         ...data,
         preco_esperado: parseFloat(data.preco_esperado),
+        quantidade_pax: parseInt(data.quantidade_pax || 1, 10),
         check_diario: !!data.check_diario
       };
 
       if (editingFlight) {
         await axios.put(`${API_URL}/${editingFlight.id}`, payload);
       } else {
+        // Place new flight at the end of the manual positions list
+        const maxPos = flights.length > 0 ? Math.max(...flights.map(f => f.posicao || 0)) : 0;
+        payload.posicao = maxPos + 1;
         await axios.post(API_URL, payload);
       }
       fetchFlights();
@@ -97,6 +109,85 @@ function App() {
     }
   };
 
+  const toggleAllChecks = async () => {
+    const anyUnchecked = flights.some(f => !f.check_diario);
+    const newStatus = anyUnchecked;
+    try {
+      await axios.put(`${API_URL}/bulk-check`, { check_diario: newStatus });
+      fetchFlights();
+    } catch (error) {
+      console.error('Error updating all checks', error);
+    }
+  };
+
+  const moveFlight = async (index, direction) => {
+    if (sortBy !== 'manual') {
+      alert('Mude a ordenação para "Manual" para reordenar!');
+      return;
+    }
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= flights.length) return;
+
+    const newFlights = [...flights];
+    const temp = newFlights[index];
+    newFlights[index] = newFlights[targetIndex];
+    newFlights[targetIndex] = temp;
+
+    // Instantly update local state for Snappy UI response
+    setFlights(newFlights);
+
+    try {
+      const ids = newFlights.map(f => f.id);
+      await axios.put(`${API_URL}/reorder`, { ids });
+    } catch (error) {
+      console.error('Error saving manual order', error);
+    }
+  };
+
+  const priorityRank = {
+    'Urgente': 4,
+    'Alta': 3,
+    'Média': 2,
+    'Baixa': 1
+  };
+
+  const parseTravelDate = (dateStr) => {
+    if (!dateStr) return new Date(0);
+    const parts = dateStr.split('/');
+    if (parts.length < 2) return new Date(0);
+    const monthStr = parts[0].trim().toLowerCase();
+    const yearStr = parts[1].trim();
+    
+    let month = 0;
+    const monthsMap = {
+      'jan': 0, 'janeiro': 0, '01': 0,
+      'fev': 1, 'fevereiro': 1, '02': 1,
+      'mar': 2, 'março': 2, '03': 2,
+      'abr': 3, 'abril': 3, '04': 3,
+      'mai': 4, 'maio': 4, '05': 4,
+      'jun': 5, 'junho': 5, '06': 5,
+      'jul': 6, 'julho': 6, '07': 6,
+      'ago': 7, 'agosto': 7, '08': 7,
+      'set': 8, 'setembro': 8, '09': 8,
+      'out': 9, 'outubro': 9, '10': 9,
+      'nov': 10, 'novembro': 10, '11': 10,
+      'dez': 11, 'dezembro': 11, '12': 11
+    };
+    
+    for (const key in monthsMap) {
+      if (monthStr.startsWith(key)) {
+        month = monthsMap[key];
+        break;
+      }
+    }
+    
+    let year = parseInt(yearStr, 10);
+    if (yearStr.length === 2) {
+      year += 2000;
+    }
+    return new Date(year, month, 1);
+  };
+
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'Urgente': return 'bg-red-500/10 text-red-400 border border-red-500/20';
@@ -107,6 +198,18 @@ function App() {
     }
   };
 
+  const sortedFlights = [...flights].sort((a, b) => {
+    if (sortBy === 'priority') {
+      return (priorityRank[b.prioridade] || 0) - (priorityRank[a.prioridade] || 0);
+    }
+    if (sortBy === 'date') {
+      return parseTravelDate(a.mes_viagem) - parseTravelDate(b.mes_viagem);
+    }
+    return 0; // manual order already preserved
+  });
+
+  const allChecked = flights.length > 0 && flights.every(f => f.check_diario);
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -115,9 +218,9 @@ function App() {
           <img src={logo} alt="Clube do Voo Viagens" className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/20" />
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-              Monitoramento de Voos
+              Monitoramento de Voos Prime
             </h1>
-            <p className="text-slate-400 text-sm mt-1">Gerencie e acompanhe preços de passagens aéreas</p>
+            <p className="text-slate-400 text-sm mt-1">Painel administrativo de passagens aéreas monitoradas</p>
           </div>
         </div>
         <button
@@ -129,24 +232,93 @@ function App() {
         </button>
       </header>
 
+      {/* Stats and Filter Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
+          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
+            <Plane className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 font-medium">Total de Voos</div>
+            <div className="text-lg font-bold text-white">{flights.length}</div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
+          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 font-medium">Passageiros (Pax)</div>
+            <div className="text-lg font-bold text-white">
+              {flights.reduce((acc, curr) => acc + (curr.quantidade_pax || 1), 0)}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
+          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 font-medium">Checks Concluídos</div>
+            <div className="text-lg font-bold text-white">
+              {flights.filter(f => f.check_diario).length} / {flights.length}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 w-full">
+            <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
+              <span className="text-xs font-bold font-mono">ORD</span>
+            </div>
+            <div className="w-full">
+              <div className="text-xs text-slate-400 font-medium">Ordenar por</div>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-transparent border-0 text-sm font-bold text-white focus:ring-0 focus:outline-none cursor-pointer w-full mt-0.5 animate-fade-in"
+              >
+                <option value="manual" className="bg-slate-900 text-white">Manual ↕</option>
+                <option value="priority" className="bg-slate-900 text-white">Prioridade ★</option>
+                <option value="date" className="bg-slate-900 text-white">Data Viagem 📅</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
-      <main className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
+      <main className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden animate-fade-in">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400">
+                {sortBy === 'manual' && <th className="px-4 py-4 font-semibold w-12 text-center">Pos</th>}
                 <th className="px-6 py-4 font-semibold">Cliente</th>
                 <th className="px-6 py-4 font-semibold">Viagem</th>
                 <th className="px-6 py-4 font-semibold">Prioridade</th>
                 <th className="px-6 py-4 font-semibold">Preço Alvo</th>
-                <th className="px-6 py-4 font-semibold text-center">Check Diário</th>
+                <th className="px-6 py-4 font-semibold text-center select-none">
+                  <div className="flex items-center justify-center gap-2">
+                    <span>Check Diário</span>
+                    <button 
+                      onClick={toggleAllChecks}
+                      className="p-1 hover:bg-slate-800 rounded transition-colors text-indigo-400 hover:text-indigo-300 font-semibold text-[10px] tracking-wide border border-indigo-400/20 cursor-pointer active:scale-95"
+                      title={allChecked ? "Desmarcar todos" : "Marcar todos"}
+                    >
+                      {allChecked ? "DESMARCAR ALL" : "MARCAR ALL"}
+                    </button>
+                  </div>
+                </th>
                 <th className="px-6 py-4 font-semibold text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={sortBy === 'manual' ? 7 : 6} className="px-6 py-12 text-center text-slate-400">
                     <div className="flex justify-center items-center gap-2">
                       <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
                       Carregando voos...
@@ -155,23 +327,51 @@ function App() {
                 </tr>
               ) : flights.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={sortBy === 'manual' ? 7 : 6} className="px-6 py-12 text-center text-slate-400">
                     <Plane className="w-12 h-12 mx-auto text-slate-600 mb-3 opacity-50" />
                     <p>Nenhum voo sendo monitorado.</p>
                     <p className="text-sm mt-1">Clique em "Novo Voo" para começar.</p>
                   </td>
                 </tr>
               ) : (
-                flights.map((flight) => (
+                sortedFlights.map((flight, index) => (
                   <tr key={flight.id} className="hover:bg-slate-800/30 transition-colors group">
+                    {sortBy === 'manual' && (
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            onClick={() => moveFlight(index, -1)}
+                            disabled={index === 0}
+                            className={`p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            title="Mover para cima"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => moveFlight(index, 1)}
+                            disabled={index === flights.length - 1}
+                            className={`p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ${index === flights.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                            title="Mover para baixo"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                     <td className="px-6 py-4">
-                      <div className="font-medium text-slate-200">{flight.cliente}</div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-200">{flight.cliente}</span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Users className="w-3.5 h-3.5 text-slate-500" />
+                          {flight.quantidade_pax || 1} { (flight.quantidade_pax || 1) === 1 ? 'passageiro' : 'passageiros' }
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-slate-300">
                       {flight.mes_viagem}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-3 py-1 text-xs font-medium rounded-full ${getPriorityColor(flight.prioridade)}`}>
+                      <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getPriorityColor(flight.prioridade)}`}>
                         {flight.prioridade}
                       </span>
                     </td>
@@ -237,16 +437,32 @@ function App() {
             </div>
             
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                  <User className="w-4 h-4" /> Cliente
-                </label>
-                <input 
-                  {...register('cliente', { required: true })} 
-                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all px-4 py-2.5 rounded-lg"
-                  placeholder="Nome do cliente"
-                />
-                {errors.cliente && <span className="text-xs text-red-400">Campo obrigatório</span>}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                    <User className="w-4 h-4" /> Cliente
+                  </label>
+                  <input 
+                    {...register('cliente', { required: true })} 
+                    className="w-full bg-slate-800/50 border border-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all px-4 py-2.5 rounded-lg"
+                    placeholder="Nome do cliente"
+                  />
+                  {errors.cliente && <span className="text-xs text-red-400">Campo obrigatório</span>}
+                </div>
+
+                <div className="col-span-1 space-y-1">
+                  <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Pax
+                  </label>
+                  <input 
+                    type="number"
+                    min="1"
+                    {...register('quantidade_pax', { required: true, min: 1 })} 
+                    className="w-full bg-slate-800/50 border border-slate-700 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all px-4 py-2.5 rounded-lg"
+                    placeholder="1"
+                  />
+                  {errors.quantidade_pax && <span className="text-xs text-red-400">Mínimo 1</span>}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

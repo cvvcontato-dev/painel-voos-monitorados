@@ -17,12 +17,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
             prioridade TEXT NOT NULL CHECK(prioridade IN ('Urgente', 'Alta', 'Média', 'Baixa')),
             preco_esperado REAL NOT NULL,
             check_diario BOOLEAN NOT NULL DEFAULT 0,
-            link_voo TEXT NOT NULL UNIQUE
+            link_voo TEXT NOT NULL UNIQUE,
+            quantidade_pax INTEGER NOT NULL DEFAULT 1,
+            posicao INTEGER NOT NULL DEFAULT 0
         )`, (err) => {
             if (err) {
                 console.error('Error creating table', err.message);
             } else {
                 console.log('Flights table created or already exists.');
+                // Migrations to add columns to existing table
+                db.run("ALTER TABLE flights ADD COLUMN quantidade_pax INTEGER NOT NULL DEFAULT 1", (err) => {
+                    if (err && !err.message.includes('duplicate column name')) {
+                        console.error('Error adding quantidade_pax column:', err.message);
+                    }
+                });
+                db.run("ALTER TABLE flights ADD COLUMN posicao INTEGER NOT NULL DEFAULT 0", (err) => {
+                    if (err && !err.message.includes('duplicate column name')) {
+                        console.error('Error adding posicao column:', err.message);
+                    }
+                });
             }
         });
     }

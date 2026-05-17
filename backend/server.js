@@ -13,11 +13,45 @@ app.use(express.json());
 
 // Get all flights
 app.get('/api/flights', (req, res) => {
-    db.all('SELECT * FROM flights ORDER BY id DESC', [], (err, rows) => {
+    db.all('SELECT * FROM flights ORDER BY posicao ASC, id DESC', [], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
         res.json(rows);
+    });
+});
+
+// Bulk check/uncheck all flights
+app.put('/api/flights/bulk-check', (req, res) => {
+    const { check_diario } = req.body;
+    const isCheckDiario = check_diario ? 1 : 0;
+    
+    db.run('UPDATE flights SET check_diario = ?', [isCheckDiario], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: `Updated all flights check status to ${isCheckDiario}`, changes: this.changes });
+    });
+});
+
+// Bulk reorder flights manually
+app.put('/api/flights/reorder', (req, res) => {
+    const { ids } = req.body; // Array of IDs in the desired order
+    if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: 'Invalid ids array' });
+    }
+
+    db.serialize(() => {
+        const stmt = db.prepare('UPDATE flights SET posicao = ? WHERE id = ?');
+        ids.forEach((id, index) => {
+            stmt.run(index, id);
+        });
+        stmt.finalize((err) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ message: 'Reordered successfully' });
+        });
     });
 });
 
@@ -37,17 +71,19 @@ app.get('/api/flights/:id', (req, res) => {
 
 // Create a flight
 app.post('/api/flights', (req, res) => {
-    const { cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo } = req.body;
+    const { cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo, quantidade_pax, posicao } = req.body;
     
     if (!cliente || !mes_viagem || !prioridade || preco_esperado == null || !link_voo) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const isCheckDiario = check_diario ? 1 : 0;
+    const paxQty = quantidade_pax != null ? parseInt(quantidade_pax, 10) : 1;
+    const pos = posicao != null ? parseInt(posicao, 10) : 0;
 
-    const sql = `INSERT INTO flights (cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo)
-                 VALUES (?, ?, ?, ?, ?, ?)`;
-    const params = [cliente, mes_viagem, prioridade, preco_esperado, isCheckDiario, link_voo];
+    const sql = `INSERT INTO flights (cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo, quantidade_pax, posicao)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const params = [cliente, mes_viagem, prioridade, preco_esperado, isCheckDiario, link_voo, paxQty, pos];
 
     db.run(sql, params, function(err) {
         if (err) {
@@ -56,27 +92,41 @@ app.post('/api/flights', (req, res) => {
             }
             return res.status(500).json({ error: err.message });
         }
-        res.status(201).json({ id: this.lastID, cliente, mes_viagem, prioridade, preco_esperado, check_diario: isCheckDiario, link_voo });
+        res.status(201).json({ 
+            id: this.lastID, 
+            cliente, 
+            mes_viagem, 
+            prioridade, 
+            preco_esperado, 
+            check_diario: isCheckDiario, 
+            link_voo,
+            quantidade_pax: paxQty,
+            posicao: pos
+        });
     });
 });
 
 // Update a flight
 app.put('/api/flights/:id', (req, res) => {
     const { id } = req.params;
-    const { cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo } = req.body;
+    const { cliente, mes_viagem, prioridade, preco_esperado, check_diario, link_voo, quantidade_pax, posicao } = req.body;
 
-    const isCheckDiario = check_diario ? 1 : 0;
+    const isCheckDiario = check_diario !== undefined ? (check_diario ? 1 : 0) : null;
+    const paxQty = quantidade_pax !== undefined ? parseInt(quantidade_pax, 10) : null;
+    const pos = posicao !== undefined ? parseInt(posicao, 10) : null;
 
     const sql = `UPDATE flights 
                  SET cliente = COALESCE(?, cliente), 
                      mes_viagem = COALESCE(?, mes_viagem), 
                      prioridade = COALESCE(?, prioridade), 
                      preco_esperado = COALESCE(?, preco_esperado), 
-                     check_diario = COALESCE(?, check_diario), 
-                     link_voo = COALESCE(?, link_voo)
+                     check_diario = COALESCE(?, check_diario, check_diario), 
+                     link_voo = COALESCE(?, link_voo),
+                     quantidade_pax = COALESCE(?, quantidade_pax),
+                     posicao = COALESCE(?, posicao)
                  WHERE id = ?`;
                  
-    const params = [cliente, mes_viagem, prioridade, preco_esperado, isCheckDiario, link_voo, id];
+    const params = [cliente, mes_viagem, prioridade, preco_esperado, isCheckDiario, link_voo, paxQty, pos, id];
 
     db.run(sql, params, function(err) {
         if (err) {
