@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, GripVertical } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import logo from './assets/logo.png';
 
@@ -120,27 +120,36 @@ function App() {
     }
   };
 
-  const moveFlight = async (index, direction) => {
-    if (sortBy !== 'manual') {
-      alert('Mude a ordenação para "Manual" para reordenar!');
-      return;
-    }
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= flights.length) return;
+  const [draggedIndex, setDraggedIndex] = useState(null);
+
+  const handleDragStart = (e, index) => {
+    if (sortBy !== 'manual') return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, index) => {
+    if (sortBy !== 'manual') return;
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
 
     const newFlights = [...flights];
-    const temp = newFlights[index];
-    newFlights[index] = newFlights[targetIndex];
-    newFlights[targetIndex] = temp;
+    const draggedItem = newFlights[draggedIndex];
+    
+    newFlights.splice(draggedIndex, 1);
+    newFlights.splice(index, 0, draggedItem);
 
-    // Instantly update local state for Snappy UI response
     setFlights(newFlights);
+    setDraggedIndex(index);
+  };
 
+  const handleDragEnd = async () => {
+    setDraggedIndex(null);
     try {
-      const ids = newFlights.map(f => f.id);
+      const ids = flights.map(f => f.id);
       await axios.put(`${API_URL}/reorder`, { ids });
     } catch (error) {
-      console.error('Error saving manual order', error);
+      console.error('Error saving manual order after drag', error);
     }
   };
 
@@ -323,26 +332,20 @@ function App() {
                 </tr>
               ) : (
                 sortedFlights.map((flight, index) => (
-                  <tr key={flight.id} className="hover:bg-slate-800/30 transition-colors group">
+                  <tr 
+                    key={flight.id}
+                    draggable={sortBy === 'manual'}
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                    className={`hover:bg-slate-800/30 transition-all duration-150 group border-b border-slate-800/30 ${
+                      sortBy === 'manual' ? 'cursor-move' : ''
+                    } ${draggedIndex === index ? 'opacity-30 bg-indigo-500/10 border-indigo-500/30' : ''}`}
+                  >
                     {sortBy === 'manual' && (
-                      <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <button
-                            onClick={() => moveFlight(index, -1)}
-                            disabled={index === 0}
-                            className={`p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                            title="Mover para cima"
-                          >
-                            <ArrowUp className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => moveFlight(index, 1)}
-                            disabled={index === flights.length - 1}
-                            className={`p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ${index === flights.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                            title="Mover para baixo"
-                          >
-                            <ArrowDown className="w-4 h-4" />
-                          </button>
+                      <td className="px-4 py-4 text-center select-none text-slate-500 group-hover:text-slate-300 transition-colors">
+                        <div className="flex justify-center items-center">
+                          <GripVertical className="w-5 h-5 cursor-grab active:cursor-grabbing" />
                         </div>
                       </td>
                     )}
