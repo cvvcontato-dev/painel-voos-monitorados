@@ -1,9 +1,23 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+const path = require('path');
+const fs = require('fs');
+
+// Load .env from multiple possible locations
+const envPaths = [
+    path.resolve(__dirname, '.env'),
+    path.resolve(__dirname, '../.env'),
+    '/data/.env'
+];
+const envPath = envPaths.find(p => fs.existsSync(p));
+if (envPath) {
+    require('dotenv').config({ path: envPath });
+    console.log(`[ENV] Loaded from ${envPath}`);
+} else {
+    require('dotenv').config();
+    console.log('[ENV] No .env file found, using process env only');
+}
 
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 const db = require('./database');
 const { startScheduler, processFlight } = require('./services/scheduler');
 

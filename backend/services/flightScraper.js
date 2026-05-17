@@ -84,17 +84,24 @@ async function scrapeFlightPrice(url) {
         try {
             console.log(`[SCRAPER] Tentativa ${attempt}/${MAX_RETRIES} para: ${url.substring(0, 80)}...`);
 
-            browser = await chromium.launch({
+            const launchOptions = {
                 headless: true,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
                     '--disable-gpu',
-                    '--disable-web-security',
                     '--single-process'
                 ]
-            });
+            };
+
+            // Use system Chromium if available (Docker)
+            if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+                launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+                console.log(`[SCRAPER] Usando Chromium do sistema: ${launchOptions.executablePath}`);
+            }
+
+            browser = await chromium.launch(launchOptions);
 
             const context = await browser.newContext({
                 userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
