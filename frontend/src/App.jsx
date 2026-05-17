@@ -233,7 +233,7 @@ function App() {
       </header>
 
       {/* Stats and Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
           <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
             <Plane className="w-5 h-5" />
@@ -241,18 +241,6 @@ function App() {
           <div>
             <div className="text-xs text-slate-400 font-medium">Total de Voos</div>
             <div className="text-lg font-bold text-white">{flights.length}</div>
-          </div>
-        </div>
-
-        <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-medium">Passageiros (Pax)</div>
-            <div className="text-lg font-bold text-white">
-              {flights.reduce((acc, curr) => acc + (curr.quantidade_pax || 1), 0)}
-            </div>
           </div>
         </div>
 
