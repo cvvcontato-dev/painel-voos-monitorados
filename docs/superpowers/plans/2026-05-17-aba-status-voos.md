@@ -2062,7 +2062,9 @@ Edit `frontend/src/components/PrecosTab.jsx` and **remove** the `<header>` block
 
 Change the signature to `export default function PrecosTab({ showToast })` and remove the local `toast` state. Replace internal calls to `showToast` to use the prop.
 
-Also remove the `import logo from './assets/logo.png'`, `import Toast`, `import SettingsModal`, and the `Settings`, `Plus` icons used by the header.
+Also remove `import logo from '../assets/logo.png'`, `import Toast from './Toast'`, `import SettingsModal from './SettingsModal'`, and the `Settings` icon used by the header.
+
+> **Keep** the `Plus` icon import and the "Novo Voo" button — the price-tab still owns its own create-flight CTA. Move that button to a new toolbar row inside `PrecosTab` (e.g., above the stat cards: `<div className="flex justify-end mb-4"><button onClick={...}><Plus.../> Novo Voo</button></div>`), mirroring the toolbar pattern that `StatusTab` will use in Task 4.3.
 
 - [ ] **Step 3: New App.jsx**
 
