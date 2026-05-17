@@ -209,7 +209,7 @@ Função principal `checkDueFlights()`, chamada pelo scheduler a cada 5min:
      - `atrasado`: `partida_estimada - partida_programada >= DELAY_THRESHOLD_MIN` (default 15min)
      - `reagendado`: `partida_programada` mudou (≠ atraso pontual)
      - `portao_alterado` / `terminal_alterado`: campos mudaram (sem notificação)
-   - **Anti-spam:** para cada evento notificável, busca último registro do mesmo `evento` na história desse voo; se `payload_json` idêntico → grava `check_ok` em vez de re-notificar.
+   - **Anti-spam:** para cada evento notificável, busca último registro do mesmo `evento` na história desse voo; se `payload_json` idêntico → grava `check_ok` em vez de re-notificar. **Snapshot em `monitored_flights_status` é atualizado normalmente** mesmo quando o anti-spam suprime a notificação.
    - Persiste eventos detectados em `flight_status_history` (com `payload_json` descrevendo mudanças).
    - Atualiza `monitored_flights_status` (todos os campos snapshot + `ultima_verificacao = now`).
    - **Auto-arquivamento:** se `status_atual = 'landed'` && `chegada_estimada < now - 2h` → seta `monitoramento_ativo = 0` e registra evento `arquivado_auto`.
@@ -382,9 +382,10 @@ Documentar no `README.md` raiz (seção nova "Aba Status") como obter a key da R
 1. Posso cadastrar um voo (número + data + cliente) pela UI e ele aparece na lista.
 2. Edito a cadência de um voo; a `proxima_verificacao` é recalculada.
 3. Disparo "check now"; o snapshot atualiza e o histórico ganha um evento.
-4. Quando a API retorna mudança de status para `cancelled`, recebo email + Telegram com template vermelho.
-5. Quando a mesma condição persiste no próximo ciclo, **não** recebo alerta duplicado (anti-spam).
-6. Voo com `landed` há +2h é automaticamente pausado.
-7. Aba "Preços" continua funcionando exatamente como antes (zero regressão).
-8. Tabs persistem ao recarregar a página.
-9. Todos os timestamps no DB são UTC; UI exibe em horário local.
+4. Quando a API retorna mudança de status para `cancelled`, recebo email + Telegram com template **vermelho**.
+5. Quando a API retorna atraso ≥ `DELAY_THRESHOLD_MIN` ou reagendamento, recebo email + Telegram com template **âmbar**, indicando "antes → depois".
+6. Quando a mesma condição persiste no próximo ciclo, **não** recebo alerta duplicado (anti-spam).
+7. Voo com `landed` há +2h é automaticamente pausado.
+8. Aba "Preços" continua funcionando exatamente como antes (zero regressão).
+9. Tabs persistem ao recarregar a página.
+10. Todos os timestamps no DB são UTC; UI exibe em horário local.
