@@ -16,8 +16,21 @@ if (envPath) {
     console.log('[ENV] No .env file found, using process env only');
 }
 
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+    console.error('[AUTH] FATAL: SESSION_SECRET is not set. Generate one with: openssl rand -hex 32');
+    process.exit(1);
+}
+
 const express = require('express');
 const cors = require('cors');
+const session = require('express-session');
+const cookieParser = require('cookie-parser');
+const SqliteStore = require('connect-sqlite3')(session);
+const csrfMiddleware = require('./middleware/csrf');
+const requireAuth = require('./middleware/requireAuth');
+const authRouter = require('./routes/auth');
+// NOTE: usersRouter is added in Task 10 — leave this commented for now:
+// const usersRouter = require('./routes/users');
 const { startScheduler, startStatusScheduler } = require('./services/scheduler');
 const monitoredFlightsRouter = require('./routes/monitoredFlights');
 const flightsRouter = require('./routes/flights');
@@ -26,12 +39,45 @@ const settingsRouter = require('./routes/settings');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 app.use(cors());
 app.use(express.json());
 
+app.use(cookieParser());
+app.use(session({
+    store: new SqliteStore({
+        db: 'database.sqlite',
+        dir: process.env.DB_PATH || __dirname,
+        cleanupInterval: 3600
+    }),
+    name: 'cvv.sid',
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production',
+    }
+}));
+
+// 1. CSRF middleware for all /api routes
+app.use('/api', csrfMiddleware);
+
+// 2. Auth router BEFORE global requireAuth
+app.use('/api/auth', authRouter);
+
+// 3. Global auth guard — all /api/* after this point requires a valid session
+app.use('/api', requireAuth);
+
+// 4. Business routes (all protected by requireAuth above)
 app.use('/api/monitored-flights', monitoredFlightsRouter);
 app.use('/api/flights', flightsRouter);
 app.use('/api/settings', settingsRouter);
+// app.use('/api/users', usersRouter); // Task 10
 
 // --- Serve Frontend (Production) ---
 // In production, serve the built React app
