@@ -114,14 +114,14 @@ export function useTheme()
 - Props: `{ theme, onToggle }`.
 - Renderiza um botão ícone (`Sun` quando `theme === 'dark'`, `Moon` quando `theme === 'light'`).
 - Estilo idêntico ao botão de Settings no header (mesmas classes de hover/borda).
-- Tooltip: "Tema claro" / "Tema escuro" (alterna).
+- Ícone e tooltip descrevem **a ação alvo, não o estado atual**: quando está no escuro, exibe `Sun` + tooltip "Tema claro" (clicar → vai para claro). Quando está no claro, exibe `Moon` + tooltip "Tema escuro" (clicar → vai para escuro).
 
 ## 6. Mudança em arquivos existentes
 
 | Arquivo | Mudança |
 |---|---|
 | `frontend/index.html` | Adiciona script inline antes do `<script src="/src/main.jsx">` que lê `localStorage.theme` (default `'dark'`) e aplica classe `dark` em `<html>` |
-| `frontend/src/index.css` | Adiciona `@custom-variant dark (&:where(.dark, .dark *));` no topo. Body com cor de fundo/texto claros como base; `.dark body` restaura cores escuras atuais |
+| `frontend/src/index.css` | Adiciona `@custom-variant dark (&:where(.dark, .dark *));` no topo. Body com `background-color: theme(colors.slate.50); color: theme(colors.slate.900)` como base (mesmo `slate-50` da seção 4); `.dark body` restaura as cores escuras atuais (`slate-950` + `slate-100`) |
 | `frontend/src/App.jsx` | Importa e usa `useTheme`; renderiza `<ThemeToggle>` no header à esquerda do botão Settings |
 | `frontend/src/components/Tabs.jsx` | Adiciona pares `dark:` em todas as classes de cor |
 | `frontend/src/components/PrecosTab.jsx` | Idem (arquivo mais extenso afetado) |
