@@ -1,10 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, GripVertical, RefreshCw, Settings, Mail, MessageSquare } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, GripVertical, RefreshCw, Mail, MessageSquare } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import logo from '../assets/logo.png';
-import Toast from './Toast';
-import SettingsModal from './SettingsModal';
 
 const API_URL = '/api/flights';
 const fmt = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
@@ -20,7 +17,7 @@ function timeAgo(dateStr) {
   return `Verificado há ${Math.floor(hrs/24)} dias`;
 }
 
-export default function PrecosTab() {
+export default function PrecosTab({ showToast }) {
   const [flights, setFlights] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState(null);
@@ -28,12 +25,8 @@ export default function PrecosTab() {
   const [sortBy, setSortBy] = useState('manual');
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
-  const [toast, setToast] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
-
-  const showToast = useCallback((message, type='info') => setToast({message,type}), []);
 
   const fetchFlights = async () => {
     setIsLoading(true);
@@ -128,24 +121,12 @@ export default function PrecosTab() {
 
   return (
     <>
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="Clube do Voo" className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/20" />
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Monitoramento de Voos Prime</h1>
-            <p className="text-slate-400 text-sm mt-1">Painel administrativo de passagens aéreas monitoradas</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setSettingsOpen(true)} className="p-2.5 text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-700/50" title="Configurações">
-            <Settings className="w-5 h-5" />
-          </button>
-          <button onClick={()=>openModal()} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
-            <Plus className="w-5 h-5" /> Novo Voo
-          </button>
-        </div>
-      </header>
+      {/* Toolbar */}
+      <div className="flex justify-end mb-4">
+        <button onClick={() => openModal()} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
+          <Plus className="w-5 h-5" /> Novo Voo
+        </button>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -332,8 +313,6 @@ export default function PrecosTab() {
         </div>
       )}
 
-      <SettingsModal isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} onToast={showToast} />
-      {toast && <Toast message={toast.message} type={toast.type} onClose={()=>setToast(null)} />}
     </>
   );
 }
