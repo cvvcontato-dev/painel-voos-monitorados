@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../hooks/useApi';
 import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, GripVertical, RefreshCw, Mail, MessageSquare } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -28,14 +28,14 @@ export default function PrecosTab({ showToast }) {
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
-  const fetchFlights = async () => {
+  const fetchFlights = useCallback(async () => {
     setIsLoading(true);
     try { setFlights((await api.get(API_URL)).data); }
     catch(e) { console.error('Error fetching flights', e); }
     finally { setIsLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { fetchFlights(); }, []);
+  useEffect(() => { fetchFlights(); }, [fetchFlights]);
 
   const openModal = (flight = null) => {
     if (flight) {

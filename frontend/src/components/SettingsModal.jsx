@@ -24,6 +24,9 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
           email_pass: '',
           email_from: ''
         });
+      }).catch(() => {
+        onToast('Erro ao carregar configurações', 'error');
+        onClose();
       });
     }
   }, [isOpen]);
