@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState, useEffect, useCallback } from 'react';
+import api from '../hooks/useApi';
 import { Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle, AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X, Users, GripVertical, RefreshCw, Mail, MessageSquare } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
@@ -28,14 +28,14 @@ export default function PrecosTab({ showToast }) {
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
-  const fetchFlights = async () => {
+  const fetchFlights = useCallback(async () => {
     setIsLoading(true);
-    try { setFlights((await axios.get(API_URL)).data); }
+    try { setFlights((await api.get(API_URL)).data); }
     catch(e) { console.error('Error fetching flights', e); }
     finally { setIsLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { fetchFlights(); }, []);
+  useEffect(() => { fetchFlights(); }, [fetchFlights]);
 
   const openModal = (flight = null) => {
     if (flight) {
@@ -53,8 +53,8 @@ export default function PrecosTab({ showToast }) {
   const onSubmit = async (data) => {
     try {
       const payload = { ...data, preco_esperado: parseFloat(data.preco_esperado), quantidade_pax: parseInt(data.quantidade_pax||1,10), check_diario: !!data.check_diario };
-      if (editingFlight) { await axios.put(`${API_URL}/${editingFlight.id}`, payload); }
-      else { payload.posicao = flights.length > 0 ? Math.max(...flights.map(f=>f.posicao||0))+1 : 0; await axios.post(API_URL, payload); }
+      if (editingFlight) { await api.put(`${API_URL}/${editingFlight.id}`, payload); }
+      else { payload.posicao = flights.length > 0 ? Math.max(...flights.map(f=>f.posicao||0))+1 : 0; await api.post(API_URL, payload); }
       fetchFlights(); closeModal(); showToast('Voo salvo com sucesso!','success');
     } catch (error) {
       if (error.response?.status === 409) showToast('Este link já está cadastrado!','error');
@@ -64,25 +64,25 @@ export default function PrecosTab({ showToast }) {
 
   const deleteFlight = async (id) => {
     if (window.confirm('Tem certeza que deseja excluir este voo?')) {
-      try { await axios.delete(`${API_URL}/${id}`); fetchFlights(); showToast('Voo excluído','success'); }
+      try { await api.delete(`${API_URL}/${id}`); fetchFlights(); showToast('Voo excluído','success'); }
       catch(e) { console.error(e); }
     }
   };
 
   const toggleCheck = async (flight) => {
-    try { await axios.put(`${API_URL}/${flight.id}`, { ...flight, check_diario: !flight.check_diario }); fetchFlights(); }
+    try { await api.put(`${API_URL}/${flight.id}`, { ...flight, check_diario: !flight.check_diario }); fetchFlights(); }
     catch(e) { console.error(e); }
   };
 
   const toggleAllChecks = async () => {
-    try { await axios.put(`${API_URL}/bulk-check`, { check_diario: flights.some(f=>!f.check_diario) }); fetchFlights(); }
+    try { await api.put(`${API_URL}/bulk-check`, { check_diario: flights.some(f=>!f.check_diario) }); fetchFlights(); }
     catch(e) { console.error(e); }
   };
 
   const checkNow = async (id) => {
     setCheckingId(id);
     try {
-      const { data } = await axios.post(`${API_URL}/${id}/check-now`);
+      const { data } = await api.post(`${API_URL}/${id}/check-now`);
       if (data.bloqueado) showToast('Google Voos bloqueou o acesso. Tente novamente mais tarde.','warning');
       else if (!data.sucesso) showToast(data.erro || 'Falha ao verificar preço','error');
       else { showToast(`Preço encontrado: ${fmt(data.preco_encontrado)}${data.alerta_disparado ? ' — Alerta enviado!' : ''}`,'success'); }
@@ -94,7 +94,7 @@ export default function PrecosTab({ showToast }) {
   // Drag and drop
   const handleDragStart = (e,i) => { if(sortBy!=='manual') return; setDraggedIndex(i); e.dataTransfer.effectAllowed='move'; };
   const handleDragOver = (e,i) => { if(sortBy!=='manual') return; e.preventDefault(); if(draggedIndex===null||draggedIndex===i) return; const n=[...flights]; n.splice(draggedIndex,1); n.splice(i,0,flights[draggedIndex]); setFlights(n); setDraggedIndex(i); };
-  const handleDragEnd = async () => { setDraggedIndex(null); try { await axios.put(`${API_URL}/reorder`,{ids:flights.map(f=>f.id)}); } catch(e){console.error(e);} };
+  const handleDragEnd = async () => { setDraggedIndex(null); try { await api.put(`${API_URL}/reorder`,{ids:flights.map(f=>f.id)}); } catch(e){console.error(e);} };
 
   const priorityRank = {'Urgente':4,'Alta':3,'Média':2,'Baixa':1};
   const parseTravelDate = (s) => { if(!s) return new Date(0); const p=s.split('/'); if(p.length<2) return new Date(0); const m=p[0].trim().toLowerCase(); const mMap={'jan':0,'janeiro':0,'fev':1,'fevereiro':1,'mar':2,'março':2,'abr':3,'abril':3,'mai':4,'maio':4,'jun':5,'junho':5,'jul':6,'julho':6,'ago':7,'agosto':7,'set':8,'setembro':8,'out':9,'outubro':9,'nov':10,'novembro':10,'dez':11,'dezembro':11}; let mo=0; for(const k in mMap){if(m.startsWith(k)){mo=mMap[k];break;}} let y=parseInt(p[1].trim(),10); if(p[1].trim().length===2) y+=2000; return new Date(y,mo,1); };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../hooks/useApi';
 import { X, CheckCircle2, AlertTriangle, XCircle, Clock, Archive, AlertOctagon } from 'lucide-react';
 
 const EVENT_META = {
@@ -22,7 +22,7 @@ export default function StatusHistoryDrawer({ flightId, onClose }) {
 
   useEffect(() => {
     if (!flightId) { setData(null); return; }
-    axios.get(`/api/monitored-flights/${flightId}`)
+    api.get(`/api/monitored-flights/${flightId}`)
       .then(r => setData(r.data))
       .catch(() => setData({ flight: null, history: [] }));
   }, [flightId]);
@@ -50,7 +50,8 @@ export default function StatusHistoryDrawer({ flightId, onClose }) {
               {data.history.map(ev => {
                 const meta = EVENT_META[ev.evento] || { icon: AlertTriangle, color: 'text-slate-600 dark:text-slate-400', label: ev.evento };
                 const Icon = meta.icon;
-                const payload = ev.payload_json ? JSON.parse(ev.payload_json) : null;
+                let payload = null;
+                try { payload = ev.payload_json ? JSON.parse(ev.payload_json) : null; } catch (_) {}
                 return (
                   <li key={ev.id} className="ml-6">
                     <span className={`absolute -left-3 flex items-center justify-center w-6 h-6 bg-white ring-4 ring-white rounded-full dark:bg-slate-900 dark:ring-slate-900 ${meta.color}`}>

@@ -1,5 +1,7 @@
 process.env.AVIATION_API_MODE = 'stub';
 process.env.DB_PATH = require('path').join(__dirname, '.tmp-mon');
+process.env.ADMIN_EMAIL = 'admin@test.com';
+process.env.ADMIN_PASSWORD = 'AdminPass123!';
 const fs = require('fs');
 if (!fs.existsSync(process.env.DB_PATH)) fs.mkdirSync(process.env.DB_PATH);
 try { fs.unlinkSync(require('path').join(process.env.DB_PATH, 'database.sqlite')); } catch(e) {}

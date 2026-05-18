@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { hash: hashPassword } = require('./helpers/password');
 
 // Use /data volume in production (Docker), fallback to local dir
 const dbDir = process.env.DB_PATH || __dirname;
@@ -33,6 +34,45 @@ const db = new sqlite3.Database(dbPath, (err) => {
         });
     }
 });
+
+async function seedAdminIfNeeded() {
+    return new Promise((resolve) => {
+        db.get('SELECT COUNT(*) as cnt FROM users', [], async (err, row) => {
+            if (err || row.cnt > 0) return resolve();
+
+            const email = process.env.ADMIN_EMAIL;
+            const password = process.env.ADMIN_PASSWORD;
+
+            if (!email || !password) {
+                console.error(
+                    '[AUTH] FATAL: users table is empty but ADMIN_EMAIL and ADMIN_PASSWORD are not set. ' +
+                    'Cannot start without an initial admin account.'
+                );
+                process.exit(1);
+            }
+
+            const password_hash = await hashPassword(password);
+            db.run(
+                `INSERT INTO users (email, nome, password_hash, role, criado_em)
+                 VALUES (?, ?, ?, 'admin', datetime('now'))`,
+                [email.toLowerCase(), email.split('@')[0], password_hash],
+                function(err) {
+                    if (err) {
+                        console.error('[AUTH] Failed to seed admin:', err.message);
+                    } else {
+                        console.log(`[AUTH] Admin account seeded for ${email}`);
+                        db.run(
+                            `INSERT INTO auth_audit_log (timestamp, evento, user_id, ip, user_agent, success)
+                             VALUES (datetime('now'), 'admin_seeded', ?, 'server', 'seed', 1)`,
+                            [this.lastID]
+                        );
+                    }
+                    resolve();
+                }
+            );
+        });
+    });
+}
 
 function runMigrations() {
     const migrations = [
@@ -130,6 +170,45 @@ function runMigrations() {
             db.run(`CREATE INDEX IF NOT EXISTS idx_fsh_flight_evento
                     ON flight_status_history(monitored_flight_id, evento, verificado_em DESC)`, (err) => {
                 if (err) console.error('Error creating idx_fsh_flight_evento:', err.message);
+            });
+        }
+    });
+
+    // --- Auth tables ---
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        nome TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin','user')) DEFAULT 'user',
+        criado_em TEXT NOT NULL,
+        ultimo_login TEXT
+    )`, async (err) => {
+        if (err) {
+            console.error('Error creating users table:', err.message);
+            return;
+        }
+        console.log('users table created or already exists.');
+        await seedAdminIfNeeded();
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS auth_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        evento TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        ip TEXT,
+        user_agent TEXT,
+        success INTEGER NOT NULL,
+        metadata_json TEXT
+    )`, (err) => {
+        if (err) console.error('Error creating auth_audit_log table:', err.message);
+        else {
+            console.log('auth_audit_log table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_audit_user_time
+                    ON auth_audit_log(user_id, timestamp DESC)`, (err) => {
+                if (err) console.error('Error creating audit index:', err.message);
             });
         }
     });
