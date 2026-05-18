@@ -20,7 +20,7 @@ function validateCreatePayload(body) {
   const flightDate = new Date(`${data_voo}T00:00:00.000Z`);
   const daysDiff = (flightDate - today) / (24 * 3600 * 1000);
   if (daysDiff < -30) return 'data_voo está muito no passado (>30 dias)';
-  // No upper-bound limit on future dates — flights can be monitored years ahead
+  if (daysDiff > 365) return 'data_voo está muito no futuro (>365 dias)';
 
   if (email_cliente && !EMAIL_REGEX.test(email_cliente)) return 'email_cliente inválido';
   if (cadencia_minutos !== undefined && !ALLOWED_CADENCIAS.includes(Number(cadencia_minutos)))
