@@ -101,7 +101,7 @@ A app hoje é pública: qualquer pessoa com a URL acessa o painel completo. Este
 | `ip` | TEXT | extraído da request (respeitando `trust proxy`) |
 | `user_agent` | TEXT | header `User-Agent` |
 | `success` | INTEGER NOT NULL | 1 ou 0 |
-| `metadata_json` | TEXT | JSON com contexto: `{email_tentado}` em login_fail; `{role_before, role_after}` em role_changed; `{deleted_user_email}` em user_deleted; etc. |
+| `metadata_json` | TEXT | JSON com contexto: `{attempted_email}` em login_fail; `{role_before, role_after}` em role_changed; `{deleted_user_email}` em user_deleted; etc. |
 
 **Índice:** `CREATE INDEX idx_audit_user_time ON auth_audit_log(user_id, timestamp DESC)`.
 
@@ -112,6 +112,8 @@ Tabela `sessions` criada automaticamente pelo middleware. Campos: `sid TEXT PK`,
 Para **invalidar todas as sessões de um user** (após troca de senha ou role), executa `DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?`.
 
 > **Nota de implementação:** o `connect-sqlite3` serializa o objeto da sessão em JSON na coluna `sess` (campo padrão é `session.userId`, já que setamos `req.session.userId` direto). Ao implementar a Fase 1, validar a serialização real com um teste — inspecionar uma row de `sessions` logo após o login e confirmar que `json_extract(sess, '$.userId')` retorna o id esperado. Se a versão instalada usar coluna ou campo diferente, ajustar a query nesse ponto.
+>
+> **Fallback de confiabilidade:** se o `json_extract` revelar-se não-confiável durante a Fase 1, criar uma tabela auxiliar `user_sessions(user_id INTEGER, sid TEXT PK)` populada no login e esvaziada no logout — a invalidação vira `DELETE FROM sessions WHERE sid IN (SELECT sid FROM user_sessions WHERE user_id = ?)`, sem depender de introspecção de JSON.
 
 ## 5. Backend
 
@@ -229,11 +231,22 @@ function requireAdmin(req, res, next) {
 }
 ```
 
-### 5.6 Aplicação dos middlewares em `server.js`
+### 5.6 Códigos HTTP da API de autenticação
+
+| Código | Cenário |
+|---|---|
+| 200 | Operação bem-sucedida (login, logout, me, change-password, CRUD de usuários) |
+| 400 | Input inválido — campo obrigatório ausente, `password_nova` muito curta, formato de email inválido |
+| 401 | Não autenticado — sem sessão válida; também usado em login com credenciais incorretas (mensagem genérica) |
+| 403 | Sem permissão — sessão válida mas papel insuficiente (`admin_required`); também retornado quando `X-CSRF-Token` não bate com o cookie |
+| 409 | Conflito de regra de negócio — auto-delete (`cannot_delete_self`), remover o último admin (`cannot_delete_last_admin`) |
+| 429 | Rate limit atingido no endpoint de login (5 tentativas / 15 min / IP) |
+
+### 5.7 Aplicação dos middlewares em `server.js`
 
 Ordem (após dotenv/cors/express.json):
 1. `cookieParser`
-2. `express-session` configurado conforme §6
+2. `express-session` configurado conforme §7
 3. `csrfMiddleware`
 4. Mount `/api/auth` (público — `requireAuth` aplicado seletivamente nas rotas que precisam)
 5. **Global** `app.use('/api', requireAuth)` exceto `/api/auth/login` (que já está em /api/auth montado antes, mas o router de auth precisa estar configurado para permitir esses dois endpoints sem o middleware global)
@@ -249,7 +262,7 @@ ADMIN_EMAIL=joabh@example.com                   # só usado no primeiro boot
 ADMIN_PASSWORD=<senha forte>                    # idem
 ```
 
-## 6. `express-session` config exato
+## 7. `express-session` config exato
 
 ```js
 session({
@@ -272,7 +285,7 @@ session({
 })
 ```
 
-## 7. Frontend
+## 8. Frontend
 
 ### 7.1 Estrutura
 
@@ -381,7 +394,7 @@ Modal full-screen exibido ao receber 401 fora da LoginPage:
 - Botão único: "Voltar ao login" → reload (que cai na LoginPage via AuthProvider).
 - Sem botão de "cancelar" — a sessão é inválida, não há para onde continuar.
 
-## 8. Roadmap incremental
+## 9. Roadmap incremental
 
 1. **Fase 1 — Backend auth core**
    - Migrations das tabelas `users` e `auth_audit_log`.
@@ -421,7 +434,7 @@ Modal full-screen exibido ao receber 401 fora da LoginPage:
    - Testes completos verdes.
    - Smoke test em produção pós-deploy: configurar `SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` no Coolify; redeploy; logar; criar colaboradora; logar como colaboradora; tentar acessar `/api/users` como user comum → 403.
 
-## 9. Critérios de aceitação
+## 10. Critérios de aceitação
 
 1. Sem cookie de sessão válido, qualquer chamada a `/api/*` (exceto `/api/auth/login` e `/api/auth/logout`) retorna 401.
 2. Login com credenciais válidas seta cookie `cvv.sid` e responde com `{user}`.
@@ -440,7 +453,7 @@ Modal full-screen exibido ao receber 401 fora da LoginPage:
 15. Bootstrap inicial: server falha com mensagem clara se `users` está vazia e `ADMIN_EMAIL`/`ADMIN_PASSWORD` ausentes.
 16. Backend tests passam (existentes + novos de auth).
 
-## 10. Fora de escopo (YAGNI)
+## 11. Fora de escopo (YAGNI)
 
 - ❌ 2FA / TOTP — overkill para 2 usuários internos sem dados financeiros
 - ❌ Reset de senha via email — admin reseta via UsersTab
@@ -450,7 +463,7 @@ Modal full-screen exibido ao receber 401 fora da LoginPage:
 - ❌ Lockout temporário **por conta** — só rate limit por IP nesta versão
 - ❌ Captcha no login
 
-## 11. Evoluções futuras (não bloqueantes)
+## 12. Evoluções futuras (não bloqueantes)
 
 - **Lockout por conta + rate limit por email:** se a operação passar a acessar de redes compartilhadas, VPN corporativa ou IPs rotativos, rate limit por IP perde eficácia. Adicionar lockout (ex.: 10 falhas em 1h trava a conta por 30min) com unlock por admin via UI.
 - **TOTP/2FA:** se o app passar a expor dados muito sensíveis ou crescer para 5+ usuários, considerar TOTP via app autenticador.
