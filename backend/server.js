@@ -20,12 +20,15 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./database');
 const { startScheduler, processFlight } = require('./services/scheduler');
+const monitoredFlightsRouter = require('./routes/monitoredFlights');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/monitored-flights', monitoredFlightsRouter);
 
 // --- Validation helpers ---
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
