@@ -78,7 +78,8 @@ async function seedAdminIfNeeded() {
                 // ── Subsequent boots: sync admin password from env if it changed ──
                 // This self-heals deployments where the hash was generated from a
                 // value with accidental whitespace (e.g. Coolify env copy-paste).
-                db.get('SELECT id, password_hash FROM users WHERE email = ?', [email], async (err2, user) => {
+                // Use TRIM/LOWER in SQL to find user even if email was stored with accidental whitespace
+                db.get('SELECT id, password_hash FROM users WHERE TRIM(LOWER(email)) = ?', [email], async (err2, user) => {
                     if (err2 || !user) return resolve();
 
                     const alreadyMatches = await comparePassword(password, user.password_hash).catch(() => false);

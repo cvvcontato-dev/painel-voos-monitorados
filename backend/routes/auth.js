@@ -18,7 +18,7 @@ const loginLimiter = rateLimit({
 
 function getUser(email) {
   return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()], (err, row) => {
+    db.get('SELECT * FROM users WHERE TRIM(LOWER(email)) = ?', [email.toLowerCase().trim()], (err, row) => {
       if (err) reject(err); else resolve(row);
     });
   });
