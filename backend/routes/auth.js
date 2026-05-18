@@ -123,7 +123,10 @@ router.post('/change-password', requireAuth, async (req, res) => {
       db.run(
         "DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?",
         [userId],
-        () => resolve()  // Ignore errors — sessions table may not exist yet in some envs
+        (err) => {
+          if (err) console.error('[AUTH] Failed to invalidate sessions after password change:', err.message);
+          resolve();
+        }
       );
     });
 
