@@ -8,10 +8,10 @@ export default function Toast({ message, type = 'info', onClose }) {
   }, [onClose]);
 
   const colors = {
-    success: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300',
-    error: 'bg-red-500/20 border-red-500/40 text-red-300',
-    warning: 'bg-amber-500/20 border-amber-500/40 text-amber-300',
-    info: 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+    success: 'bg-emerald-100 border-emerald-200 text-emerald-700 dark:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-300',
+    error:   'bg-red-100 border-red-200 text-red-700 dark:bg-red-500/20 dark:border-red-500/40 dark:text-red-300',
+    warning: 'bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/40 dark:text-amber-300',
+    info:    'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
   };
 
   return (
