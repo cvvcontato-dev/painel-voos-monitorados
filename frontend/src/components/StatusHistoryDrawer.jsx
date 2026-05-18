@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../hooks/useApi';
 import { X, CheckCircle2, AlertTriangle, XCircle, Clock, Archive, AlertOctagon } from 'lucide-react';
 
 const EVENT_META = {
@@ -22,7 +22,7 @@ export default function StatusHistoryDrawer({ flightId, onClose }) {
 
   useEffect(() => {
     if (!flightId) { setData(null); return; }
-    axios.get(`/api/monitored-flights/${flightId}`)
+    api.get(`/api/monitored-flights/${flightId}`)
       .then(r => setData(r.data))
       .catch(() => setData({ flight: null, history: [] }));
   }, [flightId]);

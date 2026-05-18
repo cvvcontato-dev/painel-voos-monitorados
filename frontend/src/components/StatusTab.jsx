@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import api from '../hooks/useApi';
 import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
@@ -38,7 +38,7 @@ export default function StatusTab({ showToast }) {
   const [checkingId, setCheckingId] = useState(null);
 
   const fetchFlights = useCallback(async () => {
-    try { setFlights((await axios.get(API_URL)).data); }
+    try { setFlights((await api.get(API_URL)).data); }
     catch (e) { console.error(e); }
     finally { setIsLoading(false); }
   }, []);
@@ -52,10 +52,10 @@ export default function StatusTab({ showToast }) {
   const handleSubmit = async (data) => {
     try {
       if (editing) {
-        await axios.put(`${API_URL}/${editing.id}`, data);
+        await api.put(`${API_URL}/${editing.id}`, data);
         showToast('Voo atualizado', 'success');
       } else {
-        await axios.post(API_URL, data);
+        await api.post(API_URL, data);
         showToast('Voo monitorado', 'success');
       }
       setModalOpen(false); setEditing(null);
@@ -67,19 +67,19 @@ export default function StatusTab({ showToast }) {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Remover este voo do monitoramento?')) return;
-    try { await axios.delete(`${API_URL}/${id}`); fetchFlights(); showToast('Removido', 'success'); }
+    try { await api.delete(`${API_URL}/${id}`); fetchFlights(); showToast('Removido', 'success'); }
     catch (e) { showToast('Erro ao remover', 'error'); }
   };
 
   const handleToggle = async (id) => {
-    try { await axios.post(`${API_URL}/${id}/toggle`); fetchFlights(); }
+    try { await api.post(`${API_URL}/${id}/toggle`); fetchFlights(); }
     catch (e) { showToast('Erro ao alternar', 'error'); }
   };
 
   const handleCheckNow = async (id) => {
     setCheckingId(id);
     try {
-      const { data } = await axios.post(`${API_URL}/${id}/check-now`);
+      const { data } = await api.post(`${API_URL}/${id}/check-now`);
       if (data.sucesso) showToast(`Status: ${data.status_atual}`, 'success');
       else showToast(data.erro || 'Falha ao consultar', 'error');
       fetchFlights();

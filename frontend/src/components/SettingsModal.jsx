@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Settings, Eye, EyeOff } from 'lucide-react';
-import axios from 'axios';
+import api from '../hooks/useApi';
 
 export default function SettingsModal({ isOpen, onClose, onToast }) {
   const [settings, setSettings] = useState(null);
@@ -11,7 +11,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
 
   useEffect(() => {
     if (isOpen) {
-      axios.get('/api/settings').then(r => {
+      api.get('/api/settings').then(r => {
         setSettings(r.data);
         setForm({
           check_interval_hours: r.data.check_interval_hours,
@@ -42,7 +42,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
       if (form.email_pass) payload.email_pass = form.email_pass;
       if (form.email_from) payload.email_from = form.email_from;
 
-      await axios.put('/api/settings', payload);
+      await api.put('/api/settings', payload);
       onToast('Configurações salvas com sucesso!', 'success');
       onClose();
     } catch (e) {

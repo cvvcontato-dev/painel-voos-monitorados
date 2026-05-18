@@ -6,15 +6,21 @@ import Toast from './components/Toast';
 import SettingsModal from './components/SettingsModal';
 import PrecosTab from './components/PrecosTab';
 import StatusTab from './components/StatusTab';
+import LoginPage from './components/LoginPage';
+import SessionExpiredModal from './components/SessionExpiredModal';
+import UserMenu from './components/UserMenu';
 import { useTheme } from './hooks/useTheme';
 import ThemeToggle from './components/ThemeToggle';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 
 const TABS = [
   { value: 'precos', label: 'Preços', icon: <DollarSign className="w-4 h-4" /> },
   { value: 'status', label: 'Status', icon: <Activity className="w-4 h-4" /> }
 ];
 
-function App() {
+function AppShell() {
+  const { currentUser, setCurrentUser, sessionExpired } = useAuth();
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'precos');
   const [toast, setToast] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -24,8 +30,24 @@ function App() {
 
   useEffect(() => { localStorage.setItem('activeTab', activeTab); }, [activeTab]);
 
+  // Still loading
+  if (currentUser === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="text-slate-400 text-sm">Carregando…</div>
+      </div>
+    );
+  }
+
+  // Not logged in
+  if (!currentUser) {
+    return <LoginPage onLogin={setCurrentUser} />;
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      {sessionExpired && <SessionExpiredModal />}
+
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div className="flex items-center gap-3">
           <img src={logo} alt="Clube do Voo" className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/20" />
@@ -36,16 +58,16 @@ function App() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <button onClick={()=>setSettingsOpen(true)} className="p-2.5 rounded-lg transition-colors cursor-pointer border
-                                                                  bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200
-                                                                  dark:bg-slate-800/60 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white dark:border-slate-700/50" title="Configurações">
+          <button onClick={() => setSettingsOpen(true)} className="p-2.5 rounded-lg transition-colors cursor-pointer border
+                                                                    bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200
+                                                                    dark:bg-slate-800/60 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white dark:border-slate-700/50" title="Configurações">
             <Settings className="w-5 h-5" />
           </button>
+          <UserMenu user={currentUser} onToast={showToast} />
         </div>
       </header>
 
       <Tabs active={activeTab} onChange={setActiveTab} tabs={TABS} />
-
       {activeTab === 'precos' ? <PrecosTab showToast={showToast} /> : <StatusTab showToast={showToast} />}
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onToast={showToast} />
@@ -54,4 +76,10 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+}
