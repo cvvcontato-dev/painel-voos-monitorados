@@ -88,6 +88,7 @@ router.post('/', async (req, res) => {
 // PUT /api/users/:id — update nome and/or role
 router.put('/:id', async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) return res.status(400).json({ error: 'invalid_id' });
   const { nome, role, confirm_password } = req.body;
   const adminId = req.session.userId;
   const ip = req.ip;
@@ -129,8 +130,11 @@ router.put('/:id', async (req, res) => {
     });
 
     if (role !== undefined && role !== current.role) {
-      db.run("DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?", [targetId], (err) => {
-        if (err) console.error('[USERS] Failed to invalidate sessions after role change:', err.message);
+      await new Promise((resolve) => {
+        db.run("DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?", [targetId], (err) => {
+          if (err) console.error('[USERS] Failed to invalidate sessions after role change:', err.message);
+          resolve();
+        });
       });
       log({ evento: 'role_changed', userId: adminId, targetUserId: targetId, ip, userAgent: ua, success: true, meta: { role_before: current.role, role_after: role } });
     } else {
@@ -150,6 +154,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/users/:id
 router.delete('/:id', async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) return res.status(400).json({ error: 'invalid_id' });
   const adminId = req.session.userId;
   const ip = req.ip;
   const ua = req.get('User-Agent');
@@ -183,9 +188,12 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
-    // Invalidate sessions before deletion
-    db.run("DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?", [targetId], (err) => {
-      if (err) console.error('[USERS] Failed to invalidate sessions before delete:', err.message);
+    // Invalidate sessions before deletion (awaited so deletion ordering is deterministic)
+    await new Promise((resolve) => {
+      db.run("DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?", [targetId], (err) => {
+        if (err) console.error('[USERS] Failed to invalidate sessions before delete:', err.message);
+        resolve();
+      });
     });
 
     await new Promise((resolve, reject) => {
@@ -194,7 +202,7 @@ router.delete('/:id', async (req, res) => {
       });
     });
 
-    log({ evento: 'user_deleted', userId: adminId, targetUserId: null, ip, userAgent: ua, success: true, meta: { deleted_user_email: target.email } });
+    log({ evento: 'user_deleted', userId: adminId, targetUserId: targetId, ip, userAgent: ua, success: true, meta: { deleted_user_email: target.email } });
 
     res.json({ ok: true });
   } catch (err) {
