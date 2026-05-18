@@ -111,6 +111,8 @@ Tabela `sessions` criada automaticamente pelo middleware. Campos: `sid TEXT PK`,
 
 Para **invalidar todas as sessões de um user** (após troca de senha ou role), executa `DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?`.
 
+> **Nota de implementação:** o `connect-sqlite3` serializa o objeto da sessão em JSON na coluna `sess` (campo padrão é `session.userId`, já que setamos `req.session.userId` direto). Ao implementar a Fase 1, validar a serialização real com um teste — inspecionar uma row de `sessions` logo após o login e confirmar que `json_extract(sess, '$.userId')` retorna o id esperado. Se a versão instalada usar coluna ou campo diferente, ajustar a query nesse ponto.
+
 ## 5. Backend
 
 ### 5.1 Estrutura de arquivos
@@ -170,7 +172,7 @@ Aplicado **em todas as rotas `/api/*`**. `/api/auth/login` é exempto (não há 
 | Método | Rota | Auth | Body | Função |
 |---|---|---|---|---|
 | POST | `/api/auth/login` | público (rate-limited 5/15min/IP) | `{email, password, remember}` | 200 `{user}` + sessão; 401 mensagem genérica; 429 quando bloqueado por rate limit |
-| POST | `/api/auth/logout` | autenticado | — | destrói sessão atual, limpa cookies, audit log |
+| POST | `/api/auth/logout` | **público (idempotente)** | — | destrói sessão atual se existir, limpa cookies, audit log apenas se havia sessão. Sempre responde 200 — facilita lidar com cookies stale no frontend sem race conditions |
 | GET | `/api/auth/me` | autenticado | — | retorna `{id, email, nome, role}` |
 | POST | `/api/auth/change-password` | autenticado | `{password_atual, password_nova}` | valida atual; hashea nova; **invalida todas sessões do user**; audit log; força re-login |
 
@@ -191,8 +193,8 @@ Aplicado **em todas as rotas `/api/*`**. `/api/auth/login` é exempto (não há 
 5. Resposta 200.
 
 **Change-password flow:**
-1. Valida `password_atual` via bcrypt.compare. Se falhar → log + 401.
-2. Validar `password_nova` (mínimo 8 chars).
+1. Valida `password_atual` via bcrypt.compare. Se falhar → log + 401 com mensagem **específica** `"senha atual incorreta"` (sem risco de enumeração — o usuário já está autenticado e só pode validar a senha dele mesmo).
+2. Validar `password_nova` (mínimo 8 chars). Se inválida → 400 com mensagem específica.
 3. Atualiza `password_hash` com bcrypt(12).
 4. `DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?` — invalida todas.
 5. Log `password_changed` + `session_invalidated_after_password_change`.
@@ -391,8 +393,9 @@ Modal full-screen exibido ao receber 401 fora da LoginPage:
    - Testes Jest/Supertest: login OK, login fail, login rate-limit, logout, regenerate sessão, me 401, me 200, change-password destrói todas sessões, CSRF aceita/rejeita.
 
 2. **Fase 2 — Proteger rotas existentes**
+   - As rotas `/api/flights/*` e `/api/settings/*` hoje estão definidas inline em `server.js` (não como routers separados). Antes de aplicar `requireAuth`, **extrair em routers** seguindo o padrão já usado em `routes/monitoredFlights.js`. Isso é refatoração necessária — não surpresa.
    - Aplica `requireAuth` global em `/api/*` (após mount de `/api/auth`).
-   - Atualiza testes existentes para autenticar antes (helper `loginAs(role)` no testApp.js).
+   - Atualiza testes existentes para autenticar antes (helper `loginAs(role)` no `testApp.js` que faz login e retorna agent com cookie + helper `withCsrf()` que adiciona o header em requests mutáveis).
    - Verificação: 40 testes existentes + novos de auth, todos verdes.
 
 3. **Fase 3 — Frontend login + sessão**
