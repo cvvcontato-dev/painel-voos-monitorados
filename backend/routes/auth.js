@@ -33,7 +33,13 @@ router.post('/login', loginLimiter, async (req, res) => {
 
   try {
     const user = await getUser(email);
-    const valid = user && await compare(password, user.password_hash);
+    console.log(`[AUTH-DEBUG] login attempt: email="${email}" (len=${email.length}), user_found=${!!user}`);
+    if (user) {
+      console.log(`[AUTH-DEBUG] stored email="${user.email}" (len=${user.email.length}), hash_len=${user.password_hash?.length}`);
+    }
+    const pwdMatch = user ? await compare(password, user.password_hash) : false;
+    console.log(`[AUTH-DEBUG] password_len=${password.length}, bcrypt_match=${pwdMatch}`);
+    const valid = user && pwdMatch;
 
     if (!valid) {
       log({ evento: 'login_fail', userId: user?.id ?? null, ip: req.ip, userAgent: req.get('User-Agent'), success: false, meta: { attempted_email: email } });
