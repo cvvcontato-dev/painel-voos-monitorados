@@ -205,7 +205,10 @@ export default function PrecosTab({ showToast }) {
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className={`font-mono font-semibold ${flight.preco_atual <= flight.preco_esperado ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-300'}`}>{fmt(flight.preco_atual)}</span>
-                          {flight.preco_atual <= flight.preco_esperado && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 px-1.5 py-0.5 rounded">✓ ALERTA</span>}
+                          {flight.preco_atual <= flight.preco_esperado
+                            ? <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 px-1.5 py-0.5 rounded">✓ ALERTA</span>
+                            : <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30 px-1.5 py-0.5 rounded">⏳ AGUARDAR</span>
+                          }
                         </div>
                         {flight.ultima_verificacao && <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5">{timeAgo(flight.ultima_verificacao)}</span>}
                       </div>
