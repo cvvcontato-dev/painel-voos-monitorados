@@ -86,7 +86,6 @@ async function seedAdminIfNeeded() {
                         console.warn(`[AUTH] Admin user not found for "${email}" — skipping password sync`);
                         return resolve();
                     }
-                    console.log(`[AUTH-DEBUG-SYNC] password charCodes: ${[...password].map(c => c.charCodeAt(0)).join(',')}`);
                     const newHash = await hashPassword(password);
                     db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id], (err3) => {
                         if (err3) {
