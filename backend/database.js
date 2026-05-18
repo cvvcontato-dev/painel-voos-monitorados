@@ -10,6 +10,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('Error opening database', err.message);
     } else {
         console.log(`Connected to SQLite database at ${dbPath}`);
+        // SQLite disables foreign keys by default — enable per-connection so that
+        // ON DELETE CASCADE on flight_status_history actually cascades.
+        db.run('PRAGMA foreign_keys = ON');
         db.run(`CREATE TABLE IF NOT EXISTS flights (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             cliente TEXT NOT NULL,
@@ -69,6 +72,64 @@ function runMigrations() {
             db.run(`CREATE INDEX IF NOT EXISTS idx_flight_price_history_flight_id
                     ON flight_price_history (flight_id)`, (err) => {
                 if (err) console.error('Error creating index:', err.message);
+            });
+        }
+    });
+
+    // --- Status monitoring tables ---
+    db.run(`CREATE TABLE IF NOT EXISTS monitored_flights_status (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente TEXT NOT NULL,
+        numero_voo TEXT NOT NULL,
+        data_voo TEXT NOT NULL,
+        origem TEXT,
+        destino TEXT,
+        companhia TEXT,
+        email_cliente TEXT,
+        telegram_chat_id TEXT,
+        cadencia_minutos INTEGER NOT NULL DEFAULT 60,
+        status_atual TEXT,
+        partida_programada TEXT,
+        partida_estimada TEXT,
+        chegada_programada TEXT,
+        chegada_estimada TEXT,
+        portao TEXT,
+        terminal TEXT,
+        monitoramento_ativo INTEGER NOT NULL DEFAULT 1,
+        ultima_verificacao TEXT,
+        proxima_verificacao TEXT,
+        criado_em TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL,
+        UNIQUE(numero_voo, data_voo, cliente)
+    )`, (err) => {
+        if (err) {
+            console.error('Error creating monitored_flights_status table:', err.message);
+        } else {
+            console.log('monitored_flights_status table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_msf_proxima
+                    ON monitored_flights_status(proxima_verificacao)
+                    WHERE monitoramento_ativo = 1`, (err) => {
+                if (err) console.error('Error creating idx_msf_proxima:', err.message);
+            });
+        }
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS flight_status_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        monitored_flight_id INTEGER NOT NULL,
+        verificado_em TEXT NOT NULL,
+        evento TEXT NOT NULL,
+        payload_json TEXT,
+        notificado INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (monitored_flight_id) REFERENCES monitored_flights_status(id) ON DELETE CASCADE
+    )`, (err) => {
+        if (err) {
+            console.error('Error creating flight_status_history table:', err.message);
+        } else {
+            console.log('flight_status_history table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_fsh_flight_evento
+                    ON flight_status_history(monitored_flight_id, evento, verificado_em DESC)`, (err) => {
+                if (err) console.error('Error creating idx_fsh_flight_evento:', err.message);
             });
         }
     });
