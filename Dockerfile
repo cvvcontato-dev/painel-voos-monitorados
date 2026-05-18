@@ -32,7 +32,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Copy backend package files and install (rebuild native modules inside container)
 COPY backend/package.json backend/package-lock.json* ./
-RUN npm ci --omit=dev && npm rebuild sqlite3 --build-from-source
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild sqlite3 --build-from-source
 
 # Copy backend source
 COPY backend/ ./
