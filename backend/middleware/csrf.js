@@ -3,9 +3,9 @@ const COOKIE_NAME = 'csrf';
 const COOKIE_MAX_AGE = 30 * 24 * 3600 * 1000;
 const MUTATING = ['POST', 'PUT', 'DELETE'];
 
-// Paths exempt from CSRF validation.
+// Paths exempt from CSRF validation (relative to the /api mount point).
 // Login: public endpoint. Logout: CSRF on logout is harmless (worst case: logged out).
-const EXEMPT = ['/api/auth/login', '/api/auth/logout'];
+const EXEMPT = ['/auth/login', '/auth/logout'];
 
 function csrfMiddleware(req, res, next) {
   // Always ensure the csrf cookie exists
