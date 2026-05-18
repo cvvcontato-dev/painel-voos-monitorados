@@ -37,6 +37,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (user) {
       console.log(`[AUTH-DEBUG] stored email="${user.email}" (len=${user.email.length}), hash_len=${user.password_hash?.length}`);
     }
+    console.log(`[AUTH-DEBUG-LOGIN] password charCodes: ${[...password].map(c => c.charCodeAt(0)).join(',')}`);
     const pwdMatch = user ? await compare(password, user.password_hash) : false;
     console.log(`[AUTH-DEBUG] password_len=${password.length}, bcrypt_match=${pwdMatch}`);
     const valid = user && pwdMatch;
