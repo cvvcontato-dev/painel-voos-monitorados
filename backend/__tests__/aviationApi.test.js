@@ -39,3 +39,86 @@ describe('aviationApi (stub mode)', () => {
     expect(aviationApi.normalizeStatus('SomethingUnknown')).toBe('scheduled');
   });
 });
+
+describe('aviationApi (real mode, mocked HTTP)', () => {
+  beforeEach(() => {
+    process.env.AVIATION_API_MODE = 'real';
+    process.env.RAPIDAPI_KEY = 'test-key';
+    process.env.AERODATABOX_HOST = 'aerodatabox.p.rapidapi.com';
+  });
+  afterAll(() => { process.env.AVIATION_API_MODE = 'stub'; });
+
+  test('successful response is normalized', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ([{
+        number: 'LA 8084',
+        airline: { name: 'LATAM' },
+        status: 'EnRoute',
+        departure: {
+          airport: { iata: 'GRU' },
+          scheduledTime: { utc: '2026-05-22 14:00Z' },
+          revisedTime: { utc: '2026-05-22 14:30Z' },
+          terminal: '3', gate: 'A12'
+        },
+        arrival: {
+          airport: { iata: 'MIA' },
+          scheduledTime: { utc: '2026-05-22 23:00Z' },
+          revisedTime: { utc: '2026-05-22 23:30Z' }
+        }
+      }])
+    });
+
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(r.ok).toBe(true);
+    expect(r.data.numero_voo).toBe('LA8084');
+    expect(r.data.companhia).toBe('LATAM');
+    expect(r.data.status).toBe('active');
+    expect(r.data.origem).toBe('GRU');
+    expect(r.data.destino).toBe('MIA');
+    expect(r.data.partida_programada).toBe('2026-05-22T14:00:00.000Z');
+    expect(r.data.partida_estimada).toBe('2026-05-22T14:30:00.000Z');
+    expect(r.data.portao).toBe('A12');
+    expect(r.data.terminal).toBe('3');
+  });
+
+  test('404 returns not_found', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(r).toEqual({ ok: false, error: 'not_found' });
+  });
+
+  test('429 returns rate_limited with retryAfter', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false, status: 429,
+      headers: { get: (k) => k === 'Retry-After' ? '30' : null },
+      json: async () => ({})
+    });
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('rate_limited');
+    expect(r.retryAfter).toBe(30);
+  });
+
+  test('5xx returns server_error', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(r).toEqual({ ok: false, error: 'server_error' });
+  });
+
+  test('network error returns error string', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('ECONNREFUSED');
+  });
+
+  test('missing RAPIDAPI_KEY returns config_error without calling fetch', async () => {
+    delete process.env.RAPIDAPI_KEY;
+    global.fetch = jest.fn();
+    const r = await require('../services/aviationApi').fetchFlightStatus('LA8084', '2026-05-22');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(r).toEqual({ ok: false, error: 'config_error' });
+  });
+});
