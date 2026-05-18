@@ -238,7 +238,7 @@ git commit -m "feat(frontend): apply theme class before React mounts to avoid fl
 
 - [ ] **Step 1: Create the hook**
 
-Create `frontend/src/hooks/useTheme.js`:
+The `frontend/src/hooks/` directory does not exist yet — create it on the way. Then create `frontend/src/hooks/useTheme.js`:
 
 ```js
 import { useState, useCallback, useEffect } from 'react';
