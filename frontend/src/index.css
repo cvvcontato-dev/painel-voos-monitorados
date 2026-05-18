@@ -1,15 +1,27 @@
 @import "tailwindcss";
 
+/* Enable .dark class-based dark mode (Tailwind v4 syntax). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   body {
-    background-color: #0f172a;
-    color: #f1f5f9;
+    /* Light is the base theme. */
+    background-color: theme(colors.slate.50);
+    color: theme(colors.slate.900);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
-    background-image: 
+    background-image:
+      radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.05) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-color: theme(colors.slate.950);
+    color: theme(colors.slate.100);
+    background-image:
       radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
       radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.08) 0%, transparent 50%);
-    background-attachment: fixed;
   }
 
   ::selection {
@@ -17,23 +29,31 @@
   }
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5); 
+  background: rgba(241, 245, 249, 0.5);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8); 
+  background: rgba(203, 213, 225, 0.8);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 1); 
+  background: rgba(148, 163, 184, 1);
 }
 
-/* Modal animation */
+.dark ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+}
+
 @keyframes modal-in {
   from {
     opacity: 0;
