@@ -7,12 +7,12 @@ import StatusHistoryDrawer from './StatusHistoryDrawer';
 const API_URL = '/api/monitored-flights';
 
 const STATUS_STYLES = {
-  scheduled: { color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: '🟢', label: 'Programado' },
-  active:    { color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: '🟢', label: 'Em voo' },
-  delayed:   { color: 'bg-amber-500/10 text-amber-400 border-amber-500/20',       icon: '🟡', label: 'Atrasado' },
-  cancelled: { color: 'bg-red-500/10 text-red-400 border-red-500/20',             icon: '🔴', label: 'Cancelado' },
-  diverted:  { color: 'bg-red-500/10 text-red-400 border-red-500/20',             icon: '🔴', label: 'Desviado' },
-  landed:    { color: 'bg-slate-500/10 text-slate-400 border-slate-500/20',       icon: '⚫', label: 'Pousou' }
+  scheduled: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20', icon: '🟢', label: 'Programado' },
+  active:    { color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20', icon: '🟢', label: 'Em voo' },
+  delayed:   { color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',             icon: '🟡', label: 'Atrasado' },
+  cancelled: { color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',                         icon: '🔴', label: 'Cancelado' },
+  diverted:  { color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',                         icon: '🔴', label: 'Desviado' },
+  landed:    { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20',             icon: '⚫', label: 'Pousou' }
 };
 
 function formatTimeShort(iso) {
@@ -113,11 +113,11 @@ export default function StatusTab({ showToast }) {
         <StatCard icon={<Clock className="w-5 h-5" />} label="Próx. check" value={untilNow(stats.proximaCheck)} />
       </div>
 
-      <main className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
+      <main className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400">
+              <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900/80 dark:border-slate-800 dark:text-slate-400">
                 <th className="px-6 py-4 font-semibold">Cliente</th>
                 <th className="px-4 py-4 font-semibold">Voo</th>
                 <th className="px-4 py-4 font-semibold">Data</th>
@@ -128,45 +128,45 @@ export default function StatusTab({ showToast }) {
                 <th className="px-6 py-4 font-semibold text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
               {isLoading ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400">Carregando...</td></tr>
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-600 dark:text-slate-400">Carregando...</td></tr>
               ) : flights.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-400">
-                  <Plane className="w-12 h-12 mx-auto text-slate-600 mb-3 opacity-50" />Nenhum voo sendo monitorado.
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-600 dark:text-slate-400">
+                  <Plane className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3 opacity-50" />Nenhum voo sendo monitorado.
                 </td></tr>
               ) : flights.map(f => {
-                const style = STATUS_STYLES[f.status_atual] || { color: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: '⚪', label: f.status_atual || '—' };
+                const style = STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' };
                 return (
-                  <tr key={f.id} className="hover:bg-slate-800/30 group">
-                    <td className="px-6 py-4 font-semibold text-slate-200">{f.cliente}</td>
-                    <td className="px-4 py-4 font-mono text-slate-300">{f.numero_voo}</td>
-                    <td className="px-4 py-4 text-slate-300">{f.data_voo}</td>
-                    <td className="px-4 py-4 text-slate-300">{f.origem || '?'}→{f.destino || '?'}</td>
+                  <tr key={f.id} className="hover:bg-slate-100/60 dark:hover:bg-slate-800/30 group">
+                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-200">{f.cliente}</td>
+                    <td className="px-4 py-4 font-mono text-slate-700 dark:text-slate-300">{f.numero_voo}</td>
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300">{f.data_voo}</td>
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300">{f.origem || '?'}→{f.destino || '?'}</td>
                     <td className="px-4 py-4">
                       <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${style.color}`}>
                         {style.icon} {style.label}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-slate-300 text-sm">
-                      <div>{formatTimeShort(f.partida_programada)} {f.partida_estimada && f.partida_estimada !== f.partida_programada && <span className="text-amber-400">→ {formatTimeShort(f.partida_estimada)}</span>}</div>
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300 text-sm">
+                      <div>{formatTimeShort(f.partida_programada)} {f.partida_estimada && f.partida_estimada !== f.partida_programada && <span className="text-amber-700 dark:text-amber-400">→ {formatTimeShort(f.partida_estimada)}</span>}</div>
                     </td>
-                    <td className="px-4 py-4 text-slate-400 text-xs">{f.monitoramento_ativo ? untilNow(f.proxima_verificacao) : <span className="text-slate-600">pausado</span>}</td>
+                    <td className="px-4 py-4 text-slate-600 dark:text-slate-400 text-xs">{f.monitoramento_ativo ? untilNow(f.proxima_verificacao) : <span className="text-slate-400 dark:text-slate-600">pausado</span>}</td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleCheckNow(f.id)} disabled={checkingId === f.id} className="p-2 text-slate-400 hover:text-amber-400 bg-slate-800 hover:bg-amber-500/20 rounded-lg cursor-pointer disabled:opacity-50" title="Checar agora">
+                        <button onClick={() => handleCheckNow(f.id)} disabled={checkingId === f.id} className="p-2 bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-700 dark:bg-slate-800 dark:hover:bg-amber-500/20 dark:text-slate-400 dark:hover:text-amber-400 rounded-lg cursor-pointer disabled:opacity-50" title="Checar agora">
                           <RefreshCw className={`w-4 h-4 ${checkingId === f.id ? 'animate-spin' : ''}`} />
                         </button>
-                        <button onClick={() => setHistoryId(f.id)} className="p-2 text-slate-400 hover:text-purple-400 bg-slate-800 hover:bg-purple-500/20 rounded-lg cursor-pointer" title="Histórico">
+                        <button onClick={() => setHistoryId(f.id)} className="p-2 bg-slate-100 hover:bg-purple-100 text-slate-600 hover:text-purple-700 dark:bg-slate-800 dark:hover:bg-purple-500/20 dark:text-slate-400 dark:hover:text-purple-400 rounded-lg cursor-pointer" title="Histórico">
                           <History className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleToggle(f.id)} className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer" title={f.monitoramento_ativo ? 'Pausar' : 'Reativar'}>
+                        <button onClick={() => handleToggle(f.id)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-white rounded-lg cursor-pointer" title={f.monitoramento_ativo ? 'Pausar' : 'Reativar'}>
                           {f.monitoramento_ativo ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                         </button>
-                        <button onClick={() => { setEditing(f); setModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800 hover:bg-blue-500/20 rounded-lg cursor-pointer" title="Editar">
+                        <button onClick={() => { setEditing(f); setModalOpen(true); }} className="p-2 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-700 dark:bg-slate-800 dark:hover:bg-blue-500/20 dark:text-slate-400 dark:hover:text-blue-400 rounded-lg cursor-pointer" title="Editar">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(f.id)} className="p-2 text-slate-400 hover:text-red-400 bg-slate-800 hover:bg-red-500/20 rounded-lg cursor-pointer" title="Remover">
+                        <button onClick={() => handleDelete(f.id)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-600 hover:text-red-700 dark:bg-slate-800 dark:hover:bg-red-500/20 dark:text-slate-400 dark:hover:text-red-400 rounded-lg cursor-pointer" title="Remover">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -187,9 +187,9 @@ export default function StatusTab({ showToast }) {
 
 function StatCard({ icon, label, value }) {
   return (
-    <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
+    <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
       <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">{icon}</div>
-      <div><div className="text-xs text-slate-400 font-medium">{label}</div><div className="text-lg font-bold text-white">{value}</div></div>
+      <div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">{label}</div><div className="text-lg font-bold text-slate-900 dark:text-white">{value}</div></div>
     </div>
   );
 }
