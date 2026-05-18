@@ -26,39 +26,36 @@ async function processFlight(flight) {
 
     const preco = result.preco;
 
-    // Update DB in a serialized transaction
+    // Persist UPDATE then INSERT sequentially. No explicit BEGIN/COMMIT here:
+    // processBatch runs multiple processFlight concurrently, and SQLite cannot
+    // nest BEGIN on the same connection — that previously crashed the process
+    // with "cannot start a transaction within a transaction".
     await new Promise((resolve, reject) => {
-        db.serialize(() => {
-            db.run('BEGIN TRANSACTION');
-
-            db.run(
-                `UPDATE flights SET preco_atual = ?, ultima_verificacao = datetime('now') WHERE id = ?`,
-                [preco, flight.id],
-                function(err) {
-                    if (err) {
-                        db.run('ROLLBACK');
-                        console.error(`[SCHEDULER] Erro ao atualizar voo #${flight.id}:`, err.message);
-                        return reject(err);
-                    }
+        db.run(
+            `UPDATE flights SET preco_atual = ?, ultima_verificacao = datetime('now') WHERE id = ?`,
+            [preco, flight.id],
+            function(err) {
+                if (err) {
+                    console.error(`[SCHEDULER] Erro ao atualizar voo #${flight.id}:`, err.message);
+                    return reject(err);
                 }
-            );
+                resolve();
+            }
+        );
+    });
 
-            db.run(
-                `INSERT INTO flight_price_history (flight_id, preco) VALUES (?, ?)`,
-                [flight.id, preco],
-                function(err) {
-                    if (err) {
-                        db.run('ROLLBACK');
-                        console.error(`[SCHEDULER] Erro ao inserir histórico do voo #${flight.id}:`, err.message);
-                        return reject(err);
-                    }
-                    db.run('COMMIT', (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
+    await new Promise((resolve, reject) => {
+        db.run(
+            `INSERT INTO flight_price_history (flight_id, preco) VALUES (?, ?)`,
+            [flight.id, preco],
+            function(err) {
+                if (err) {
+                    console.error(`[SCHEDULER] Erro ao inserir histórico do voo #${flight.id}:`, err.message);
+                    return reject(err);
                 }
-            );
-        });
+                resolve();
+            }
+        );
     });
 
     let alertaDisparado = false;
