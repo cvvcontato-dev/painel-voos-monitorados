@@ -75,20 +75,24 @@ async function seedAdminIfNeeded() {
                 );
 
             } else if (email && password) {
-                // ── Subsequent boots: sync admin password from env if it changed ──
-                // This self-heals deployments where the hash was generated from a
-                // value with accidental whitespace (e.g. Coolify env copy-paste).
-                // Use TRIM/LOWER in SQL to find user even if email was stored with accidental whitespace
-                db.get('SELECT id, password_hash FROM users WHERE TRIM(LOWER(email)) = ?', [email], async (err2, user) => {
-                    if (err2 || !user) return resolve();
-
-                    const alreadyMatches = await comparePassword(password, user.password_hash).catch(() => false);
-                    if (alreadyMatches) return resolve();
-
-                    // Hash mismatch — update to the trimmed env value
+                // ── Subsequent boots: always sync admin password from env vars ──
+                // TRIM(LOWER()) in SQL handles emails stored with accidental whitespace.
+                db.get('SELECT id FROM users WHERE TRIM(LOWER(email)) = ?', [email], async (err2, user) => {
+                    if (err2) {
+                        console.error('[AUTH] Error querying admin user:', err2.message);
+                        return resolve();
+                    }
+                    if (!user) {
+                        console.warn(`[AUTH] Admin user not found for "${email}" — skipping password sync`);
+                        return resolve();
+                    }
                     const newHash = await hashPassword(password);
                     db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id], (err3) => {
-                        if (!err3) console.log(`[AUTH] Admin password synced from ADMIN_PASSWORD for ${email}`);
+                        if (err3) {
+                            console.error('[AUTH] Failed to sync admin password:', err3.message);
+                        } else {
+                            console.log(`[AUTH] Admin password synced from ADMIN_PASSWORD for ${email}`);
+                        }
                         resolve();
                     });
                 });
