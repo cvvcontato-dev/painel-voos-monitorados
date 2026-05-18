@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const { hash: hashPassword } = require('./helpers/password');
+const { hash: hashPassword, compare: comparePassword } = require('./helpers/password');
 
 // Use /data volume in production (Docker), fallback to local dir
 const dbDir = process.env.DB_PATH || __dirname;
@@ -36,40 +36,65 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 async function seedAdminIfNeeded() {
+    // Always trim env vars — Coolify and some editors inject trailing newlines
+    const email    = (process.env.ADMIN_EMAIL    || '').toLowerCase().trim();
+    const password = (process.env.ADMIN_PASSWORD || '').trim();
+
     return new Promise((resolve) => {
         db.get('SELECT COUNT(*) as cnt FROM users', [], async (err, row) => {
-            if (err || row.cnt > 0) return resolve();
+            if (err) return resolve();
 
-            const email = process.env.ADMIN_EMAIL;
-            const password = process.env.ADMIN_PASSWORD;
-
-            if (!email || !password) {
-                console.error(
-                    '[AUTH] FATAL: users table is empty but ADMIN_EMAIL and ADMIN_PASSWORD are not set. ' +
-                    'Cannot start without an initial admin account.'
-                );
-                process.exit(1);
-            }
-
-            const password_hash = await hashPassword(password);
-            db.run(
-                `INSERT INTO users (email, nome, password_hash, role, criado_em)
-                 VALUES (?, ?, ?, 'admin', datetime('now'))`,
-                [email.toLowerCase(), email.split('@')[0], password_hash],
-                function(err) {
-                    if (err) {
-                        console.error('[AUTH] Failed to seed admin:', err.message);
-                    } else {
-                        console.log(`[AUTH] Admin account seeded for ${email}`);
-                        db.run(
-                            `INSERT INTO auth_audit_log (timestamp, evento, user_id, ip, user_agent, success)
-                             VALUES (datetime('now'), 'admin_seeded', ?, 'server', 'seed', 1)`,
-                            [this.lastID]
-                        );
-                    }
-                    resolve();
+            if (row.cnt === 0) {
+                // ── First boot: table is empty, must seed admin ──────────────
+                if (!email || !password) {
+                    console.error(
+                        '[AUTH] FATAL: users table is empty but ADMIN_EMAIL and ADMIN_PASSWORD are not set. ' +
+                        'Cannot start without an initial admin account.'
+                    );
+                    process.exit(1);
                 }
-            );
+
+                const password_hash = await hashPassword(password);
+                db.run(
+                    `INSERT INTO users (email, nome, password_hash, role, criado_em)
+                     VALUES (?, ?, ?, 'admin', datetime('now'))`,
+                    [email, email.split('@')[0], password_hash],
+                    function(insertErr) {
+                        if (insertErr) {
+                            console.error('[AUTH] Failed to seed admin:', insertErr.message);
+                        } else {
+                            console.log(`[AUTH] Admin account seeded for ${email}`);
+                            db.run(
+                                `INSERT INTO auth_audit_log (timestamp, evento, user_id, ip, user_agent, success)
+                                 VALUES (datetime('now'), 'admin_seeded', ?, 'server', 'seed', 1)`,
+                                [this.lastID]
+                            );
+                        }
+                        resolve();
+                    }
+                );
+
+            } else if (email && password) {
+                // ── Subsequent boots: sync admin password from env if it changed ──
+                // This self-heals deployments where the hash was generated from a
+                // value with accidental whitespace (e.g. Coolify env copy-paste).
+                db.get('SELECT id, password_hash FROM users WHERE email = ?', [email], async (err2, user) => {
+                    if (err2 || !user) return resolve();
+
+                    const alreadyMatches = await comparePassword(password, user.password_hash).catch(() => false);
+                    if (alreadyMatches) return resolve();
+
+                    // Hash mismatch — update to the trimmed env value
+                    const newHash = await hashPassword(password);
+                    db.run('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id], (err3) => {
+                        if (!err3) console.log(`[AUTH] Admin password synced from ADMIN_PASSWORD for ${email}`);
+                        resolve();
+                    });
+                });
+
+            } else {
+                resolve();
+            }
         });
     });
 }
