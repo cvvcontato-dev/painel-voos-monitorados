@@ -51,7 +51,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(session({
     store: new SqliteStore({
-        db: 'database.sqlite',
+        db: 'sessions.sqlite',
         dir: process.env.DB_PATH || __dirname,
         cleanupInterval: 3600
     }),
