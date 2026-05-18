@@ -9,6 +9,10 @@ frontend/dist/
 # Database (local dev only)
 backend/database.sqlite
 
+# Test artifacts
+backend/__tests__/.tmp/
+backend/__tests__/.tmp-mon/
+
 # Env
 .env
 
