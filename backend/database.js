@@ -10,6 +10,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('Error opening database', err.message);
     } else {
         console.log(`Connected to SQLite database at ${dbPath}`);
+        // SQLite disables foreign keys by default — enable per-connection so that
+        // ON DELETE CASCADE on flight_status_history actually cascades.
+        db.run('PRAGMA foreign_keys = ON');
         db.run(`CREATE TABLE IF NOT EXISTS flights (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             cliente TEXT NOT NULL,

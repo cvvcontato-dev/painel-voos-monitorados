@@ -140,10 +140,28 @@ describe('DELETE /api/monitored-flights/:id', () => {
     const created = await request(app).post('/api/monitored-flights').send({
       cliente: 'Del Test', numero_voo: 'LA4444', data_voo: FUTURE
     });
-    const del = await request(app).delete(`/api/monitored-flights/${created.body.id}`);
+    const id = created.body.id;
+
+    // Seed a history row so we can verify cascade actually removed it.
+    const db = require('../database');
+    await new Promise((res, rej) => db.run(
+      `INSERT INTO flight_status_history (monitored_flight_id, verificado_em, evento, payload_json, notificado)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, new Date().toISOString(), 'check_ok', null, 0],
+      err => err ? rej(err) : res()
+    ));
+
+    const del = await request(app).delete(`/api/monitored-flights/${id}`);
     expect(del.status).toBe(200);
-    const after = await request(app).get(`/api/monitored-flights/${created.body.id}`);
+    const after = await request(app).get(`/api/monitored-flights/${id}`);
     expect(after.status).toBe(404);
+
+    // FK cascade should have removed the history row too.
+    const orphans = await new Promise((res, rej) => db.all(
+      `SELECT * FROM flight_status_history WHERE monitored_flight_id = ?`, [id],
+      (err, rows) => err ? rej(err) : res(rows || [])
+    ));
+    expect(orphans.length).toBe(0);
   });
 });
 
