@@ -29,8 +29,7 @@ const SqliteStore = require('connect-sqlite3')(session);
 const csrfMiddleware = require('./middleware/csrf');
 const requireAuth = require('./middleware/requireAuth');
 const authRouter = require('./routes/auth');
-// NOTE: usersRouter is added in Task 10 — leave this commented for now:
-// const usersRouter = require('./routes/users');
+const usersRouter = require('./routes/users');
 const { startScheduler, startStatusScheduler } = require('./services/scheduler');
 const monitoredFlightsRouter = require('./routes/monitoredFlights');
 const flightsRouter = require('./routes/flights');
@@ -80,7 +79,7 @@ app.use('/api', requireAuth);
 app.use('/api/monitored-flights', monitoredFlightsRouter);
 app.use('/api/flights', flightsRouter);
 app.use('/api/settings', settingsRouter);
-// app.use('/api/users', usersRouter); // Task 10
+app.use('/api/users', usersRouter);
 
 // --- Serve Frontend (Production) ---
 // In production, serve the built React app

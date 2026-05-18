@@ -15,6 +15,7 @@ const cookieParser = require('cookie-parser');
 const SqliteStore = require('connect-sqlite3')(session);
 const monitoredFlightsRouter = require('../routes/monitoredFlights');
 const authRouter = require('../routes/auth');
+const usersRouter = require('../routes/users');
 const csrfMiddleware = require('../middleware/csrf');
 const requireAuth = require('../middleware/requireAuth');
 
@@ -44,6 +45,7 @@ function makeAuthApp() {
   app.use(csrfMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api', requireAuth);
+  app.use('/api/users', usersRouter);
   app.get('/api/ping', (req, res) => res.json({ ok: true }));
   return app;
 }
