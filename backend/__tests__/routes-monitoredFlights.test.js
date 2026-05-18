@@ -146,3 +146,20 @@ describe('DELETE /api/monitored-flights/:id', () => {
     expect(after.status).toBe(404);
   });
 });
+
+describe('POST /api/monitored-flights/:id/check-now', () => {
+  test('runs a check and returns updated flight', async () => {
+    const created = await request(app).post('/api/monitored-flights').send({
+      cliente: 'CN Test', numero_voo: 'LA3333', data_voo: FUTURE
+    });
+    const res = await request(app).post(`/api/monitored-flights/${created.body.id}/check-now`);
+    expect(res.status).toBe(200);
+    expect(res.body.sucesso).toBe(true);
+    expect(res.body.flight.status_atual).toBeTruthy();
+  });
+
+  test('404 when id does not exist', async () => {
+    const res = await request(app).post('/api/monitored-flights/999999/check-now');
+    expect(res.status).toBe(404);
+  });
+});

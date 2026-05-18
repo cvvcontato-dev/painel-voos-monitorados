@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../database');
 const { nowUtcIso, addMinutesUtc } = require('../helpers/time');
+const { checkOne } = require('../services/statusMonitor');
 
 const router = express.Router();
 
@@ -175,9 +176,21 @@ router.delete('/:id', (req, res) => {
   });
 });
 
-// POST check-now — placeholder; full implementation in Task 3.2
-router.post('/:id/check-now', (req, res) => {
-  res.status(501).json({ error: 'Not implemented yet (Phase 3)' });
+// POST check-now
+router.post('/:id/check-now', async (req, res) => {
+  try {
+    const result = await checkOne(req.params.id);
+    if (!result.ok && result.error === 'not_found')
+      return res.status(404).json({ error: 'Flight not found' });
+    if (!result.ok)
+      return res.status(502).json({ sucesso: false, erro: result.error });
+    const flight = await new Promise((r, j) =>
+      db.get('SELECT * FROM monitored_flights_status WHERE id = ?', [req.params.id],
+        (e, row) => e ? j(e) : r(row)));
+    return res.json({ sucesso: true, status_atual: result.status_atual, events: result.events, flight });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

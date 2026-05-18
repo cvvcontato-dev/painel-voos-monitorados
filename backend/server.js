@@ -19,7 +19,7 @@ if (envPath) {
 const express = require('express');
 const cors = require('cors');
 const db = require('./database');
-const { startScheduler, processFlight } = require('./services/scheduler');
+const { startScheduler, processFlight, startStatusScheduler } = require('./services/scheduler');
 const monitoredFlightsRouter = require('./routes/monitoredFlights');
 
 const app = express();
@@ -368,4 +368,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
     // Start the scheduler after server is up
     startScheduler();
+    startStatusScheduler();
 });

@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const db = require('../database');
 const { scrapeFlightPrice } = require('./flightScraper');
 const { sendTelegram, sendEmail } = require('./notifier');
+const { checkDueFlights } = require('./statusMonitor');
 
 let currentJob = null;
 
@@ -165,4 +166,21 @@ function startScheduler() {
     return currentJob;
 }
 
-module.exports = { startScheduler, runCheckCycle, processFlight };
+let statusCronJob = null;
+function startStatusScheduler() {
+  if (statusCronJob) { statusCronJob.stop(); statusCronJob = null; }
+  console.log('[STATUS-MON] Cron iniciado: */5 * * * *');
+  statusCronJob = cron.schedule('*/5 * * * *', async () => {
+    try {
+      const results = await checkDueFlights();
+      if (results.length > 0) {
+        console.log(`[STATUS-MON] Processados ${results.length} voo(s).`);
+      }
+    } catch (err) {
+      console.error('[STATUS-MON] Erro fatal:', err);
+    }
+  });
+  return statusCronJob;
+}
+
+module.exports = { startScheduler, runCheckCycle, processFlight, startStatusScheduler };
