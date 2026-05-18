@@ -31,7 +31,7 @@ function makeAuthApp() {
   app.use(express.json());
   app.use(session({
     store: new SqliteStore({
-      db: 'database.sqlite',
+      db: 'sessions-test.sqlite',  // separate file — prevents Windows file lock on database.sqlite
       dir: process.env.DB_PATH,
       cleanupInterval: 3600
     }),

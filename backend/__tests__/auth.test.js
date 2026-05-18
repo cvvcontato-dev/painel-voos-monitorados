@@ -255,19 +255,26 @@ describe('sessions table json_extract compatibility', () => {
   });
 
   test('json_extract can read userId from sessions after login', async () => {
-    const db = require('../database');
+    const sqlite3 = require('sqlite3').verbose();
+    const sessDbPath = require('path').join(process.env.DB_PATH, 'sessions-test.sqlite');
     const agent = request.agent(app);
     const loginRes = await agent.post('/api/auth/login').send({ email: 'admin@test.com', password: 'AdminPass123!' });
     const userId = loginRes.body.user?.id;
 
-    await new Promise(r => setTimeout(r, 200)); // let session write settle
+    await new Promise(r => setTimeout(r, 300)); // let session write settle
 
     const row = await new Promise((resolve, reject) => {
-      db.get(
-        "SELECT sess, json_extract(sess, '$.userId') as extracted_uid FROM sessions LIMIT 1",
-        [],
-        (err, row) => { if (err) reject(err); else resolve(row); }
-      );
+      const sessDb = new sqlite3.Database(sessDbPath, sqlite3.OPEN_READONLY, (err) => {
+        if (err) return reject(new Error(`Cannot open sessions DB: ${err.message}`));
+        sessDb.get(
+          "SELECT sess, json_extract(sess, '$.userId') as extracted_uid FROM sessions LIMIT 1",
+          [],
+          (err, row) => {
+            sessDb.close();
+            if (err) reject(err); else resolve(row);
+          }
+        );
+      });
     });
 
     // If this test fails, the connect-sqlite3 version uses a different field name.
