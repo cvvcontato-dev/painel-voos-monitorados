@@ -133,7 +133,16 @@ independentes.
 
 ### Storage temporário
 Pasta de trabalho por ciclo em `backend/output/promos/<promo_id>/` (print enviado, `promocao_final.png`).
-URLs temporárias com `expires_at`; limpeza periódica.
+URLs temporárias com `expires_at` = criação + 24h. Limpeza: varredura no startup do servidor +
+verificação preguiçosa a cada `/extract` que remove pastas com mais de 24h. Sem cron dedicado no v1.
+
+### Tratamento de erro da extração
+`geminiExtractor` é o ponto mais dependente de serviço externo. Comportamento esperado:
+- Gemini indisponível / timeout / erro HTTP → `/extract` retorna `503` com mensagem amigável;
+  o operador pode tentar novamente.
+- Resposta do Gemini com JSON malformado ou campos faltando → tenta parse tolerante; campos
+  ausentes entram em `_meta.low_confidence_fields` (em vez de falhar), permitindo correção manual
+  no formulário. Só falha (`422`) se nada útil for extraído.
 
 ## Componentes
 
@@ -166,10 +175,11 @@ URLs temporárias com `expires_at`; limpeza periódica.
 ## Regras de validação (`promoValidator`)
 
 - Campos obrigatórios: origem, destino, hotel, voo, preço.
-- Coerência: `installment_amount * installments ≈ total_price` dentro de tolerância de centavos.
+- Coerência: `installment_amount * installments ≈ total_price` dentro de tolerância de R$ 0,10
+  (10 centavos, para absorver arredondamento da divisão).
 - **Bloqueio do "Seu ganho" / campos internos** — aplicado também no renderer e no message
   builder, não só no validator.
-- Número mínimo e máximo de noites.
+- Número de noites entre 1 e 30 (fora disso → warning para revisão).
 - Limite de comprimento para `hotel_name`, `meal_plan`, `airlines` com truncamento visual controlado.
 - Campos de baixa confiança exigem atenção do operador antes da aprovação.
 
