@@ -88,4 +88,4 @@ async function renderImage(promo_id, rawPromo, { backgroundUrl } = {}) {
   }
 }
 
-module.exports = { renderImage, fillTemplate, W, H };
+module.exports = { renderImage, fillTemplate, backgroundCss, W, H };
