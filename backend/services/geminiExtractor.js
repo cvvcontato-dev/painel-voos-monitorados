@@ -37,7 +37,7 @@ async function extract(imageBuffer, mimeType) {
   if (!process.env.GEMINI_API_KEY) { const e = new Error('GEMINI_API_KEY missing'); e.code = 'unavailable'; throw e; }
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
     const result = await model.generateContent([
       PROMPT,
       { inlineData: { data: imageBuffer.toString('base64'), mimeType } }
