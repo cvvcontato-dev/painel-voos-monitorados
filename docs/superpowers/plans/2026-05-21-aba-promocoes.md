@@ -902,9 +902,10 @@ router.post('/render-message', (req, res) => {
   return res.json({ message_text: buildMessage(stripInternal(promotion)) });
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 router.post('/render-image', async (req, res) => {
   const { promotion, background_choice } = req.body || {};
-  if (!promotion || !promotion.promo_id) return res.status(400).json({ error: 'promotion.promo_id é obrigatório' });
+  if (!promotion || !UUID_RE.test(promotion.promo_id || '')) return res.status(400).json({ error: 'promotion.promo_id inválido' });
   try {
     const out = await renderImage(promotion.promo_id, stripInternal(promotion), { backgroundUrl: background_choice || null });
     return res.json(out);
