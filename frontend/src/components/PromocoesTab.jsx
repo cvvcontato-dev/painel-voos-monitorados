@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import {
   UploadCloud, Sparkles, ArrowLeft, RefreshCw, Copy, Download,
-  Plus, AlertTriangle, Info, Image as ImageIcon
+  Plus, AlertTriangle, Info, Image as ImageIcon, Ban, Check
 } from 'lucide-react';
-import { extractPrint, renderMessage, renderImage } from '../api/promoClient';
+import { extractPrint, renderMessage, renderImage, listBackgrounds } from '../api/promoClient';
 
 const fmtBRL = (v) => {
   const n = Number(v);
@@ -35,9 +35,30 @@ export default function PromocoesTab({ showToast }) {
   const [printUrl, setPrintUrl] = useState(null);
   const [messageText, setMessageText] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [selectedBg, setSelectedBg] = useState(null);
+  const [loadingBg, setLoadingBg] = useState(false);
   const fileInputRef = useRef(null);
 
   const lowConf = (name) => (meta.low_confidence_fields || []).includes(name);
+
+  // ── Backgrounds ─────────────────────────────────────────────────
+  const fetchBackgrounds = async (destination) => {
+    if (!destination) return;
+    setLoadingBg(true);
+    try {
+      const res = await listBackgrounds(destination);
+      const options = res.options || [];
+      setBackgrounds(options);
+      setSelectedBg(options[0]?.url ?? null);
+    } catch {
+      // Backgrounds são opcionais — não bloquear o fluxo nem poluir com erros.
+      setBackgrounds([]);
+      setSelectedBg(null);
+    } finally {
+      setLoadingBg(false);
+    }
+  };
 
   // ── Step 1: Upload ──────────────────────────────────────────────
   const handleFile = async (file) => {
@@ -50,6 +71,7 @@ export default function PromocoesTab({ showToast }) {
       setPromotion(res.promotion);
       setMeta(res._meta || { low_confidence_fields: [], validation_warnings: [], agency_commission_detected: null });
       setStep('review');
+      fetchBackgrounds(res.promotion?.destination_city);
     } catch (err) {
       if (err.kind === 'unprocessable') {
         // Não conseguiu ler o print: vai para revisão com formulário em branco.
@@ -83,7 +105,7 @@ export default function PromocoesTab({ showToast }) {
     try {
       const [msgRes, imgRes] = await Promise.all([
         renderMessage(promotion),
-        renderImage(promotion),
+        renderImage(promotion, selectedBg),
       ]);
       setMessageText(msgRes.message_text || '');
       setImageUrl(imgRes.image_url || '');
@@ -113,6 +135,9 @@ export default function PromocoesTab({ showToast }) {
     setPrintUrl(null);
     setMessageText('');
     setImageUrl('');
+    setBackgrounds([]);
+    setSelectedBg(null);
+    setLoadingBg(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -138,6 +163,11 @@ export default function PromocoesTab({ showToast }) {
           lowConf={lowConf}
           setField={setField}
           toggleBaggage={toggleBaggage}
+          backgrounds={backgrounds}
+          selectedBg={selectedBg}
+          loadingBg={loadingBg}
+          onSelectBg={setSelectedBg}
+          onRefreshBg={() => fetchBackgrounds(promotion.destination_city)}
           onBack={reset}
           onGenerate={generate}
         />
@@ -225,7 +255,7 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
 }
 
 // ── Step 2: Review ────────────────────────────────────────────────
-function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, toggleBaggage, onBack, onGenerate }) {
+function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, toggleBaggage, backgrounds, selectedBg, loadingBg, onSelectBg, onRefreshBg, onBack, onGenerate }) {
   const warnings = meta.validation_warnings || [];
   const commission = meta.agency_commission_detected;
 
@@ -353,6 +383,85 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
                 <input className={`${inputCls} ${lowConf('cta_text') ? lowConfCls : ''}`} value={promotion.cta_text ?? ''} onChange={(e) => setField('cta_text', e.target.value)} />
               </Field>
             </div>
+          </div>
+
+          {/* Fundo da arte */}
+          <div className="border-t border-slate-200 dark:border-slate-700/50 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" /> Fundo da arte
+              </p>
+              <button
+                type="button"
+                onClick={onRefreshBg}
+                disabled={loadingBg}
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingBg ? 'animate-spin' : ''}`} /> Atualizar fundos
+              </button>
+            </div>
+
+            {loadingBg ? (
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-4">
+                <div className="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                Buscando fotos do destino...
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {/* Sem fundo */}
+                  <button
+                    type="button"
+                    onClick={() => onSelectBg(null)}
+                    className={`relative aspect-[4/3] rounded-lg overflow-hidden border-2 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                      selectedBg === null
+                        ? 'border-indigo-500 ring-2 ring-indigo-500/40'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50'
+                    } bg-slate-50 dark:bg-slate-800/50`}
+                  >
+                    <Ban className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Sem fundo</span>
+                    {selectedBg === null && (
+                      <span className="absolute top-1 right-1 bg-indigo-600 text-white rounded-full p-0.5">
+                        <Check className="w-3 h-3" />
+                      </span>
+                    )}
+                  </button>
+
+                  {backgrounds.map((opt) => {
+                    const active = selectedBg === opt.url;
+                    return (
+                      <button
+                        key={opt.url}
+                        type="button"
+                        onClick={() => onSelectBg(opt.url)}
+                        className={`relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                          active
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/40'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50'
+                        }`}
+                      >
+                        <img src={opt.thumb} alt={`Fundo (${opt.source})`} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-1 left-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/60 text-white">
+                          {opt.source === 'local' ? 'Local' : 'Pexels'}
+                        </span>
+                        {active && (
+                          <span className="absolute top-1 right-1 bg-indigo-600 text-white rounded-full p-0.5">
+                            <Check className="w-3 h-3" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {backgrounds.length === 0 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
+                    Nenhuma foto encontrada — será usado o fundo padrão.
+                  </p>
+                )}
+              </>
+            )}
           </div>
 
           {/* Actions */}
