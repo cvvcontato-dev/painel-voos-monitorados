@@ -29,8 +29,11 @@ test('extract returns promotion + safe workspace urls (no internal paths)', asyn
   expect(res.body.promotion).toBeDefined();
   expect(res.body.promotion.promo_id).toMatch(/^[0-9a-f-]{36}$/);
   expect(res.body.workspace.print_url).toMatch(/^\/api\/promotions\/[0-9a-f-]+\/file\//);
-  expect(JSON.stringify(res.body)).not.toContain('output');      // no internal/abs path
-  expect(JSON.stringify(res.body)).not.toContain('227');          // commission not in promotion
+  expect(JSON.stringify(res.body)).not.toContain('output');           // no internal/abs path
+  // Customer-facing payload must be clean; the commission lives only in _meta as an
+  // operator-only alert (this response never reaches the customer).
+  expect(JSON.stringify(res.body.promotion)).not.toContain('227');
+  expect(res.body._meta.agency_commission_detected).toBe(227);
 });
 
 test('render-message returns commission-free text', async () => {

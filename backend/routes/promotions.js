@@ -24,8 +24,10 @@ router.post('/extract', upload.single('print'), async (req, res) => {
     const normalized = normalize(promotion);
     const { warnings, normalized_promotion } = validate(normalized);
     _meta.validation_warnings = warnings;
-    // Contract: agency commission ("Seu ganho") must never leak to client output.
-    delete _meta.agency_commission_detected;
+    // _meta.agency_commission_detected is intentionally returned here: this response
+    // goes only to the authenticated operator's browser, where it powers the "comissão
+    // detectada, não será publicada" alert. It is NEVER customer-facing — the message
+    // and image routes run stripInternal, which removes it from published output.
     return res.json({
       promo_id, promotion: { ...normalized_promotion, promo_id }, _meta,
       workspace: { promo_id, print_url: ws.publicUrl(promo_id, `print.${ext}`) }
