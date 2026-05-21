@@ -1,12 +1,17 @@
 const LIMITS = { hotel_name: 45, meal_plan: 30, airlines: 3 };
 const CENTS_TOLERANCE = 0.10;
 
+// Contrato: todo dado interno/sensível vive sob chaves com prefixo "_" (ex.: _meta),
+// nunca aninhado dentro de campos voltados ao cliente — o strip raso depende disso.
 function stripInternal(promotion) {
   const clean = {};
   for (const [k, v] of Object.entries(promotion || {})) {
     if (k.startsWith('_')) continue;
     clean[k] = v;
   }
+  // Defesa em profundidade: a comissão ("Seu ganho") nunca pode vazar para a saída.
+  // O extractor emite o campo top-level `agency_commission`; remover ambos os nomes.
+  delete clean.agency_commission;
   delete clean.agency_commission_detected;
   return clean;
 }

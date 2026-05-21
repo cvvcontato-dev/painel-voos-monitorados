@@ -16,6 +16,12 @@ test('stripInternal removes commission and underscore-prefixed keys', () => {
   expect(JSON.stringify(clean)).not.toContain('227');
 });
 
+test('stripInternal removes top-level agency_commission (extractor field name)', () => {
+  const clean = stripInternal({ ...base, agency_commission: 227 });
+  expect(clean.agency_commission).toBeUndefined();
+  expect(JSON.stringify(clean)).not.toContain('227');
+});
+
 test('missing destination is an error', () => {
   const r = validate({ ...base, destination_city: '' });
   expect(r.valid).toBe(false);
@@ -43,4 +49,22 @@ test('overlong hotel_name is truncated in normalized_promotion with warning', ()
   const r = validate({ ...base, hotel_name: long });
   expect(r.normalized_promotion.hotel_name.length).toBeLessThanOrEqual(45);
   expect(r.warnings.join(' ')).toMatch(/hotel/i);
+});
+
+test('overlong meal_plan is truncated with warning', () => {
+  const r = validate({ ...base, meal_plan: 'Y'.repeat(50) });
+  expect(r.normalized_promotion.meal_plan.length).toBeLessThanOrEqual(30);
+  expect(r.warnings.join(' ')).toMatch(/meal_plan/i);
+});
+
+test('more than 3 airlines are trimmed with warning', () => {
+  const r = validate({ ...base, airlines: ['GOL', 'LATAM', 'Azul', 'Voepass'] });
+  expect(r.normalized_promotion.airlines).toHaveLength(3);
+  expect(r.warnings.join(' ')).toMatch(/companhia/i);
+});
+
+test('validate does not mutate its input argument', () => {
+  const original = JSON.parse(JSON.stringify(base));
+  validate({ ...base, hotel_name: 'Z'.repeat(60), airlines: ['A', 'B', 'C', 'D'] });
+  expect(base).toEqual(original);
 });
