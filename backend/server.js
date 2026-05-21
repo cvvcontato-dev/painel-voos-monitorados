@@ -101,5 +101,9 @@ app.listen(PORT, '0.0.0.0', () => {
     // Start the scheduler after server is up
     startScheduler();
     startStatusScheduler();
-    require('./helpers/promoWorkspace').cleanupExpired();
+    // Limpa pastas de trabalho de promoções no boot e a cada hora (TTL 24h),
+    // honrando o expires_at retornado por /render-image.
+    const { cleanupExpired } = require('./helpers/promoWorkspace');
+    cleanupExpired();
+    setInterval(() => cleanupExpired(), 3600 * 1000).unref();
 });

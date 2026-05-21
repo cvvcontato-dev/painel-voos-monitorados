@@ -48,14 +48,16 @@ router.post('/validate', (req, res) => {
 router.post('/render-message', (req, res) => {
   const { promotion } = req.body || {};
   if (!promotion) return res.status(400).json({ error: 'promotion é obrigatório' });
-  return res.json({ message_text: buildMessage(stripInternal(promotion)) });
+  // Re-normaliza o payload editado pelo operador: campos vindos do formulário chegam como
+  // strings/vazios; normalizar recomputa noites, parcela, display_availability, etc. antes de gerar.
+  return res.json({ message_text: buildMessage(stripInternal(normalize(promotion))) });
 });
 
 router.post('/render-image', async (req, res) => {
   const { promotion, background_choice } = req.body || {};
   if (!promotion || !UUID_RE.test(promotion.promo_id || '')) return res.status(400).json({ error: 'promotion.promo_id inválido' });
   try {
-    const out = await renderImage(promotion.promo_id, stripInternal(promotion), { backgroundUrl: background_choice || null });
+    const out = await renderImage(promotion.promo_id, stripInternal(normalize(promotion)), { backgroundUrl: background_choice || null });
     return res.json(out);
   } catch (err) { return res.status(500).json({ error: err.message }); }
 });
