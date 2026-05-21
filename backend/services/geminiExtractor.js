@@ -1,6 +1,6 @@
 const PROMPT = `Você recebe o print de um pacote de viagem (sistema interno estilo CVC).
 Extraia SOMENTE os dados visíveis e devolva um JSON único, sem texto extra, com as chaves:
-origin_code, destination_code, start_date (YYYY-MM-DD), end_date, passengers, hotel_name,
+origin_code, destination_code, start_date (YYYY-MM-DD), end_date, nights, passengers, hotel_name,
 hotel_stars, hotel_rating_value, hotel_rating_text, flight_type ("Direto" ou "1 parada"),
 airlines (array), baggage_raw (array de strings como "bagagem de mão"), meal_plan,
 total_price (número, "Final 2 pessoas"), agency_commission ("Seu ganho", número ou null),
@@ -9,7 +9,7 @@ Se um campo não estiver visível, use null. NÃO invente valores.`;
 
 const STUB = {
   origin_code: 'SSA', destination_code: 'BPS', start_date: '2026-09-12', end_date: '2026-09-19',
-  passengers: 2, hotel_name: 'Rede Andrade Terra Brasil', hotel_stars: 3, hotel_rating_value: 8.1,
+  nights: 7, passengers: 2, hotel_name: 'Rede Andrade Terra Brasil', hotel_stars: 3, hotel_rating_value: 8.1,
   hotel_rating_text: 'Muito bom', flight_type: 'Direto', airlines: ['GOL'],
   baggage_raw: ['bagagem de mão', 'bagagem despachada'], meal_plan: 'Café da Manhã',
   total_price: 2411.0, agency_commission: 227.0, availability_note: 'sob consulta'

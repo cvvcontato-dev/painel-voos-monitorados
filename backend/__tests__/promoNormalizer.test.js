@@ -18,6 +18,16 @@ test('derives installment_amount from total and installments (default 10)', () =
   expect(out.installment_amount).toBeCloseTo(241.10, 2);
 });
 
+test('derives nights from date range when not provided', () => {
+  const out = normalize({ start_date: '2026-09-12', end_date: '2026-09-19' });
+  expect(out.nights).toBe(7);
+});
+
+test('keeps explicit nights when provided', () => {
+  const out = normalize({ nights: 6, start_date: '2026-09-12', end_date: '2026-09-19' });
+  expect(out.nights).toBe(6);
+});
+
 test('normalizes baggage to closed values', () => {
   const out = normalize({ baggage_raw: ['bagagem de mão', 'bagagem despachada'] });
   expect(out.baggage).toEqual(['carry_on', 'checked']);

@@ -16,6 +16,15 @@ function monthLabel(isoDate) {
   return MONTHS[m - 1] || null;
 }
 
+function nightsBetween(start, end) {
+  if (!start || !end) return null;
+  const a = new Date(`${start}T00:00:00Z`);
+  const b = new Date(`${end}T00:00:00Z`);
+  if (isNaN(a) || isNaN(b)) return null;
+  const diff = Math.round((b - a) / (24 * 3600 * 1000));
+  return diff > 0 ? diff : null;
+}
+
 function normalizeBaggage(raw) {
   if (!Array.isArray(raw)) return [];
   const out = new Set();
@@ -34,6 +43,11 @@ function normalize(raw = {}) {
 
   const month = raw.travel_month_label || monthLabel(raw.start_date);
   if (month) out.travel_month_label = month;
+
+  // Noites: usa o valor extraído ou deriva do intervalo de datas (check-in → check-out).
+  if (raw.nights != null) out.nights = Number(raw.nights);
+  else out.nights = nightsBetween(raw.start_date, raw.end_date);
+
   out.availability_note = raw.availability_note || null;
   if (out.travel_month_label) {
     out.display_availability = out.availability_note
@@ -59,4 +73,4 @@ function normalize(raw = {}) {
   return out;
 }
 
-module.exports = { normalize, cityFromCode, monthLabel, normalizeBaggage, AIRPORTS };
+module.exports = { normalize, cityFromCode, monthLabel, nightsBetween, normalizeBaggage, AIRPORTS };
