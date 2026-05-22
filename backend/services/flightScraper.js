@@ -4,6 +4,11 @@ const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 5000;
 const NAVIGATION_TIMEOUT = 60000;
 
+// How long to wait for the first price to appear after page load
+const PRICE_APPEAR_TIMEOUT_MS = 30000;
+// Extra settle time after first price detected (remaining results still rendering)
+const PRICE_SETTLE_MS = 3000;
+
 /**
  * Detect if the page is blocked by CAPTCHA or anti-bot protection.
  */
@@ -216,8 +221,27 @@ async function scrapeFlightPrice(url) {
 
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUT });
 
-            // Wait for dynamic content to load
-            await page.waitForTimeout(8000);
+            // Wait until the first R$ price appears in the DOM, up to PRICE_APPEAR_TIMEOUT_MS.
+            // This is far more reliable than a flat sleep: it advances the moment prices render
+            // (usually 2-5 s) and only gives up after 30 s if nothing appears.
+            let priceDetected = false;
+            try {
+                await page.waitForFunction(() => {
+                    const spans = document.querySelectorAll('span');
+                    for (const span of spans) {
+                        const t = span.textContent.trim();
+                        if (t.length < 25 && /R\$\s*[\d.,]+/.test(t)) return true;
+                    }
+                    return false;
+                }, { timeout: PRICE_APPEAR_TIMEOUT_MS });
+                priceDetected = true;
+                console.log('[SCRAPER] Preço detectado no DOM — aguardando estabilização...');
+                // Give the rest of the results a moment to finish rendering
+                await page.waitForTimeout(PRICE_SETTLE_MS);
+            } catch (_) {
+                // Timeout: page may be blocked or no prices available — try extracting anyway
+                console.log('[SCRAPER] Timeout aguardando preços — tentando extração mesmo assim...');
+            }
 
             // Check for CAPTCHA/block
             const blockCheck = await detectBlock(page);
