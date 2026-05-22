@@ -85,6 +85,8 @@ function normalize(raw = {}) {
 
   if (raw.baggage_raw) out.baggage = normalizeBaggage(raw.baggage_raw);
   else if (Array.isArray(raw.baggage)) out.baggage = raw.baggage;
+  // Bagagem de mão é praticamente sempre inclusa nesses pacotes — default quando vazio.
+  if (!Array.isArray(out.baggage) || out.baggage.length === 0) out.baggage = ['carry_on'];
 
   if (raw.flight_type) {
     const ft = String(raw.flight_type).toLowerCase();

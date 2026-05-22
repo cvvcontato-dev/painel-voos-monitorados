@@ -5,10 +5,13 @@ REGRAS IMPORTANTES:
 - O cabeçalho no topo mostra "Origem, País - Destino, País" (ex.: "Salvador, Brasil - Aruba, Aruba").
   Use ESSE cabeçalho para os nomes de cidade/país. Os códigos de aeroporto (3 letras como SSA, AUA)
   NÃO são o nome do destino — o destino é o NOME DA CIDADE do cabeçalho.
-- O nome do hotel aparece DUAS vezes: abreviado no topo (com "...") e COMPLETO no card inferior
-  "Hospedagem selecionada". SEMPRE use o nome COMPLETO do card inferior, nunca o abreviado.
-- flight_type: olhe os trechos de voo E o texto "Voo direto" / "Voo com paradas" no card inferior.
-  Se QUALQUER trecho tiver parada(s), use "Com paradas". Só use "Direto" se TODOS os trechos forem diretos.
+- NOME DO HOTEL: no topo ele aparece ABREVIADO com reticências (ex.: "Caribbean Palm Villag...").
+  NUNCA use esse. O nome COMPLETO está no bloco "Hospedagem selecionada" (ao lado da foto do hotel,
+  na parte de baixo). Copie o nome COMPLETO de lá, SEM reticências. Se houver "..." no valor, está errado.
+- TIPO DE VOO: no bloco inferior há o texto "Voo direto" OU "Voo com paradas" (ex.: "Voo com paradas SSA ⇄ AUA").
+  Os trechos também mostram "Direto", "1 parada", "2 paradas". Regra: se aparecer "Voo com paradas" OU
+  qualquer trecho com parada(s), então flight_type = "Com paradas". Só use "Direto" se TODOS os trechos
+  forem diretos E o texto disser "Voo direto".
 
 Chaves do JSON:
 origin_code (IATA, ex.: SSA), origin_city (nome, ex.: Salvador), origin_country (ex.: Brasil),

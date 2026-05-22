@@ -56,6 +56,11 @@ test('normalizes baggage to closed values', () => {
   expect(out.baggage).toEqual(['carry_on', 'checked']);
 });
 
+test('defaults baggage to carry_on when none detected', () => {
+  expect(normalize({}).baggage).toEqual(['carry_on']);
+  expect(normalize({ baggage_raw: [] }).baggage).toEqual(['carry_on']);
+});
+
 test('keeps display_availability without parens when no note', () => {
   const out = normalize({ start_date: '2026-08-01', end_date: '2026-08-07' });
   expect(out.display_availability).toBe('Agosto');

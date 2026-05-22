@@ -17,7 +17,7 @@ const BLANK_PROMOTION = (promo_id) => ({
   origin_city: '', destination_city: '', destination_country: '', travel_month_label: '', availability_note: '',
   display_availability: '', nights: '', passengers: '', hotel_name: '', hotel_stars: '',
   hotel_rating_value: '', hotel_rating_text: '', flight_type: 'Direto', airlines: [],
-  baggage: [], meal_plan: 'Café da Manhã', total_price: '', installments: '', installment_amount: '',
+  baggage: ['carry_on'], meal_plan: 'Café da Manhã', total_price: '', installments: '', installment_amount: '',
   taxes_included: false, customization_text: '', cta_text: '',
 });
 
@@ -344,9 +344,9 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
             <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold mb-3">Voo</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Tipo de voo" name="flight_type" lowConf={lowConf}>
-                <select className={`${inputCls} appearance-none ${lowConf('flight_type') ? lowConfCls : ''}`} value={promotion.flight_type ?? 'Direto'} onChange={(e) => setField('flight_type', e.target.value)}>
+                <select className={`${inputCls} appearance-none ${lowConf('flight_type') ? lowConfCls : ''}`} value={(promotion.flight_type && promotion.flight_type.toLowerCase().includes('parad')) ? 'Com paradas' : 'Direto'} onChange={(e) => setField('flight_type', e.target.value)}>
                   <option value="Direto" className="bg-white dark:bg-slate-900">Direto</option>
-                  <option value="1 parada" className="bg-white dark:bg-slate-900">1 parada</option>
+                  <option value="Com paradas" className="bg-white dark:bg-slate-900">Com paradas</option>
                 </select>
               </Field>
               <Field label="Companhias (separadas por vírgula)" name="airlines" lowConf={lowConf}>
