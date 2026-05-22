@@ -14,12 +14,14 @@ const fmtBRL = (v) => {
 // Promoção em branco usada quando o print não pôde ser lido (kind unprocessable).
 const BLANK_PROMOTION = (promo_id) => ({
   promo_id: promo_id || '',
-  origin_city: '', destination_city: '', travel_month_label: '', availability_note: '',
+  origin_city: '', destination_city: '', destination_country: '', travel_month_label: '', availability_note: '',
   display_availability: '', nights: '', passengers: '', hotel_name: '', hotel_stars: '',
   hotel_rating_value: '', hotel_rating_text: '', flight_type: 'Direto', airlines: [],
-  baggage: [], meal_plan: '', total_price: '', installments: '', installment_amount: '',
-  taxes_included: false, cta_text: '',
+  baggage: [], meal_plan: 'Café da Manhã', total_price: '', installments: '', installment_amount: '',
+  taxes_included: false, customization_text: '', cta_text: '',
 });
+
+const MEAL_OPTIONS = ['Café da Manhã', 'Meia Pensão', 'Pensão Completa'];
 
 const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border " +
   "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
@@ -301,6 +303,9 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
             <Field label="Cidade de destino" name="destination_city" lowConf={lowConf}>
               <input className={`${inputCls} ${lowConf('destination_city') ? lowConfCls : ''}`} value={promotion.destination_city ?? ''} onChange={(e) => setField('destination_city', e.target.value)} />
             </Field>
+            <Field label="País de destino" name="destination_country" lowConf={lowConf}>
+              <input className={inputCls} value={promotion.destination_country ?? ''} onChange={(e) => setField('destination_country', e.target.value)} />
+            </Field>
             <Field label="Mês da viagem" name="travel_month_label" lowConf={lowConf}>
               <input className={`${inputCls} ${lowConf('travel_month_label') ? lowConfCls : ''}`} value={promotion.travel_month_label ?? ''} onChange={(e) => setField('travel_month_label', e.target.value)} />
             </Field>
@@ -322,7 +327,9 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
                 <input className={`${inputCls} ${lowConf('hotel_name') ? lowConfCls : ''}`} value={promotion.hotel_name ?? ''} onChange={(e) => setField('hotel_name', e.target.value)} />
               </Field>
               <Field label="Plano de refeições" name="meal_plan" lowConf={lowConf}>
-                <input className={`${inputCls} ${lowConf('meal_plan') ? lowConfCls : ''}`} value={promotion.meal_plan ?? ''} onChange={(e) => setField('meal_plan', e.target.value)} />
+                <select className={`${inputCls} appearance-none`} value={promotion.meal_plan || 'Café da Manhã'} onChange={(e) => setField('meal_plan', e.target.value)}>
+                  {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
               </Field>
               <Field label="Estrelas" name="hotel_stars" lowConf={lowConf}>
                 <input type="number" className={`${inputCls} ${lowConf('hotel_stars') ? lowConfCls : ''}`} value={promotion.hotel_stars ?? ''} onChange={(e) => setField('hotel_stars', e.target.value)} />
@@ -379,8 +386,11 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
               </Field>
             </div>
             <div className="mt-4">
+              <Field label="Personalize (texto)" name="customization_text" lowConf={lowConf}>
+                <input className={inputCls} value={promotion.customization_text ?? ''} onChange={(e) => setField('customization_text', e.target.value)} placeholder="Precisa de outras datas ou roteiro? Fale conosco!" />
+              </Field>
               <Field label="Texto da chamada (CTA)" name="cta_text" lowConf={lowConf}>
-                <input className={`${inputCls} ${lowConf('cta_text') ? lowConfCls : ''}`} value={promotion.cta_text ?? ''} onChange={(e) => setField('cta_text', e.target.value)} />
+                <input className={`${inputCls} ${lowConf('cta_text') ? lowConfCls : ''}`} value={promotion.cta_text ?? ''} onChange={(e) => setField('cta_text', e.target.value)} placeholder="Garanta já sua viagem inesquecível!" />
               </Field>
             </div>
           </div>
