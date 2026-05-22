@@ -337,6 +337,9 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
               <Field label="Nota de avaliação" name="hotel_rating_value" lowConf={lowConf}>
                 <input type="number" step="0.1" className={`${inputCls} ${lowConf('hotel_rating_value') ? lowConfCls : ''}`} value={promotion.hotel_rating_value ?? ''} onChange={(e) => setField('hotel_rating_value', e.target.value)} />
               </Field>
+              <Field label="Avaliação (texto)" name="hotel_rating_text" lowConf={lowConf}>
+                <input className={inputCls} value={promotion.hotel_rating_text ?? ''} onChange={(e) => setField('hotel_rating_text', e.target.value)} placeholder="Muito bom" />
+              </Field>
             </div>
           </div>
 

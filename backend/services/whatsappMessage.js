@@ -32,7 +32,7 @@ function hotelLine(p) {
   if (p.hotel_rating_value) det.push(`${p.hotel_rating_text ? p.hotel_rating_text + ' ' : ''}${p.hotel_rating_value}`);
   if (p.destination_city) det.push(p.destination_city);
   if (p.meal_plan) det.push(`com ${p.meal_plan}`);
-  return `${p.hotel_name}${det.length ? ` (${det.join(', ')})` : ''}`;
+  return `${p.hotel_name || ''}${det.length ? ` (${det.join(', ')})` : ''}`.trim();
 }
 
 function flightLine(p) {

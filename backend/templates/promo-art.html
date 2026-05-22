@@ -10,82 +10,85 @@
     position: relative; overflow: hidden;
     background: linear-gradient(160deg,#1a7fb8 0%,#2aa7c4 35%,#39c0c9 60%,#7fd6b8 100%);
   }
-  /* Foto de fundo do destino (token BG_URL); se vazio, fica o gradiente acima */
   .bg {
     position: absolute; inset: 0; z-index: 0;
     background-image: var(--bg-url, none);
     background-size: cover; background-position: center;
   }
-  .bg::after { /* leve escurecimento nas bordas p/ legibilidade */
+  .bg::after {
     content: ""; position: absolute; inset: 0;
     background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.18));
   }
 
-  /* Logo no topo central (opção A) */
+  /* Logo no topo central, sobre a foto, levemente sobreposta ao card */
   .logo {
-    position: absolute; z-index: 5; top: 40px; left: 50%; transform: translateX(-50%);
-    width: 150px; height: 150px; border-radius: 50%;
-    background: #fff center/cover no-repeat;
-    border: 5px solid rgba(255,255,255,.9);
-    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    position: absolute; z-index: 5; top: 44px; left: 50%; transform: translateX(-50%);
+    width: 168px; height: 168px; border-radius: 30px; object-fit: cover;
+    box-shadow: 0 12px 34px rgba(0,0,0,.4);
   }
 
+  /* Card preenche a maior parte da altura (pouca sobra de foto embaixo) */
   .card {
-    position: absolute; z-index: 3; left: 64px; right: 64px; top: 230px;
-    background: #fff; border-radius: 40px; padding: 44px 48px 40px;
+    position: absolute; z-index: 3; left: 46px; right: 46px; top: 196px; bottom: 56px;
+    background: #fff; border-radius: 46px; padding: 40px 46px 44px;
     box-shadow: 0 24px 70px rgba(0,0,0,.28);
+    display: flex; flex-direction: column;
   }
   .band {
-    background: #15355f; color: #fff; font-weight: 700; font-size: 30px;
-    letter-spacing: 4px; text-align: center; padding: 20px; border-radius: 18px;
-    margin: -8px -8px 18px;
+    background: #15355f; color: #fff; font-weight: 700; font-size: 31px;
+    letter-spacing: 4px; text-align: center; padding: 22px; border-radius: 20px;
+    margin: 24px -6px 20px;
   }
   .dest {
-    color: #15355f; font-weight: 800; text-align: center; line-height: .98;
-    font-size: clamp(60px, 110px, 110px); letter-spacing: 1px;
-    overflow-wrap: anywhere;
+    color: #15355f; font-weight: 800; text-align: center; line-height: .96;
+    font-size: clamp(56px, 104px, 104px); letter-spacing: 1px; overflow-wrap: anywhere;
   }
   .meta {
-    color: #1f4e79; font-size: 26px; font-weight: 600; text-align: center;
-    margin: 22px 0; letter-spacing: .5px;
+    color: #1f4e79; font-size: 27px; font-weight: 600; text-align: center;
+    margin: 26px 0 8px; letter-spacing: .5px;
   }
+  /* As linhas (voo/hotel/regime) absorvem o espaço extra, distribuídas uniformemente */
+  .lines { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; padding: 8px 0; }
   .line {
-    display: flex; gap: 20px; align-items: flex-start;
-    font-size: 27px; color: #334155; line-height: 1.3;
-    padding: 22px 0; border-top: 2px solid #eef2f6;
+    display: flex; gap: 22px; align-items: flex-start;
+    font-size: 28px; color: #334155; line-height: 1.3;
+    padding: 18px 0; border-top: 2px solid #eef2f6;
   }
+  .line:first-child { border-top: none; }
   .line .txt { overflow-wrap: anywhere; }
   .line b { color: #15355f; }
-  .icon { flex: 0 0 auto; width: 40px; height: 40px; color: #15355f; }
-  .price-wrap { text-align: center; padding: 26px 0 18px; border-top: 2px solid #eef2f6; }
-  .price-lbl { color: #1f4e79; font-size: 24px; font-weight: 700; letter-spacing: 1px; }
-  .price { color: #1a7fb8; font-size: 92px; font-weight: 800; line-height: 1; margin: 6px 0; }
-  .price-sub { color: #1f4e79; font-size: 21px; font-weight: 600; letter-spacing: 1px; }
+  .icon { flex: 0 0 auto; width: 42px; height: 42px; color: #15355f; }
+  .price-wrap { text-align: center; padding: 22px 0 16px; border-top: 2px solid #eef2f6; }
+  .price-lbl { color: #1f4e79; font-size: 25px; font-weight: 700; letter-spacing: 1px; }
+  .price { color: #1a7fb8; font-size: 96px; font-weight: 800; line-height: 1; margin: 8px 0; }
+  .price-sub { color: #1f4e79; font-size: 22px; font-weight: 600; letter-spacing: 1px; }
   .cta {
     background: #f6741e; color: #fff; text-align: center; font-weight: 700;
-    font-size: 38px; padding: 28px; border-radius: 60px; margin: 22px 0 8px;
+    font-size: 40px; padding: 30px; border-radius: 60px; margin-top: 8px;
     box-shadow: 0 12px 30px rgba(246,116,30,.4);
   }
 </style>
 </head>
 <body>
   <div class="bg" style="--bg-url: {{BG_CSS}}"></div>
-  <div class="logo" style="background-image: url('{{LOGO_URL}}')"></div>
+  <img class="logo" src="{{LOGO_URL}}" alt="">
 
   <div class="card">
     <div class="band">SAINDO DE {{ORIGIN_CITY}}</div>
     <div class="dest">{{DESTINATION}}</div>
     <div class="meta">{{META_LINE}}</div>
 
-    <div class="line">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
-      <div class="txt">{{FLIGHT_LINE}}</div>
+    <div class="lines">
+      <div class="line">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
+        <div class="txt">{{FLIGHT_LINE}}</div>
+      </div>
+      <div class="line">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+        <div class="txt">{{HOTEL_LINE}}</div>
+      </div>
+      {{MEAL_BLOCK}}
     </div>
-    <div class="line">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
-      <div class="txt">{{HOTEL_LINE}}</div>
-    </div>
-    {{MEAL_BLOCK}}
 
     <div class="price-wrap">
       <div class="price-lbl">{{PRICE_LABEL}}</div>
