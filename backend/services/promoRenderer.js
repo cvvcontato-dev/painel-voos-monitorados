@@ -72,7 +72,17 @@ async function renderImage(promo_id, rawPromo, { backgroundUrl } = {}) {
   const p = stripInternal(rawPromo);
   const html = fillTemplate(p, backgroundUrl);
   const { chromium } = require('playwright');
-  const browser = await chromium.launch();
+  // Mesmo padrão de launch do flightScraper: usa o Chromium do sistema em produção
+  // (Docker define PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD),
+  // e os args --no-sandbox são necessários ao rodar como root no container.
+  const launchOptions = {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+  };
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
+  const browser = await chromium.launch(launchOptions);
   try {
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'networkidle' });
