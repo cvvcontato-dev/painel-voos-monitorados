@@ -6,6 +6,29 @@ test('maps known airport codes to cities', () => {
   expect(out.destination_city).toBe('Porto Seguro');
 });
 
+test('prefers an extracted city name over the IATA code', () => {
+  // Aruba (AUA) não está no mapa de aeroportos: deve usar o nome extraído, não "AUA".
+  const out = normalize({ destination_code: 'AUA', destination_city: 'Aruba' });
+  expect(out.destination_city).toBe('Aruba');
+});
+
+test('ignores a city field that is actually an airport code', () => {
+  const out = normalize({ destination_code: 'BPS', destination_city: 'BPS' });
+  expect(out.destination_city).toBe('Porto Seguro');
+});
+
+test('applies business defaults (meal, cta, customization)', () => {
+  const out = normalize({});
+  expect(out.meal_plan).toBe('Café da Manhã');
+  expect(out.cta_text).toBe('Garanta já sua viagem inesquecível!');
+  expect(out.customization_text).toBe('Precisa de outras datas ou roteiro? Fale conosco!');
+});
+
+test('defaults destination flag to Brazil and uses country code when present', () => {
+  expect(normalize({ destination_city: 'Maceió' }).destination_flag).toBe('🇧🇷');
+  expect(normalize({ destination_city: 'Aruba', destination_country_code: 'AW' }).destination_flag).toBe('🇦🇼');
+});
+
 test('builds month label and display_availability from date range', () => {
   const out = normalize({ start_date: '2026-09-12', end_date: '2026-09-19', availability_note: 'sob consulta' });
   expect(out.travel_month_label).toBe('Setembro');

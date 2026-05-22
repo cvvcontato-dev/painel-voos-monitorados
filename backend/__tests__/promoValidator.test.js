@@ -45,10 +45,15 @@ test('nights out of range warns', () => {
 });
 
 test('overlong hotel_name is truncated in normalized_promotion with warning', () => {
-  const long = 'X'.repeat(60);
+  const long = 'X'.repeat(80);
   const r = validate({ ...base, hotel_name: long });
-  expect(r.normalized_promotion.hotel_name.length).toBeLessThanOrEqual(45);
+  expect(r.normalized_promotion.hotel_name.length).toBeLessThanOrEqual(60);
   expect(r.warnings.join(' ')).toMatch(/hotel/i);
+});
+
+test('a normal full hotel name is not truncated', () => {
+  const r = validate({ ...base, hotel_name: 'Caribbean Palm Village Resort' });
+  expect(r.normalized_promotion.hotel_name).toBe('Caribbean Palm Village Resort');
 });
 
 test('overlong meal_plan is truncated with warning', () => {

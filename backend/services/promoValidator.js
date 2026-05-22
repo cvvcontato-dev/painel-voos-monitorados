@@ -1,4 +1,4 @@
-const LIMITS = { hotel_name: 45, meal_plan: 30, airlines: 3 };
+const LIMITS = { hotel_name: 60, meal_plan: 30, airlines: 3 };
 const CENTS_TOLERANCE = 0.10;
 
 // Contrato: todo dado interno/sensível vive sob chaves com prefixo "_" (ex.: _meta),
