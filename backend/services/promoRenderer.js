@@ -25,18 +25,27 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// Ícone sólido (Material) de café para o bloco de regime.
+const COFFEE_ICON = '<svg class="icon" viewBox="0 0 24 24"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>';
+
 function fillTemplate(p, backgroundUrl) {
   let html = fs.readFileSync(TEMPLATE, 'utf8');
-  const flightLine = `Voo (${p.flight_type || 'Direto'}${p.airlines?.length ? ' - ' + p.airlines.join('/') : ''}${baggageLabel(p.baggage)})`;
-  // Linha do hotel: "Nome (3 estrelas, Muito bom 8.1, Cidade)" — sem expor "null" quando vazio.
+  // Linhas com HTML: rótulo/nome em <b>, restante regular (esc só nos valores dinâmicos).
+  const flightDetail = `${esc(p.flight_type || 'Direto')}${p.airlines?.length ? ' - ' + esc(p.airlines.join('/')) : ''}${esc(baggageLabel(p.baggage))}`;
+  const flightLineHtml = `<b>Voo</b> (${flightDetail})`;
+
+  // Linha do hotel: nome em negrito + "(3 estrelas, Muito bom 8.1, Cidade)" regular; sem "null".
   const hotelDet = [];
-  if (p.hotel_stars) hotelDet.push(`${p.hotel_stars} estrelas`);
-  if (p.hotel_rating_value) hotelDet.push(`${p.hotel_rating_text ? p.hotel_rating_text + ' ' : ''}${p.hotel_rating_value}`);
-  if (p.destination_city) hotelDet.push(p.destination_city);
-  const hotelLine = `${p.hotel_name || ''}${hotelDet.length ? ` (${hotelDet.join(', ')})` : ''}`.trim();
+  if (p.hotel_stars) hotelDet.push(`${esc(p.hotel_stars)} estrelas`);
+  if (p.hotel_rating_value) hotelDet.push(`${p.hotel_rating_text ? esc(p.hotel_rating_text) + ' ' : ''}${esc(p.hotel_rating_value)}`);
+  if (p.destination_city) hotelDet.push(esc(p.destination_city));
+  const hotelLineHtml = p.hotel_name
+    ? `<b>${esc(p.hotel_name)}</b>${hotelDet.length ? ` (${hotelDet.join(', ')})` : ''}`
+    : (hotelDet.length ? `(${hotelDet.join(', ')})` : '');
+
   // Linha de regime só aparece quando há meal_plan (evita ícone solto com texto vazio).
   const mealBlock = p.meal_plan
-    ? `<div class="line"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2M14 2v2M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h12z"/><path d="M16 11h2a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-2"/></svg><div class="txt">${esc(p.meal_plan)}</div></div>`
+    ? `<div class="line">${COFFEE_ICON}<div class="txt"><b>${esc(p.meal_plan)}</b></div></div>`
     : '';
   const tokens = {
     BG_CSS: backgroundCss(backgroundUrl),
@@ -44,8 +53,8 @@ function fillTemplate(p, backgroundUrl) {
     ORIGIN_CITY: esc((p.origin_city || '').toUpperCase()),
     DESTINATION: esc((p.destination_city || '').toUpperCase()),
     META_LINE: esc(`${p.nights} NOITES | ${(p.display_availability || '').toUpperCase()} | ${p.passengers || 2} PESSOAS`),
-    FLIGHT_LINE: esc(flightLine),
-    HOTEL_LINE: esc(hotelLine),
+    FLIGHT_LINE: flightLineHtml,
+    HOTEL_LINE: hotelLineHtml,
     MEAL_BLOCK: mealBlock,
     PRICE_LABEL: `POR APENAS ${p.installments || 10}X S/ JUROS DE`,
     PRICE: brl(p.installment_amount),
