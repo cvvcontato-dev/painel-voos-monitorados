@@ -20,15 +20,16 @@ function formatBRL(value) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-function buildTelegramMessage(flight) {
+function buildTelegramMessage(flight, isTest = false) {
     const economiaPorPax = flight.preco_esperado - flight.preco_atual;
     const pax = flight.quantidade_pax || 1;
     const economiaTotal = economiaPorPax * pax;
 
-    return `
-✈️ <b>ALERTA DE VOO — PREÇO ABAIXO DO ALVO!</b>
+    const header = isTest
+        ? `🧪 <b>[TESTE] MENSAGEM DE EXEMPLO — NÃO É UM ALERTA REAL</b>\n<i>Esta é apenas uma simulação para validar o envio. Os valores abaixo são fictícios.</i>\n\n`
+        : `✈️ <b>ALERTA DE VOO — PREÇO ABAIXO DO ALVO!</b>\n\n`;
 
-👤 <b>Cliente:</b> ${flight.cliente}
+    return (header + `👤 <b>Cliente:</b> ${flight.cliente}
 📅 <b>Viagem:</b> ${flight.mes_viagem}
 👥 <b>Passageiros:</b> ${pax}
 
@@ -38,14 +39,22 @@ function buildTelegramMessage(flight) {
 💸 <b>Economia por pax:</b> ${formatBRL(economiaPorPax)}
 💸 <b>Economia total:</b> ${formatBRL(economiaTotal)}
 
-🔗 <a href="${flight.link_voo}">Acessar Google Flights</a>
-    `.trim();
+🔗 <a href="${flight.link_voo}">Acessar Google Flights</a>`).trim();
 }
 
-function buildEmailHtml(flight) {
+function buildEmailHtml(flight, isTest = false) {
     const economiaPorPax = flight.preco_esperado - flight.preco_atual;
     const pax = flight.quantidade_pax || 1;
     const economiaTotal = economiaPorPax * pax;
+
+    const testBanner = isTest ? `
+    <div style="background: #f59e0b; color: #1f2937; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; text-align: center; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;">
+      🧪 MENSAGEM DE TESTE — Os valores abaixo são fictícios.<br/>
+      <span style="font-weight: 400; font-size: 12px;">Esta é uma simulação enviada para validar o envio. Não representa um alerta real.</span>
+    </div>` : '';
+
+    const title = isTest ? '[TESTE] Alerta de Voo' : 'Alerta de Voo';
+    const subtitle = isTest ? 'Exemplo de notificação — não é um alerta real' : 'Preço abaixo do alvo detectado!';
 
     return `
 <!DOCTYPE html>
@@ -53,11 +62,11 @@ function buildEmailHtml(flight) {
 <head><meta charset="utf-8"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; color: #e2e8f0; padding: 32px;">
   <div style="max-width: 560px; margin: 0 auto; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 16px; padding: 32px; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
-    
+    ${testBanner}
     <div style="text-align: center; margin-bottom: 24px;">
-      <span style="font-size: 40px;">✈️</span>
-      <h1 style="color: #ffffff; font-size: 22px; margin: 8px 0 4px;">Alerta de Voo</h1>
-      <p style="color: #94a3b8; font-size: 13px; margin: 0;">Preço abaixo do alvo detectado!</p>
+      <span style="font-size: 40px;">${isTest ? '🧪' : '✈️'}</span>
+      <h1 style="color: #ffffff; font-size: 22px; margin: 8px 0 4px;">${title}</h1>
+      <p style="color: #94a3b8; font-size: 13px; margin: 0;">${subtitle}</p>
     </div>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -108,7 +117,8 @@ function buildEmailHtml(flight) {
 /**
  * Send a Telegram notification with rate limiting.
  */
-async function sendTelegram(chatId, flight) {
+async function sendTelegram(chatId, flight, options = {}) {
+    const { isTest = false } = options;
     try {
         const token = process.env.TELEGRAM_BOT_TOKEN;
         if (!token) {
@@ -128,7 +138,7 @@ async function sendTelegram(chatId, flight) {
         }
         telegramTimestamps.push(Date.now());
 
-        const message = buildTelegramMessage(flight);
+        const message = buildTelegramMessage(flight, isTest);
         const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
         const response = await fetch(url, {
@@ -160,17 +170,22 @@ async function sendTelegram(chatId, flight) {
 /**
  * Send an email notification.
  */
-async function sendEmail(to, flight) {
+async function sendEmail(to, flight, options = {}) {
+    const { isTest = false } = options;
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
         }
 
+        const subject = isTest
+            ? `🧪 [TESTE] Notificação de exemplo | ${flight.cliente}`
+            : `✈️ Alerta de voo | ${flight.cliente} — ${flight.mes_viagem}`;
+
         const info = await transporter.sendMail({
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
             to: to,
-            subject: `✈️ Alerta de voo | ${flight.cliente} — ${flight.mes_viagem}`,
-            html: buildEmailHtml(flight)
+            subject,
+            html: buildEmailHtml(flight, isTest)
         });
 
         console.log(`[NOTIFIER] ✓ E-mail enviado para ${to} | MessageId: ${info.messageId}`);

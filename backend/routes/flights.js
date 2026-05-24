@@ -278,13 +278,13 @@ router.post('/:id/test-notification', async (req, res) => {
         const results = { email: null, telegram: null, env: envCheck };
 
         if (flight.email_cliente) {
-            results.email = await sendEmail(flight.email_cliente, testFlight);
+            results.email = await sendEmail(flight.email_cliente, testFlight, { isTest: true });
         } else {
             results.email = { sucesso: false, erro: 'Nenhum e-mail configurado para este voo' };
         }
 
         if (flight.telegram_chat_id) {
-            results.telegram = await sendTelegram(flight.telegram_chat_id, testFlight);
+            results.telegram = await sendTelegram(flight.telegram_chat_id, testFlight, { isTest: true });
         } else {
             results.telegram = { sucesso: false, erro: 'Nenhum chat_id Telegram configurado para este voo' };
         }
