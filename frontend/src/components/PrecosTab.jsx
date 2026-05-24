@@ -3,7 +3,7 @@ import api from '../hooks/useApi';
 import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
   AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X,
-  Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock
+  Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock, Bell
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
@@ -29,6 +29,7 @@ export default function PrecosTab({ showToast }) {
   const [sortBy, setSortBy] = useState('manual');
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
+  const [testingNotifId, setTestingNotifId] = useState(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
@@ -81,6 +82,30 @@ export default function PrecosTab({ showToast }) {
   const toggleAllChecks = async () => {
     try { await api.put(`${API_URL}/bulk-check`, { check_diario: flights.some(f => !f.check_diario) }); fetchFlights(); }
     catch (e) { console.error(e); }
+  };
+
+  const testNotification = async (id) => {
+    setTestingNotifId(id);
+    try {
+      const { data } = await api.post(`${API_URL}/${id}/test-notification`);
+      const lines = [];
+      if (data.email?.sucesso) lines.push('✓ E-mail enviado');
+      else lines.push(`✗ E-mail: ${data.email?.erro || 'falha'}`);
+      if (data.telegram?.sucesso) lines.push('✓ Telegram enviado');
+      else lines.push(`✗ Telegram: ${data.telegram?.erro || 'falha'}`);
+
+      const envMissing = Object.entries(data.env || {}).filter(([, v]) => !v).map(([k]) => k);
+      if (envMissing.length > 0) {
+        lines.push(`⚠ Env faltando no servidor: ${envMissing.join(', ')}`);
+      }
+
+      const success = data.email?.sucesso || data.telegram?.sucesso;
+      showToast(lines.join(' | '), success ? 'success' : 'error');
+    } catch (e) {
+      showToast(`Erro ao testar: ${e.response?.data?.error || e.message}`, 'error');
+    } finally {
+      setTestingNotifId(null);
+    }
   };
 
   const checkNow = async (id) => {
@@ -139,8 +164,8 @@ export default function PrecosTab({ showToast }) {
     gap: '1rem',
     alignItems: 'center',
     gridTemplateColumns: sortBy === 'manual'
-      ? '28px minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 108px'
-      : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 108px',
+      ? '28px minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 140px'
+      : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 140px',
   };
 
   const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border " +
@@ -348,6 +373,14 @@ export default function PrecosTab({ showToast }) {
 
                 {/* Ações */}
                 <div className="flex justify-end items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <button
+                    onClick={() => testNotification(flight.id)}
+                    disabled={testingNotifId === flight.id}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:text-violet-400 dark:hover:bg-violet-500/10 transition-colors disabled:opacity-40 cursor-pointer"
+                    title="Enviar notificação de teste (email + telegram)"
+                  >
+                    <Bell className={`w-3.5 h-3.5 ${testingNotifId === flight.id ? 'animate-pulse' : ''}`} />
+                  </button>
                   <button
                     onClick={() => checkNow(flight.id)}
                     disabled={checkingId === flight.id}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { processFlight } = require('../services/scheduler');
+const { sendEmail, sendTelegram } = require('../services/notifier');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_STATUSES = ['ativo', 'encerrado', 'passagem comprada'];
@@ -239,6 +240,59 @@ router.post('/:id/check-now', async (req, res) => {
     } catch (error) {
         console.error(`[CHECK-NOW] Erro no voo #${id}:`, error.message);
         return res.status(500).json({ sucesso: false, preco_encontrado: null, bloqueado: false, alerta_disparado: false, erro: error.message });
+    }
+});
+
+// Test notification — sends a fake alert through both channels to validate
+// SMTP/Telegram setup without waiting for a real price drop.
+// Ignores `alerta_enviado` and uses preco_esperado * 0.9 as a stand-in price
+// when the flight has no scraped price yet.
+router.post('/:id/test-notification', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const flight = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM flights WHERE id = ?', [id], (err, row) => {
+                if (err) reject(err); else resolve(row);
+            });
+        });
+
+        if (!flight) {
+            return res.status(404).json({ error: 'Voo não encontrado' });
+        }
+
+        // Build a "what an alert would look like" payload
+        const testFlight = {
+            ...flight,
+            preco_atual: flight.preco_atual && flight.preco_atual <= flight.preco_esperado
+                ? flight.preco_atual
+                : Math.round(flight.preco_esperado * 0.9 * 100) / 100,
+        };
+
+        const envCheck = {
+            EMAIL_USER:         !!process.env.EMAIL_USER,
+            EMAIL_PASS:         !!process.env.EMAIL_PASS,
+            TELEGRAM_BOT_TOKEN: !!process.env.TELEGRAM_BOT_TOKEN,
+        };
+
+        const results = { email: null, telegram: null, env: envCheck };
+
+        if (flight.email_cliente) {
+            results.email = await sendEmail(flight.email_cliente, testFlight);
+        } else {
+            results.email = { sucesso: false, erro: 'Nenhum e-mail configurado para este voo' };
+        }
+
+        if (flight.telegram_chat_id) {
+            results.telegram = await sendTelegram(flight.telegram_chat_id, testFlight);
+        } else {
+            results.telegram = { sucesso: false, erro: 'Nenhum chat_id Telegram configurado para este voo' };
+        }
+
+        return res.json(results);
+    } catch (error) {
+        console.error(`[TEST-NOTIF] Erro no voo #${id}:`, error.message);
+        return res.status(500).json({ error: error.message });
     }
 });
 
