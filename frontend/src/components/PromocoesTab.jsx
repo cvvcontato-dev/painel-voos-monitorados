@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud, Sparkles, ArrowLeft, RefreshCw, Copy, Download,
   Plus, AlertTriangle, Info, Image as ImageIcon, Ban, Check
@@ -88,6 +88,20 @@ export default function PromocoesTab({ showToast }) {
       setLoading(false);
     }
   };
+
+  // Ctrl+V no passo de upload: aceita imagem da área de transferência (print → cola direto)
+  useEffect(() => {
+    if (step !== 'upload') return;
+    const onPaste = (e) => {
+      const item = Array.from(e.clipboardData?.items || []).find((i) => i.type.startsWith('image/'));
+      if (!item) return;                 // não é imagem — deixa o paste normal seguir
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) handleFile(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [step]);
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -239,7 +253,7 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
             </div>
             <div>
               <p className="text-base font-semibold text-slate-900 dark:text-white">Envie o print da promoção</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Arraste uma imagem aqui ou clique para selecionar (PNG ou JPG)</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Cole (Ctrl+V), arraste uma imagem aqui ou clique para selecionar (PNG ou JPG)</p>
             </div>
           </>
         )}
