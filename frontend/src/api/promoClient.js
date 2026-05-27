@@ -39,9 +39,9 @@ export async function renderImage(promotion, background_choice) {
   } catch (err) { throw toApiError(err); }
 }
 
-export async function listBackgrounds(destination) {
+export async function listBackgrounds(destination, country) {
   try {
-    const res = await api.get('/api/promotions/backgrounds', { params: { destination } });
+    const res = await api.get('/api/promotions/backgrounds', { params: { destination, country } });
     return res.data;
   } catch (err) { throw toApiError(err); }
 }

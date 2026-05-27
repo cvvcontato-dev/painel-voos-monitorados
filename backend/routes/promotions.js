@@ -63,9 +63,9 @@ router.post('/render-image', async (req, res) => {
 });
 
 router.get('/backgrounds', async (req, res) => {
-  const { destination } = req.query;
+  const { destination, country } = req.query;
   if (!destination) return res.status(400).json({ error: 'destination é obrigatório' });
-  return res.json(await listBackgrounds(destination));
+  return res.json(await listBackgrounds(destination, country));
 });
 
 router.get('/:promo_id/file/:name', (req, res) => {

@@ -45,11 +45,11 @@ export default function PromocoesTab({ showToast }) {
   const lowConf = (name) => (meta.low_confidence_fields || []).includes(name);
 
   // ── Backgrounds ─────────────────────────────────────────────────
-  const fetchBackgrounds = async (destination) => {
+  const fetchBackgrounds = async (destination, country) => {
     if (!destination) return;
     setLoadingBg(true);
     try {
-      const res = await listBackgrounds(destination);
+      const res = await listBackgrounds(destination, country);
       const options = res.options || [];
       setBackgrounds(options);
       setSelectedBg(options[0]?.url ?? null);
@@ -73,7 +73,7 @@ export default function PromocoesTab({ showToast }) {
       setPromotion(res.promotion);
       setMeta(res._meta || { low_confidence_fields: [], validation_warnings: [], agency_commission_detected: null });
       setStep('review');
-      fetchBackgrounds(res.promotion?.destination_city);
+      fetchBackgrounds(res.promotion?.destination_city, res.promotion?.destination_country);
     } catch (err) {
       if (err.kind === 'unprocessable') {
         // Não conseguiu ler o print: vai para revisão com formulário em branco.
@@ -183,7 +183,7 @@ export default function PromocoesTab({ showToast }) {
           selectedBg={selectedBg}
           loadingBg={loadingBg}
           onSelectBg={setSelectedBg}
-          onRefreshBg={() => fetchBackgrounds(promotion.destination_city)}
+          onRefreshBg={() => fetchBackgrounds(promotion.destination_city, promotion.destination_country)}
           onBack={reset}
           onGenerate={generate}
         />
