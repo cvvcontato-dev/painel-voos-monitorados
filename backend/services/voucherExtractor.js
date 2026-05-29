@@ -61,7 +61,7 @@ async function extractVoucher(buffer, mimetype) {
     return normalize(STUB);
   }
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
   const part = { inlineData: { data: buffer.toString('base64'), mimeType: mimetype } };
   const result = await model.generateContent([PROMPT, part]);
   const text = result.response.text().trim().replace(/^```json\s*|\s*```$/g, '');
