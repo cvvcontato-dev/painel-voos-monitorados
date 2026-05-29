@@ -74,6 +74,35 @@ function Separator({ flightNumber, durationText, accent }) {
   );
 }
 
+const WEEKDAYS_PTBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+function dateLabelWithDow(t) {
+  const base = (t.dateLabel || '').trim();
+  if (!t.departure?.datetime) return base;
+  const upper = base.toUpperCase();
+  if (WEEKDAYS_PTBR.some(d => upper.startsWith(d))) return base;
+  const dow = WEEKDAYS_PTBR[new Date(t.departure.datetime).getDay()];
+  if (!dow) return base;
+  return `${dow}, ${base}`;
+}
+
+function CarrierLogo({ carrierKey, theme }) {
+  const [failed, setFailed] = useState(false);
+  const fallback = (
+    <div style={{ width: 56, height: 56, background: 'white', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: theme.accent, boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}>
+      <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{theme.initial}</div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill={theme.accent} style={{ marginTop: 2 }}>
+        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+      </svg>
+    </div>
+  );
+  if (carrierKey === 'multi' || failed) return fallback;
+  return (
+    <div style={{ width: 56, height: 56, background: 'white', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.12)', padding: 6 }}>
+      <img src={`/voucher-assets/carrier-logos/${carrierKey}.png`} alt={theme.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={() => setFailed(true)} />
+    </div>
+  );
+}
+
 function tripSubtitle(direction) {
   const d = (direction || '').toLowerCase();
   if (d === 'ida' || d === 'outbound') return 'VOO DE IDA';
@@ -130,10 +159,7 @@ export default function VoucherCanonicalV1({ data }) {
         {/* Top row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 56, height: 56, background: 'white', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: theme.accent, boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}>
-              <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{theme.initial}</div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill={theme.accent} style={{ marginTop: 2 }}><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-            </div>
+            <CarrierLogo carrierKey={carrierKey} theme={theme} />
             <div>
               <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.1, color: 'white' }}>{airlineName}</div>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>Reserva Confirmada</div>
@@ -162,7 +188,8 @@ export default function VoucherCanonicalV1({ data }) {
           <div>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: 'rgba(255,255,255,0.7)' }}>Status</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'white', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: '#22c55e' }}>●</span> {data.reservation?.status}
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+              <span style={{ color: 'white' }}>{data.reservation?.status || 'Confirmado'}</span>
             </div>
           </div>
         </div>
@@ -194,7 +221,7 @@ export default function VoucherCanonicalV1({ data }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Date column */}
                 <div style={{ minWidth: 140 }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#9aa5b8', letterSpacing: 1 }}>{t.dateLabel}</div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', color: '#9aa5b8', letterSpacing: 1 }}>{dateLabelWithDow(t)}</div>
                 </div>
                 {/* Departure */}
                 <div style={{ minWidth: 110 }}>
@@ -225,9 +252,9 @@ export default function VoucherCanonicalV1({ data }) {
                 {baggageByDirection[dir].map((b, j) => (
                   <div key={j} style={{ background: '#f4f6f9', borderRadius: 6, padding: '10px 14px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <IconBag color="#6b7a90" size={18} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2a48' }}>{b.label}</div>
-                      {b.weightText && <div style={{ fontSize: 11, color: '#6b7a90', marginTop: 2 }}>{b.weightText}</div>}
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2a48' }}>{b.label}</span>
+                      {b.weightText && <span style={{ fontSize: 11, color: '#9aa5b8', marginTop: 2 }}>{b.weightText}</span>}
                     </div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#1a2a48' }}>{b.quantity}</div>
                   </div>
@@ -242,7 +269,7 @@ export default function VoucherCanonicalV1({ data }) {
       <footer style={{ marginTop: 'auto', padding: '16px 36px 14px', borderTop: `3px solid ${theme.accent}`, background: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
           <div style={{ flex: 1 }}>
-            <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 50, maxWidth: 180, objectFit: 'contain', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
+            <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 56, maxWidth: 200, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
             <div style={{ fontSize: 11, color: '#555', lineHeight: 1.7, marginTop: 8 }}>
               {settings.contact_phone && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

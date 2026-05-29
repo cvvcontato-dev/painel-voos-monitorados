@@ -3,13 +3,6 @@ const path = require('path');
 const { exportsDir } = require('../helpers/voucherWorkspace');
 
 const WATERMARK_CSS = `
-  body::before {
-    content: "REEMISSÃO — CÓPIA NÃO-OFICIAL";
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%) rotate(-30deg);
-    font-size: 64px; font-weight: 800; color: rgba(200, 0, 0, 0.12);
-    pointer-events: none; z-index: 9999; white-space: nowrap;
-  }
   body::after {
     content: "Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.";
     position: fixed; bottom: 8px; left: 0; right: 0;
