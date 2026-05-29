@@ -5,6 +5,15 @@ import {
   CarrierLogo, IconPlane, IconBag, IconUser, IconPhone, IconMail, IconGlobe
 } from './_shared';
 
+// Modelo Compacto usa SEMPRE as cores da agência — independe da companhia aérea.
+// Apenas a logo (e os dados) mudam por carrier.
+const AGENCY_THEME = {
+  accent: '#00569e',
+  accentLight: '#3871c1',
+  pillBg: '#e6effa',
+  name: 'Clube do Voo Viagens'
+};
+
 function fullDateLabel(t) {
   if (!t || !t.departure?.datetime) return (t && t.dateLabel) || '';
   const d = new Date(t.departure.datetime);
@@ -34,7 +43,11 @@ export default function VoucherCompactoV1({ data }) {
   if (!data) return null;
 
   const carrierKey = detectCarrierKey(data);
-  const theme = THEMES[carrierKey];
+  // Tema do carrier é usado APENAS para o componente de logo (CarrierLogo precisa
+  // dele pro fallback "inicial+avião" caso o PNG da cia não exista).
+  const carrierTheme = THEMES[carrierKey];
+  // Já o tema visual do template é fixo nas cores da agência.
+  const theme = AGENCY_THEME;
   const trips = data.trips || [];
   const passengers = data.passengers || [];
   const baggage = data.baggage || [];
@@ -51,7 +64,7 @@ export default function VoucherCompactoV1({ data }) {
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>
       {/* HEADER (white, no dark band) */}
       <header style={{ padding: '28px 36px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <CarrierLogo carrierKey={carrierKey} theme={theme} large />
+        <CarrierLogo carrierKey={carrierKey} theme={carrierTheme} large />
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 10, color: '#9aa5b8', letterSpacing: 1, textTransform: 'uppercase' }}>Localizador</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: theme.accent, letterSpacing: 2 }}>{data.reservation?.locator}</div>
