@@ -7,6 +7,7 @@ const db = require('../database');
 const { extractVoucher } = require('../services/voucherExtractor');
 const { validate } = require('../services/voucherSchema');
 const { normalize } = require('../services/voucherNormalizer');
+const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
 
 const router = express.Router();
@@ -77,6 +78,27 @@ router.get('/:id', (req, res) => {
       res.json(row);
     }
   );
+});
+
+router.get('/:id/export', async (req, res) => {
+  const format = (req.query.format || 'pdf').toLowerCase();
+  if (!['pdf', 'png'].includes(format)) return res.status(400).json({ error: 'format inválido' });
+  db.get(`SELECT id FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], async (err, row) => {
+    if (err) { console.error('[VOUCHERS] erro ao buscar para export', err.message); return res.status(500).json({ error: 'erro ao buscar voucher' }); }
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    try {
+      const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const outPath = await renderVoucher({
+        voucherId: req.params.id, format,
+        cookieHeader: req.headers.cookie, baseUrl
+      });
+      audit(req.params.id, req.session.userId, 'export', { format }, null);
+      res.download(outPath);
+    } catch (e) {
+      console.error('[VOUCHERS] falha no export', e.message);
+      res.status(500).json({ error: 'falha ao gerar export' });
+    }
+  });
 });
 
 router.put('/:id', (req, res) => {

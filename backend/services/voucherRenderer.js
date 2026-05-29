@@ -1,0 +1,53 @@
+const { chromium } = require('playwright');
+const path = require('path');
+const { exportsDir } = require('../helpers/voucherWorkspace');
+
+const WATERMARK_CSS = `
+  body::before {
+    content: "REEMISSÃO — CÓPIA NÃO-OFICIAL";
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 64px; font-weight: 800; color: rgba(200, 0, 0, 0.12);
+    pointer-events: none; z-index: 9999; white-space: nowrap;
+  }
+  body::after {
+    content: "Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.";
+    position: fixed; bottom: 8px; left: 0; right: 0;
+    text-align: center; font-size: 9px; color: #666; font-family: Arial, sans-serif;
+  }
+`;
+
+async function renderVoucher({ voucherId, format, cookieHeader, baseUrl }) {
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({ viewport: { width: 820, height: 1200 } });
+    if (cookieHeader) {
+      const url = new URL(baseUrl);
+      const cookies = cookieHeader.split(';').map(c => {
+        const [name, ...rest] = c.trim().split('=');
+        return { name, value: rest.join('='), domain: url.hostname, path: '/' };
+      }).filter(c => c.name);
+      await context.addCookies(cookies);
+    }
+    const page = await context.newPage();
+    await page.goto(`${baseUrl}/voucher-preview/${voucherId}?export=1`, { waitUntil: 'networkidle' });
+    await page.addStyleTag({ content: WATERMARK_CSS });
+    // Wait for the voucher template content (not just "Carregando…") to appear
+    await page.waitForFunction(() => !document.body.innerText.includes('Carregando'), { timeout: 10000 });
+
+    const outName = `voucher-${voucherId}-${Date.now()}.${format}`;
+    const outPath = path.join(exportsDir(), outName);
+    if (format === 'pdf') {
+      await page.pdf({ path: outPath, format: 'A4', printBackground: true, margin: { top: 0, bottom: 0, left: 0, right: 0 } });
+    } else if (format === 'png') {
+      await page.screenshot({ path: outPath, fullPage: true });
+    } else {
+      throw new Error('format deve ser pdf ou png');
+    }
+    return outPath;
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = { renderVoucher };

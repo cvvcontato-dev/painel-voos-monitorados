@@ -63,6 +63,19 @@ test('PUT updates voucher with normalized unified payload', async () => {
   expect(res.body.unified.reservation.locator).toBe('NEWLOC');
 });
 
+test('GET /:id/export with invalid format returns 400', async () => {
+  const { agent } = await authed();
+  const res = await agent.get('/api/vouchers/1/export?format=xls');
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/format/);
+});
+
+test('GET /:id/export for missing voucher returns 404', async () => {
+  const { agent } = await authed();
+  const res = await agent.get('/api/vouchers/999999/export?format=pdf');
+  expect(res.status).toBe(404);
+});
+
 test('PUT with invalid unified returns 422', async () => {
   const { agent, csrf } = await authed();
   const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
