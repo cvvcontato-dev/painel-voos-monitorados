@@ -89,6 +89,9 @@ app.use('/api/vouchers', vouchersRouter);
 // Serve local static assets (e.g. background images for promo rendering)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
+// Voucher assets (agency logo etc.) — exposed under a dedicated path for the voucher template
+app.use('/voucher-assets', express.static(path.join(__dirname, 'static')));
+
 // --- Serve Frontend (Production) ---
 // In production, serve the built React app
 const frontendPath = path.join(__dirname, 'public');

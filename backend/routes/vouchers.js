@@ -65,6 +65,26 @@ router.get('/', (req, res) => {
   );
 });
 
+router.get('/settings', (req, res) => {
+  db.get(`SELECT contact_phone, contact_email, contact_site, contact_extra, updated_at FROM voucher_settings WHERE id = 1`,
+    (err, row) => {
+      if (err) { console.error('[VOUCHERS] erro ao buscar settings', err.message); return res.status(500).json({ error: 'erro ao buscar configurações' }); }
+      res.json(row || { contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
+    });
+});
+
+router.put('/settings', (req, res) => {
+  const { contact_phone = '', contact_email = '', contact_site = '', contact_extra = '' } = req.body || {};
+  db.run(
+    `UPDATE voucher_settings SET contact_phone = ?, contact_email = ?, contact_site = ?, contact_extra = ?, updated_at = datetime('now') WHERE id = 1`,
+    [contact_phone, contact_email, contact_site, contact_extra],
+    function (err) {
+      if (err) { console.error('[VOUCHERS] erro ao salvar settings', err.message); return res.status(500).json({ error: 'erro ao salvar configurações' }); }
+      res.json({ contact_phone, contact_email, contact_site, contact_extra });
+    }
+  );
+});
+
 router.get('/:id', (req, res) => {
   db.get(
     `SELECT * FROM vouchers WHERE id = ? AND user_id = ?`,

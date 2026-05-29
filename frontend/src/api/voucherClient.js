@@ -19,3 +19,7 @@ export const update = (id, unified) =>
 export const remove = (id) => api.delete(`/api/vouchers/${id}`);
 
 export const exportUrl = (id, format) => `/api/vouchers/${id}/export?format=${format}`;
+
+export const getSettings = () => api.get('/api/vouchers/settings').then(r => r.data);
+
+export const updateSettings = (s) => api.put('/api/vouchers/settings', s).then(r => r.data);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 
@@ -21,6 +21,9 @@ export default function VouchersTab({ showToast }) {
   const [current, setCurrent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
+  const [savingSettings, setSavingSettings] = useState(false);
   const fileInputRef = useRef(null);
   const iframeRef = useRef(null);
 
@@ -30,7 +33,43 @@ export default function VouchersTab({ showToast }) {
   const passengers = useFieldArray({ control, name: 'passengers' });
   const trips = useFieldArray({ control, name: 'trips' });
 
-  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh(); loadSettings(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadSettings() {
+    try {
+      const s = await api.getSettings();
+      setSettings({
+        contact_phone: s?.contact_phone || '',
+        contact_email: s?.contact_email || '',
+        contact_site: s?.contact_site || '',
+        contact_extra: s?.contact_extra || '',
+      });
+    } catch (err) {
+      // silencioso — settings ainda podem não existir
+    }
+  }
+
+  async function saveSettings() {
+    setSavingSettings(true);
+    try {
+      const s = await api.updateSettings(settings);
+      setSettings({
+        contact_phone: s?.contact_phone || '',
+        contact_email: s?.contact_email || '',
+        contact_site: s?.contact_site || '',
+        contact_extra: s?.contact_extra || '',
+      });
+      // Recarrega o preview para refletir as novas infos de contato
+      if (selectedId && iframeRef.current) {
+        iframeRef.current.src = `/voucher-preview/${selectedId}?ts=${Date.now()}`;
+      }
+      showToast?.('Configurações salvas', 'success');
+    } catch (err) {
+      showToast?.(err?.response?.data?.error || 'Falha ao salvar configurações', 'error');
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   async function refresh() {
     try {
@@ -110,6 +149,77 @@ export default function VouchersTab({ showToast }) {
     <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-220px)]">
       {/* Coluna esquerda: lista + editor */}
       <div className="lg:w-1/2 flex flex-col gap-4 min-w-0">
+        {/* Configurações da agência */}
+        <div className={sectionCls}>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(o => !o)}
+            className="w-full flex items-center justify-between text-left cursor-pointer"
+          >
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <SettingsIcon className="w-4 h-4" /> Configurações da agência
+            </h3>
+            {settingsOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+          </button>
+          {settingsOpen && (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Exibidos no rodapé de todos os vouchers gerados.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Telefone</label>
+                  <input
+                    className={inputCls}
+                    value={settings.contact_phone}
+                    onChange={e => setSettings(s => ({ ...s, contact_phone: e.target.value }))}
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>E-mail</label>
+                  <input
+                    className={inputCls}
+                    value={settings.contact_email}
+                    onChange={e => setSettings(s => ({ ...s, contact_email: e.target.value }))}
+                    placeholder="contato@clubedovoo.com.br"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Site</label>
+                  <input
+                    className={inputCls}
+                    value={settings.contact_site}
+                    onChange={e => setSettings(s => ({ ...s, contact_site: e.target.value }))}
+                    placeholder="www.clubedovoo.com.br"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Texto adicional</label>
+                  <input
+                    className={inputCls}
+                    value={settings.contact_extra}
+                    onChange={e => setSettings(s => ({ ...s, contact_extra: e.target.value }))}
+                    placeholder="CNPJ, endereço, etc."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveSettings}
+                  disabled={savingSettings}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
+                              ${savingSettings ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
+                >
+                  <Save className="w-4 h-4" />
+                  {savingSettings ? 'Salvando…' : 'Salvar configurações'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Upload */}
         <div className={sectionCls}>
           <div className="flex items-center justify-between gap-3 flex-wrap">

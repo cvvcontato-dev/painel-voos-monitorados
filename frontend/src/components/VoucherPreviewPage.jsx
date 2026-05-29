@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import AzulConfirmacaoV1 from './voucher-templates/AzulConfirmacaoV1';
+import VoucherCanonicalV1 from './voucher-templates/VoucherCanonicalV1';
 import * as api from '../api/voucherClient';
 
-const TEMPLATES = { 'azul.confirmacao.v1': AzulConfirmacaoV1 };
+const TEMPLATES = { 'azul.confirmacao.v1': VoucherCanonicalV1 };
 
 export default function VoucherPreviewPage({ id, isExport }) {
   const [data, setData] = useState(null);

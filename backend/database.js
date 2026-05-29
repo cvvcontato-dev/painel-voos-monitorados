@@ -284,6 +284,22 @@ function runMigrations() {
             });
         }
     });
+
+    db.run(`CREATE TABLE IF NOT EXISTS voucher_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        contact_phone TEXT,
+        contact_email TEXT,
+        contact_site TEXT,
+        contact_extra TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating voucher_settings', err.message);
+        else {
+            console.log('voucher_settings table created or already exists.');
+            // Seed single row if empty
+            db.run(`INSERT OR IGNORE INTO voucher_settings (id, contact_phone, contact_email, contact_site) VALUES (1, '', '', '')`);
+        }
+    });
 }
 
 module.exports = db;
