@@ -32,12 +32,10 @@ describe('voucherRetention.runOnce', () => {
       );
     });
 
-    const cleaned = await runOnce();
+    const { cleaned, failed } = await runOnce();
     expect(cleaned).toBeGreaterThanOrEqual(1);
+    expect(failed).toBe(0);
     expect(fs.existsSync(tmp)).toBe(false);
-
-    // wait a beat for the async UPDATE/INSERT to settle (sqlite3 callbacks are async)
-    await new Promise(r => setTimeout(r, 200));
 
     const after = await new Promise(r => db.get(`SELECT source_file_path, unified_json FROM vouchers WHERE id = ?`, [voucherId], (e, row) => r(row)));
     expect(after.source_file_path).toBeNull();
