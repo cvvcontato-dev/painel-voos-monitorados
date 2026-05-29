@@ -35,6 +35,7 @@ const monitoredFlightsRouter = require('./routes/monitoredFlights');
 const flightsRouter = require('./routes/flights');
 const settingsRouter = require('./routes/settings');
 const promotionsRouter = require('./routes/promotions');
+const vouchersRouter = require('./routes/vouchers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -82,6 +83,7 @@ app.use('/api/flights', flightsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/promotions', promotionsRouter);
+app.use('/api/vouchers', vouchersRouter);
 
 // Serve local static assets (e.g. background images for promo rendering)
 app.use('/static', express.static(path.join(__dirname, 'static')));
