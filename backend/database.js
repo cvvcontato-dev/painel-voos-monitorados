@@ -257,7 +257,13 @@ function runMigrations() {
         FOREIGN KEY (user_id) REFERENCES users(id)
     )`, (err) => {
         if (err) console.error('Error creating vouchers table:', err.message);
-        else console.log('vouchers table created or already exists.');
+        else {
+            console.log('vouchers table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_vouchers_user_id
+                    ON vouchers(user_id)`, (err) => {
+                if (err) console.error('Error creating idx_vouchers_user_id:', err.message);
+            });
+        }
     });
 
     db.run(`CREATE TABLE IF NOT EXISTS voucher_audit_log (
@@ -270,7 +276,13 @@ function runMigrations() {
         ts TEXT NOT NULL DEFAULT (datetime('now'))
     )`, (err) => {
         if (err) console.error('Error creating voucher_audit_log table:', err.message);
-        else console.log('voucher_audit_log table created or already exists.');
+        else {
+            console.log('voucher_audit_log table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_voucher_audit_voucher
+                    ON voucher_audit_log(voucher_id, ts DESC)`, (err) => {
+                if (err) console.error('Error creating idx_voucher_audit_voucher:', err.message);
+            });
+        }
     });
 }
 
