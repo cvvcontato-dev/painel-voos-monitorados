@@ -8,6 +8,11 @@ frontend/dist/
 
 # Database (local dev only)
 backend/database.sqlite
+backend/sessions.sqlite
+
+# Vouchers — runtime dirs (LGPD: uploads expiram via voucherRetention)
+backend/voucher-uploads/
+backend/voucher-exports/
 
 # Test artifacts
 backend/__tests__/.tmp/
