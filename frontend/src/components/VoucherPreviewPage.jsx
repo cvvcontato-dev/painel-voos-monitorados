@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import VoucherCanonicalV1 from './voucher-templates/VoucherCanonicalV1';
+import VoucherCompactoV1 from './voucher-templates/VoucherCompactoV1';
 import * as api from '../api/voucherClient';
 
-const TEMPLATES = { 'azul.confirmacao.v1': VoucherCanonicalV1 };
+const STYLES = {
+  institucional: VoucherCanonicalV1,
+  compacto: VoucherCompactoV1,
+};
 
 export default function VoucherPreviewPage({ id, isExport }) {
   const [data, setData] = useState(null);
@@ -17,8 +21,7 @@ export default function VoucherPreviewPage({ id, isExport }) {
   if (err) return <div style={{ padding: 20, color: 'red' }}>{err}</div>;
   if (!data) return <div style={{ padding: 20 }}>Carregando…</div>;
 
-  const Tpl = TEMPLATES[data.layoutVersion];
-  if (!Tpl) return <div>Template {data.layoutVersion} não encontrado</div>;
+  const Tpl = STYLES[data.templateStyle || 'institucional'] || VoucherCanonicalV1;
 
   return (
     <div style={{

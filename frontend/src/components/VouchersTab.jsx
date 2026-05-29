@@ -119,7 +119,9 @@ export default function VouchersTab({ showToast }) {
   async function onSave(data) {
     if (!selectedId) return;
     try {
-      const r = await api.update(selectedId, data);
+      const payload = { ...(current || {}), ...data };
+      if (current?.templateStyle) payload.templateStyle = current.templateStyle;
+      const r = await api.update(selectedId, payload);
       setCurrent(r.unified || data);
       if (iframeRef.current) {
         iframeRef.current.src = `/voucher-preview/${selectedId}?ts=${Date.now()}`;
@@ -127,6 +129,21 @@ export default function VouchersTab({ showToast }) {
       showToast?.('Voucher salvo', 'success');
     } catch (err) {
       showToast?.(err?.response?.data?.detail || 'Falha ao salvar voucher', 'error');
+    }
+  }
+
+  async function changeTemplate(newStyle) {
+    if (!selectedId || !current) return;
+    const updated = { ...current, templateStyle: newStyle };
+    try {
+      const r = await api.update(selectedId, updated);
+      setCurrent(r.unified || updated);
+      if (iframeRef.current) {
+        iframeRef.current.src = `/voucher-preview/${selectedId}?ts=${Date.now()}`;
+      }
+      showToast?.('Modelo alterado', 'success');
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha ao alterar modelo', 'error');
     }
   }
 
@@ -410,6 +427,15 @@ export default function VouchersTab({ showToast }) {
             </div>
 
             <div className="flex flex-wrap gap-2 items-center">
+              <select
+                value={current.templateStyle || 'institucional'}
+                onChange={e => changeTemplate(e.target.value)}
+                className={`${inputCls} w-auto`}
+                title="Modelo do voucher"
+              >
+                <option value="institucional">Modelo institucional</option>
+                <option value="compacto">Modelo compacto</option>
+              </select>
               <button
                 type="submit"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all"
