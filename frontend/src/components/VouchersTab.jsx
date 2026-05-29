@@ -1,0 +1,359 @@
+import { useEffect, useRef, useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import {
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw
+} from 'lucide-react';
+import * as api from '../api/voucherClient';
+
+const inputCls =
+  "w-full px-3 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
+  "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
+  "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
+
+const labelCls = "block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1";
+
+const sectionCls =
+  "border border-slate-200 dark:border-slate-700/60 rounded-xl p-4 bg-white/70 dark:bg-slate-900/30";
+
+export default function VouchersTab({ showToast }) {
+  const [list, setList] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [current, setCurrent] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const iframeRef = useRef(null);
+
+  const { register, control, handleSubmit, reset } = useForm({
+    defaultValues: { reservation: {}, passengers: [], trips: [] },
+  });
+  const passengers = useFieldArray({ control, name: 'passengers' });
+  const trips = useFieldArray({ control, name: 'trips' });
+
+  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function refresh() {
+    try {
+      const data = await api.list();
+      setList(Array.isArray(data) ? data : (data.items || []));
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha ao listar vouchers', 'error');
+    }
+  }
+
+  async function select(id) {
+    setLoading(true);
+    try {
+      const v = await api.get(id);
+      const unified = v.unified || v;
+      setSelectedId(id);
+      setCurrent(unified);
+      reset({
+        reservation: unified.reservation || {},
+        passengers: unified.passengers || [],
+        trips: unified.trips || [],
+      });
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha ao carregar voucher', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await api.upload(file);
+      await refresh();
+      if (r?.id) await select(r.id);
+      showToast?.('Voucher importado com sucesso', 'success');
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha no upload do voucher', 'error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function onSave(data) {
+    if (!selectedId) return;
+    try {
+      const r = await api.update(selectedId, data);
+      setCurrent(r.unified || data);
+      if (iframeRef.current) {
+        iframeRef.current.src = `/voucher-preview/${selectedId}?ts=${Date.now()}`;
+      }
+      showToast?.('Voucher salvo', 'success');
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha ao salvar voucher', 'error');
+    }
+  }
+
+  async function onDelete() {
+    if (!selectedId) return;
+    if (!window.confirm('Excluir este voucher?')) return;
+    try {
+      await api.remove(selectedId);
+      setSelectedId(null);
+      setCurrent(null);
+      reset({ reservation: {}, passengers: [], trips: [] });
+      await refresh();
+      showToast?.('Voucher excluído', 'success');
+    } catch (err) {
+      showToast?.(err?.response?.data?.detail || 'Falha ao excluir voucher', 'error');
+    }
+  }
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-220px)]">
+      {/* Coluna esquerda: lista + editor */}
+      <div className="lg:w-1/2 flex flex-col gap-4 min-w-0">
+        {/* Upload */}
+        <div className={sectionCls}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <UploadCloud className="w-4 h-4" /> Importar voucher
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                PDF, PNG, JPEG ou WebP — extração automática dos dados.
+              </p>
+            </div>
+            <label
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
+                          ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
+            >
+              <UploadCloud className="w-4 h-4" />
+              {uploading ? 'Enviando…' : 'Selecionar arquivo'}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/png,image/jpeg,image/webp"
+                onChange={onUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div className={sectionCls}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Vouchers ({list.length})
+            </h3>
+            <button
+              onClick={refresh}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white transition-colors cursor-pointer"
+              title="Atualizar"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+          {list.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum voucher ainda. Faça upload acima.</p>
+          ) : (
+            <div className="flex gap-2 flex-wrap">
+              {list.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => select(v.id)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
+                    selectedId === v.id
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/25'
+                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700 dark:hover:border-indigo-500'
+                  }`}
+                >
+                  #{v.id} · {v.carrier || v.airline || 'sem cia'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Editor */}
+        {loading && (
+          <div className={sectionCls}>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Carregando voucher…</p>
+          </div>
+        )}
+
+        {current && !loading && (
+          <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+            <div className={sectionCls}>
+              <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 text-sm">Reserva</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Localizador</label>
+                  <input {...register('reservation.locator')} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Status</label>
+                  <input {...register('reservation.status')} className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            <div className={sectionCls}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">Passageiros</h4>
+                <button
+                  type="button"
+                  onClick={() => passengers.append({ order: passengers.fields.length + 1, name: '', type: 'adulto' })}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> adicionar
+                </button>
+              </div>
+              {passengers.fields.length === 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">Nenhum passageiro.</p>
+              )}
+              <div className="space-y-2">
+                {passengers.fields.map((f, i) => (
+                  <div key={f.id} className="flex gap-2 items-center">
+                    <input
+                      {...register(`passengers.${i}.order`, { valueAsNumber: true })}
+                      type="number"
+                      className={`${inputCls} w-16`}
+                    />
+                    <input {...register(`passengers.${i}.name`)} className={`${inputCls} flex-1`} placeholder="Nome completo" />
+                    <select {...register(`passengers.${i}.type`)} className={`${inputCls} w-32`}>
+                      <option value="adulto">adulto</option>
+                      <option value="crianca">criança</option>
+                      <option value="bebe">bebê</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => passengers.remove(i)}
+                      className="p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
+                      title="Remover"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={sectionCls}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">Trechos</h4>
+                <button
+                  type="button"
+                  onClick={() => trips.append({
+                    direction: 'ida', dateLabel: '', flightNumber: '',
+                    departure: { airport: '', datetime: '' },
+                    arrival: { airport: '', datetime: '' },
+                  })}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> adicionar
+                </button>
+              </div>
+              {trips.fields.length === 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">Nenhum trecho.</p>
+              )}
+              <div className="space-y-3">
+                {trips.fields.map((f, i) => (
+                  <div key={f.id} className="border border-slate-200 dark:border-slate-700/60 rounded-lg p-3 space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <select {...register(`trips.${i}.direction`)} className={`${inputCls} w-28`}>
+                        <option value="ida">ida</option>
+                        <option value="volta">volta</option>
+                        <option value="multi">multi</option>
+                      </select>
+                      <input {...register(`trips.${i}.dateLabel`)} className={`${inputCls} flex-1`} placeholder="12 SET 2026" />
+                      <input {...register(`trips.${i}.flightNumber`)} className={`${inputCls} w-28`} placeholder="AD 4001" />
+                      <button
+                        type="button"
+                        onClick={() => trips.remove(i)}
+                        className="p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
+                        title="Remover trecho"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Origem (IATA)</label>
+                        <input {...register(`trips.${i}.departure.airport`)} className={inputCls} placeholder="GRU" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Embarque (ISO)</label>
+                        <input {...register(`trips.${i}.departure.datetime`)} className={inputCls} placeholder="2026-09-12T08:30:00" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Destino (IATA)</label>
+                        <input {...register(`trips.${i}.arrival.airport`)} className={inputCls} placeholder="REC" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Chegada (ISO)</label>
+                        <input {...register(`trips.${i}.arrival.datetime`)} className={inputCls} placeholder="2026-09-12T11:45:00" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all"
+              >
+                <Save className="w-4 h-4" /> Salvar
+              </button>
+              <a
+                href={api.exportUrl(selectedId, 'pdf')}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+              >
+                <Download className="w-4 h-4" /> PDF
+              </a>
+              <a
+                href={api.exportUrl(selectedId, 'png')}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-lg shadow-teal-500/25 cursor-pointer transition-all"
+              >
+                <Download className="w-4 h-4" /> PNG
+              </a>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all ml-auto"
+              >
+                <Trash2 className="w-4 h-4" /> Excluir
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Coluna direita: preview */}
+      <div className="lg:w-1/2 min-w-0">
+        <div className="sticky top-4 h-[calc(100vh-180px)] rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-100 dark:bg-slate-900/40">
+          {selectedId ? (
+            <iframe
+              ref={iframeRef}
+              src={`/voucher-preview/${selectedId}`}
+              className="w-full h-full border-0"
+              title="Preview do voucher"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center p-8 text-center">
+              <div className="text-slate-500 dark:text-slate-400 text-sm">
+                <FileText className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                Faça upload de um voucher para começar.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

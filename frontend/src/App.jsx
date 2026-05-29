@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Settings, Activity, Megaphone } from 'lucide-react';
+import { DollarSign, Settings, Activity, Megaphone, Ticket } from 'lucide-react';
 import logo from './assets/logo.png';
 import Tabs from './components/Tabs';
 import Toast from './components/Toast';
@@ -7,6 +7,7 @@ import SettingsModal from './components/SettingsModal';
 import PrecosTab from './components/PrecosTab';
 import StatusTab from './components/StatusTab';
 import PromocoesTab from './components/PromocoesTab';
+import VouchersTab from './components/VouchersTab';
 import VoucherPreviewPage from './components/VoucherPreviewPage';
 import LoginPage from './components/LoginPage';
 import SessionExpiredModal from './components/SessionExpiredModal';
@@ -19,7 +20,8 @@ import { useAuth } from './hooks/useAuth';
 const TABS = [
   { value: 'precos', label: 'Preços', icon: <DollarSign className="w-4 h-4" /> },
   { value: 'status', label: 'Status', icon: <Activity className="w-4 h-4" /> },
-  { value: 'promocoes', label: 'Promoções', icon: <Megaphone className="w-4 h-4" /> }
+  { value: 'promocoes', label: 'Promoções', icon: <Megaphone className="w-4 h-4" /> },
+  { value: 'vouchers', label: 'Vouchers', icon: <Ticket className="w-4 h-4" /> }
 ];
 
 function AppShell() {
@@ -82,6 +84,7 @@ function AppShell() {
       {activeTab === 'precos' && <PrecosTab showToast={showToast} />}
       {activeTab === 'status' && <StatusTab showToast={showToast} />}
       {activeTab === 'promocoes' && <PromocoesTab showToast={showToast} />}
+      {activeTab === 'vouchers' && <VouchersTab showToast={showToast} />}
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onToast={showToast} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
