@@ -15,7 +15,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 function audit(voucherId, userId, action, details, sourceHash) {
   db.run(
     `INSERT INTO voucher_audit_log (voucher_id, user_id, action, source_file_hash, details) VALUES (?, ?, ?, ?, ?)`,
-    [voucherId, userId, action, sourceHash || null, details ? JSON.stringify(details) : null]
+    [voucherId, userId, action, sourceHash || null, details ? JSON.stringify(details) : null],
+    (err) => { if (err) console.error('[VOUCHER-AUDIT] falha ao registrar', action, 'voucher', voucherId, err.message); }
   );
 }
 
@@ -37,13 +38,18 @@ router.post('/', upload.single('file'), async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?)`,
       [req.session.userId, unified.carrier, unified.layoutVersion, filePath, hash, JSON.stringify(unified)],
       function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+          fs.unlink(filePath, () => {}); // best-effort orphan cleanup
+          console.error('[VOUCHERS] falha ao persistir voucher', err.message);
+          return res.status(500).json({ error: 'falha ao salvar voucher' });
+        }
         audit(this.lastID, req.session.userId, 'create', { filename: req.file.originalname }, hash);
         res.status(201).json({ id: this.lastID, unified });
       }
     );
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[VOUCHERS] erro ao processar upload', err.message);
+    res.status(500).json({ error: 'erro ao processar voucher' });
   }
 });
 
@@ -51,7 +57,10 @@ router.get('/', (req, res) => {
   db.all(
     `SELECT id, carrier, layout_version, created_at, updated_at FROM vouchers WHERE user_id = ? ORDER BY id DESC LIMIT 100`,
     [req.session.userId],
-    (err, rows) => err ? res.status(500).json({ error: err.message }) : res.json(rows)
+    (err, rows) => {
+      if (err) { console.error('[VOUCHERS] erro ao listar', err.message); return res.status(500).json({ error: 'erro ao listar vouchers' }); }
+      res.json(rows);
+    }
   );
 });
 
@@ -60,10 +69,11 @@ router.get('/:id', (req, res) => {
     `SELECT * FROM vouchers WHERE id = ? AND user_id = ?`,
     [req.params.id, req.session.userId],
     (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) { console.error('[VOUCHERS] erro ao buscar voucher', err.message); return res.status(500).json({ error: 'erro ao buscar voucher' }); }
       if (!row) return res.status(404).json({ error: 'não encontrado' });
       row.unified = JSON.parse(row.unified_json);
       delete row.unified_json;
+      delete row.source_file_path; // server-only path, não expor
       res.json(row);
     }
   );
@@ -79,7 +89,7 @@ router.put('/:id', (req, res) => {
     `UPDATE vouchers SET unified_json = ?, layout_version = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`,
     [JSON.stringify(norm), norm.layoutVersion, req.params.id, req.session.userId],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) { console.error('[VOUCHERS] erro ao atualizar voucher', err.message); return res.status(500).json({ error: 'erro ao atualizar voucher' }); }
       if (this.changes === 0) return res.status(404).json({ error: 'não encontrado' });
       audit(req.params.id, req.session.userId, 'update', null, null);
       res.json({ id: Number(req.params.id), unified: norm });
@@ -90,9 +100,13 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   db.get(`SELECT source_file_path FROM vouchers WHERE id = ? AND user_id = ?`,
     [req.params.id, req.session.userId], (err, row) => {
-      if (err || !row) return res.status(404).json({ error: 'não encontrado' });
-      try { if (row.source_file_path && fs.existsSync(row.source_file_path)) fs.unlinkSync(row.source_file_path); } catch (_) {}
-      db.run(`DELETE FROM vouchers WHERE id = ?`, [req.params.id], () => {
+      if (err) { console.error('[VOUCHERS] erro ao buscar voucher para delete', err.message); return res.status(500).json({ error: 'erro ao buscar voucher' }); }
+      if (!row) return res.status(404).json({ error: 'não encontrado' });
+      db.run(`DELETE FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], function (delErr) {
+        if (delErr) { console.error('[VOUCHERS] erro ao deletar voucher', delErr.message); return res.status(500).json({ error: 'falha ao remover voucher' }); }
+        if (this.changes === 0) return res.status(404).json({ error: 'não encontrado' });
+        try { if (row.source_file_path && fs.existsSync(row.source_file_path)) fs.unlinkSync(row.source_file_path); }
+        catch (e) { console.error('[VOUCHERS] arquivo órfão após delete', row.source_file_path, e.message); }
         audit(req.params.id, req.session.userId, 'delete', null, null);
         res.status(204).end();
       });
