@@ -19,12 +19,14 @@ function validate(v) {
 
   req(Array.isArray(v.passengers) && v.passengers.length >= 1, 'passengers deve ter ao menos 1');
   (v.passengers || []).forEach((p, i) => {
+    if (!p || typeof p !== 'object') { errors.push(`passengers[${i}] deve ser objeto`); return; }
     req(typeof p.name === 'string' && p.name.length, `passengers[${i}].name obrigatório`);
     req(PASSENGER_TYPES.includes(p.type), `passengers[${i}].type inválido`);
   });
 
   req(Array.isArray(v.trips) && v.trips.length >= 1, 'trips deve ter ao menos 1');
   (v.trips || []).forEach((t, i) => {
+    if (!t || typeof t !== 'object') { errors.push(`trips[${i}] deve ser objeto`); return; }
     req(DIRECTIONS.includes(t.direction), `trips[${i}].direction inválido`);
     req(t.departure && ISO_RE.test(t.departure.datetime || ''), `trips[${i}].departure.datetime deve ser ISO`);
     req(t.arrival   && ISO_RE.test(t.arrival.datetime   || ''), `trips[${i}].arrival.datetime deve ser ISO`);
