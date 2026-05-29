@@ -7,6 +7,7 @@ import SettingsModal from './components/SettingsModal';
 import PrecosTab from './components/PrecosTab';
 import StatusTab from './components/StatusTab';
 import PromocoesTab from './components/PromocoesTab';
+import VoucherPreviewPage from './components/VoucherPreviewPage';
 import LoginPage from './components/LoginPage';
 import SessionExpiredModal from './components/SessionExpiredModal';
 import UserMenu from './components/UserMenu';
@@ -22,6 +23,14 @@ const TABS = [
 ];
 
 function AppShell() {
+  // Standalone preview route — bypassa todo o shell autenticado para que
+  // Playwright/Puppeteer possa renderizar o template do voucher isoladamente.
+  const previewMatch = window.location.pathname.match(/^\/voucher-preview\/(\d+)/);
+  if (previewMatch) {
+    const isExport = new URLSearchParams(window.location.search).get('export') === '1';
+    return <VoucherPreviewPage id={previewMatch[1]} isExport={isExport} />;
+  }
+
   const { currentUser, setCurrentUser, sessionExpired } = useAuth();
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'precos');
   const [toast, setToast] = useState(null);
