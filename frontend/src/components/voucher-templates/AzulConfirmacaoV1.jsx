@@ -18,7 +18,7 @@ export default function AzulConfirmacaoV1({ data }) {
   const trips = data.trips || [];
   const baggage = data.baggage || [];
   return (
-    <div style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, sans-serif', color: '#222', background: '#fff' }}>
+    <div data-voucher-ready="azul.confirmacao.v1" style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, sans-serif', color: '#222', background: '#fff' }}>
       <header style={{ background: AZUL, color: 'white', padding: '24px 32px' }}>
         <div style={{ fontSize: 22, fontWeight: 700 }}>{data.branding?.airlineName || 'Azul'}</div>
         <div style={{ fontSize: 13, opacity: 0.9 }}>Confirmação de Reserva</div>

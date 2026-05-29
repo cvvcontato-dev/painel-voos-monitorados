@@ -23,17 +23,28 @@ async function renderVoucher({ voucherId, format, cookieHeader, baseUrl }) {
     const context = await browser.newContext({ viewport: { width: 820, height: 1200 } });
     if (cookieHeader) {
       const url = new URL(baseUrl);
+      const isHttps = url.protocol === 'https:';
       const cookies = cookieHeader.split(';').map(c => {
         const [name, ...rest] = c.trim().split('=');
-        return { name, value: rest.join('='), domain: url.hostname, path: '/' };
+        return {
+          name,
+          value: rest.join('='),
+          domain: url.hostname,
+          path: '/',
+          secure: isHttps,
+          sameSite: 'Lax',
+          httpOnly: true
+        };
       }).filter(c => c.name);
       await context.addCookies(cookies);
     }
     const page = await context.newPage();
-    await page.goto(`${baseUrl}/voucher-preview/${voucherId}?export=1`, { waitUntil: 'networkidle' });
+    const response = await page.goto(`${baseUrl}/voucher-preview/${voucherId}?export=1`, { waitUntil: 'networkidle' });
+    if (!response || response.status() >= 400) {
+      throw new Error(`preview HTTP ${response ? response.status() : 'no-response'}`);
+    }
     await page.addStyleTag({ content: WATERMARK_CSS });
-    // Wait for the voucher template content (not just "Carregando…") to appear
-    await page.waitForFunction(() => !document.body.innerText.includes('Carregando'), { timeout: 10000 });
+    await page.waitForSelector('[data-voucher-ready]', { timeout: 10000 });
 
     const outName = `voucher-${voucherId}-${Date.now()}.${format}`;
     const outPath = path.join(exportsDir(), outName);

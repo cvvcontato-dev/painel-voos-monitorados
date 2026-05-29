@@ -93,7 +93,11 @@ router.get('/:id/export', async (req, res) => {
         cookieHeader: req.headers.cookie, baseUrl
       });
       audit(req.params.id, req.session.userId, 'export', { format }, null);
-      res.download(outPath);
+      res.download(outPath, (err) => {
+        // Always cleanup the export file — exports are ephemeral
+        require('fs').unlink(outPath, () => {});
+        if (err) console.error('[VOUCHERS] erro ao enviar export', err.message);
+      });
     } catch (e) {
       console.error('[VOUCHERS] falha no export', e.message);
       res.status(500).json({ error: 'falha ao gerar export' });
