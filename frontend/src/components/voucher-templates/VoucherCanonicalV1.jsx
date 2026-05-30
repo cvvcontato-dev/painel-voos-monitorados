@@ -199,8 +199,16 @@ export default function VoucherCanonicalV1({ data }) {
         </section>
       )}
 
+      {/* RESUMO DA RESERVA */}
+      <section style={{ marginTop: 'auto', padding: '14px 36px 4px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2a48' }}>Resumo da sua reserva</div>
+        <div style={{ fontSize: 11, color: '#6b7a90', marginTop: 4 }}>
+          Acesse a área do cliente da companhia aérea para realizar o check-in, alterar assentos e mais.
+        </div>
+      </section>
+
       {/* FOOTER */}
-      <footer style={{ marginTop: 'auto', padding: '16px 36px 14px', borderTop: `3px solid ${theme.accent}`, background: '#fff' }}>
+      <footer style={{ padding: '14px 36px 14px', borderTop: `3px solid ${theme.accent}`, background: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
           <div style={{ flex: 1 }}>
             <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 56, maxWidth: 200, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
@@ -226,7 +234,7 @@ export default function VoucherCanonicalV1({ data }) {
           {qrUrl && (
             <div style={{ textAlign: 'center' }}>
               <img src={qrUrl} alt="QR localizador" style={{ width: 90, height: 90, background: 'white', padding: 4, border: '1px solid #e5eaf0', display: 'block' }} />
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#888', marginTop: 4, textAlign: 'center' }}>Localizador</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#888', marginTop: 4, textAlign: 'center' }}>Detalhes online</div>
             </div>
           )}
         </div>
