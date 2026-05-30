@@ -242,6 +242,64 @@ function runMigrations() {
             });
         }
     });
+
+    // --- Vouchers tables ---
+    db.run(`CREATE TABLE IF NOT EXISTS vouchers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        carrier TEXT NOT NULL,
+        layout_version TEXT NOT NULL,
+        source_file_path TEXT,
+        source_file_hash TEXT,
+        unified_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`, (err) => {
+        if (err) console.error('Error creating vouchers table:', err.message);
+        else {
+            console.log('vouchers table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_vouchers_user_id
+                    ON vouchers(user_id)`, (err) => {
+                if (err) console.error('Error creating idx_vouchers_user_id:', err.message);
+            });
+        }
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS voucher_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        voucher_id INTEGER,
+        user_id INTEGER NOT NULL,
+        action TEXT NOT NULL CHECK(action IN ('create','update','export','delete','retention_cleanup')),
+        source_file_hash TEXT,
+        details TEXT,
+        ts TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating voucher_audit_log table:', err.message);
+        else {
+            console.log('voucher_audit_log table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_voucher_audit_voucher
+                    ON voucher_audit_log(voucher_id, ts DESC)`, (err) => {
+                if (err) console.error('Error creating idx_voucher_audit_voucher:', err.message);
+            });
+        }
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS voucher_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        contact_phone TEXT,
+        contact_email TEXT,
+        contact_site TEXT,
+        contact_extra TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating voucher_settings', err.message);
+        else {
+            console.log('voucher_settings table created or already exists.');
+            // Seed single row if empty
+            db.run(`INSERT OR IGNORE INTO voucher_settings (id, contact_phone, contact_email, contact_site) VALUES (1, '', '', '')`);
+        }
+    });
 }
 
 module.exports = db;
