@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow,
+  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight,
   CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
 } from './_shared';
 
@@ -188,7 +188,7 @@ export default function VoucherCanonicalV1({ data }) {
                     <IconBag color="#6b7a90" size={18} />
                     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2a48' }}>{b.label}</span>
-                      {b.weightText && <span style={{ fontSize: 11, color: '#9aa5b8', marginTop: 2 }}>{b.weightText}</span>}
+                      {resolveBaggageWeight(carrierKey, b) && <span style={{ fontSize: 11, color: '#9aa5b8', marginTop: 2 }}>{resolveBaggageWeight(carrierKey, b)}</span>}
                     </div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#1a2a48' }}>{b.quantity}</div>
                   </div>

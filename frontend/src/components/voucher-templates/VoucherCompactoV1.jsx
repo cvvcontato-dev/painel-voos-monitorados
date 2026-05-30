@@ -50,11 +50,17 @@ const IconSuitcase = ({ color = '#1a2a48', size = 16 }) => (
 
 // Splits the baggage array into two slots: handbag (~10kg) and checked (~23kg) per direction.
 // Returns { mao: {qty, weight}, despachada: {qty, weight} } — qty defaults to 0 if not present.
-function splitBaggage(allBags, direction) {
+// Peso de mão padrão por cia: Azul/multi = 10kg, Latam/Gol = 12kg. Despachada = 23kg sempre.
+function handWeight(carrierKey) {
+  return (carrierKey === 'latam' || carrierKey === 'gol') ? '12kg' : '10kg';
+}
+
+function splitBaggage(allBags, direction, carrierKey) {
   const dirBags = allBags.filter(b => (b.direction || '').toLowerCase() === direction);
+  const hand = handWeight(carrierKey);
   const isHand = b => {
     const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
-    return /mochila|bolsa|m[aã]o|hand/.test(text) || /\b10\s*kg\b/.test(text);
+    return /mochila|bolsa|m[aã]o|hand/.test(text) || /\b1[02]\s*kg\b/.test(text);
   };
   const isChecked = b => {
     const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
@@ -65,7 +71,7 @@ function splitBaggage(allBags, direction) {
   // Fallbacks: if exactly one bag and we couldn't categorize, treat as hand bag.
   const fallbackHand = !mao && !desp && dirBags.length === 1 ? dirBags[0] : null;
   return {
-    mao: mao ? { qty: mao.quantity ?? 1, weight: mao.weightText || '10kg' } : (fallbackHand ? { qty: fallbackHand.quantity ?? 1, weight: fallbackHand.weightText || '10kg' } : { qty: 0, weight: '10kg' }),
+    mao: mao ? { qty: mao.quantity ?? 1, weight: mao.weightText || hand } : (fallbackHand ? { qty: fallbackHand.quantity ?? 1, weight: fallbackHand.weightText || hand } : { qty: 0, weight: hand }),
     despachada: desp ? { qty: desp.quantity ?? 1, weight: desp.weightText || '23kg' } : { qty: 0, weight: '23kg' }
   };
 }
@@ -219,7 +225,7 @@ export default function VoucherCompactoV1({ data }) {
 
               {/* Gray box per direction */}
               {dirsPresent.map(dir => {
-                const bags = splitBaggage(baggage, dir);
+                const bags = splitBaggage(baggage, dir, carrierKey);
                 return (
                   <div key={dir} style={{ background: THEME.cardBg, borderRadius: 8, padding: 12, marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                     {/* Left: direction pill + Assentos */}

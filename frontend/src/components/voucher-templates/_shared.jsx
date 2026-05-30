@@ -47,6 +47,30 @@ export const IconUser = ({ color = '#1a2a48', size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
 );
 
+// Peso padrão de bagagem por companhia, quando o voucher não traz o peso explícito.
+// Regras do negócio (Clube do Voo):
+//  - Bagagem de mão: Azul = 10kg | Latam e Gol = 12kg
+//  - Bagagem despachada: 23kg para qualquer companhia
+//  - Item pessoal (mochila/bolsa/sacola): sem peso
+export function defaultBaggageWeight(carrierKey, label) {
+  const l = (label || '').toLowerCase();
+  // Despachada / checked / porão / mala
+  if (/despach|checked|por[aã]o/.test(l) || /\bmala\b/.test(l)) return '23kg';
+  // Bagagem de mão / carry-on
+  if (/m[aã]o|carry/.test(l)) {
+    return (carrierKey === 'latam' || carrierKey === 'gol') ? '12kg' : '10kg';
+  }
+  // Item pessoal — sem peso definido
+  if (/mochila|bolsa|sacola|pessoal|personal/.test(l)) return '';
+  return '';
+}
+
+// Retorna o peso a exibir: usa o extraído quando existir, senão o padrão por cia.
+export function resolveBaggageWeight(carrierKey, baggage) {
+  if (baggage && baggage.weightText) return baggage.weightText;
+  return defaultBaggageWeight(carrierKey, baggage && baggage.label);
+}
+
 const WEEKDAYS_PTBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 export function dateLabelWithDow(t) {
   const base = (t.dateLabel || '').trim();
