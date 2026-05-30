@@ -99,7 +99,7 @@ export default function VoucherCompactoV1({ data }) {
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: THEME.text, background: '#fff', display: 'flex', flexDirection: 'column' }}>
       {/* HEADER — logo bare on left, localizador center, "Visualizar reserva" button right */}
-      <header style={{ padding: '24px 32px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <header style={{ padding: '36px 40px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ flex: '0 0 auto' }}>
           {/* Bare large carrier logo — no white card around */}
           <CarrierLogo carrierKey={carrierKey} theme={carrierTheme} bare />
@@ -110,7 +110,7 @@ export default function VoucherCompactoV1({ data }) {
         </div>
         <div style={{ flex: '0 0 auto' }}>
           {/* Decorative — looks like a button but is non-functional in print */}
-          <div style={{ background: THEME.accent, color: 'white', padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>Visualizar reserva</div>
+          <div style={{ background: THEME.accent, color: 'white', padding: '12px 22px', borderRadius: 10, fontSize: 14, fontWeight: 600 }}>Visualizar reserva</div>
         </div>
       </header>
 
@@ -197,7 +197,7 @@ export default function VoucherCompactoV1({ data }) {
 
       {/* PASSAGEIROS title */}
       <div style={{ padding: '8px 24px 4px' }}>
-        <h3 style={{ color: THEME.accent, fontSize: 15, fontWeight: 700, margin: '14px 0 12px' }}>Passageiros: {passengers.length}</h3>
+        <h3 style={{ color: THEME.accent, fontSize: 17, fontWeight: 600, margin: '18px 0 14px', letterSpacing: 0 }}>Passageiros: {passengers.length}</h3>
       </div>
 
       {/* PASSENGER CARDS */}
@@ -207,7 +207,7 @@ export default function VoucherCompactoV1({ data }) {
           // Which directions does the trip have? Show "Ida" first if 'ida' exists, then "Volta".
           const dirsPresent = directions;
           return (
-            <div key={p.order} style={{ border: `1px solid ${THEME.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 10, background: '#fff' }}>
+            <div key={p.order} style={{ border: `1px solid #eef1f6`, borderRadius: 12, padding: 16, marginBottom: 12, background: '#fff' }}>
               {/* Top row: name + e-ticket */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -232,20 +232,20 @@ export default function VoucherCompactoV1({ data }) {
                     </div>
                     {/* Right: Bagagens — 2 fixed slots (mão + despachada) */}
                     <div>
-                      <div style={{ fontSize: 11, color: THEME.textMuted, marginBottom: 6 }}>Bagagens</div>
-                      <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                          <IconBag color={THEME.text} size={16} />
+                      <div style={{ fontSize: 11, color: THEME.textMuted, marginBottom: 8 }}>Bagagens</div>
+                      <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                          <IconBag color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
-                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>{bags.mao.weight}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
+                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.mao.weight}</div>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                          <IconSuitcase color={THEME.text} size={16} />
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                          <IconSuitcase color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
-                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>{bags.despachada.weight}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
+                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.despachada.weight}</div>
                           </div>
                         </div>
                       </div>
@@ -260,7 +260,7 @@ export default function VoucherCompactoV1({ data }) {
 
       {/* INFORMAÇÕES */}
       <div style={{ padding: '6px 24px 14px' }}>
-        <h3 style={{ color: THEME.accent, fontSize: 15, fontWeight: 700, margin: '8px 0 8px' }}>Informações</h3>
+        <h3 style={{ color: THEME.accent, fontSize: 17, fontWeight: 600, margin: '12px 0 10px', letterSpacing: 0 }}>Informações</h3>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 11, color: THEME.textMuted }}>
           <IconBag color={THEME.textFaint} size={14} />
           <span>Além da bagagem especificada acima, cada passageiro pode levar consigo uma bolsa, mochila ou sacola (considerado item pessoal).</span>
