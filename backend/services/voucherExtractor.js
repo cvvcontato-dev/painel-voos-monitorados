@@ -9,12 +9,13 @@ Extraia os dados e devolva UM ÚNICO objeto JSON, sem texto extra, com as chaves
 carrier ("azul"), layoutVersion ("azul.confirmacao.v1"),
 reservation: { locator, status, summaryText },
 route: { origin (IATA 3 letras), destination (IATA) },
-passengers: [{ order (1-based), name (MAIÚSCULAS), type ("adulto"|"crianca"|"bebe"), documento, loyaltyNumber }],
+passengers: [{ order (1-based), name (MAIÚSCULAS), type ("adulto"|"crianca"|"bebe"), documento, loyaltyNumber (pode ser preenchido com o e-ticket da cia aérea quando visível, ex.: "1272303925150") }],
 trips: [{
   direction ("ida"|"volta"|"multi"), dateLabel (ex.: "12 SET 2026"),
-  departure: { airport (IATA), datetime (ISO 8601 com timezone -03:00) },
-  arrival:   { airport (IATA), datetime (ISO 8601 com timezone -03:00) },
+  departure: { airport (IATA), airportName (nome completo do aeroporto quando visível, ex.: "Ministro Victor Konder"), datetime (ISO 8601 com timezone -03:00) },
+  arrival:   { airport (IATA), airportName (nome completo do aeroporto quando visível), datetime (ISO 8601 com timezone -03:00) },
   flightNumber (ex.: "AD 4001"), durationText (ex.: "3h15"),
+  cabinClass ("Econômica"|"Executiva"|"Premium Economy" etc., null se não visível),
   airlineDisplayName, status
 }],
 baggage: [{ direction ("ida"|"volta"), label, weightText, quantity (número) }],
@@ -31,19 +32,21 @@ const STUB = {
   reservation: { locator: 'STUB01', status: 'Confirmada', summaryText: null },
   route: { origin: 'GRU', destination: 'REC' },
   passengers: [
-    { order: 1, name: 'JOAO DA SILVA', type: 'adulto', documento: null, loyaltyNumber: null },
-    { order: 2, name: 'MARIA SILVA',   type: 'adulto', documento: null, loyaltyNumber: null }
+    { order: 1, name: 'JOAO DA SILVA', type: 'adulto', documento: null, loyaltyNumber: '1234567890' },
+    { order: 2, name: 'MARIA SILVA',   type: 'adulto', documento: null, loyaltyNumber: '1234567891' }
   ],
   trips: [
     { direction: 'ida', dateLabel: '12 SET 2026',
-      departure: { airport: 'GRU', datetime: '2026-09-12T08:30:00-03:00' },
-      arrival:   { airport: 'REC', datetime: '2026-09-12T11:45:00-03:00' },
+      departure: { airport: 'GRU', airportName: 'Guarulhos', datetime: '2026-09-12T08:30:00-03:00' },
+      arrival:   { airport: 'REC', airportName: 'Guararapes', datetime: '2026-09-12T11:45:00-03:00' },
       flightNumber: 'AD 4001', durationText: '3h15',
+      cabinClass: 'Econômica',
       airlineDisplayName: 'Azul Linhas Aéreas', status: 'Confirmado' },
     { direction: 'volta', dateLabel: '19 SET 2026',
-      departure: { airport: 'REC', datetime: '2026-09-19T13:00:00-03:00' },
-      arrival:   { airport: 'GRU', datetime: '2026-09-19T16:30:00-03:00' },
+      departure: { airport: 'REC', airportName: 'Guararapes', datetime: '2026-09-19T13:00:00-03:00' },
+      arrival:   { airport: 'GRU', airportName: 'Guarulhos', datetime: '2026-09-19T16:30:00-03:00' },
       flightNumber: 'AD 4002', durationText: '3h30',
+      cabinClass: 'Econômica',
       airlineDisplayName: 'Azul Linhas Aéreas', status: 'Confirmado' }
   ],
   baggage: [

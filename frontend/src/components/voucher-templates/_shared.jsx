@@ -58,8 +58,18 @@ export function dateLabelWithDow(t) {
   return `${dow}, ${base}`;
 }
 
-export function CarrierLogo({ carrierKey, theme, large = false }) {
+export function CarrierLogo({ carrierKey, theme, large = false, bare = false }) {
   const [failed, setFailed] = useState(false);
+  if (bare && !failed && carrierKey !== 'multi') {
+    return (
+      <img
+        src={`/voucher-assets/carrier-logos/${carrierKey}.png`}
+        alt={theme.name}
+        style={{ maxHeight: 64, maxWidth: 200, objectFit: 'contain', display: 'block' }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   const boxSize = large ? 80 : 56;
   const maxW = large ? 180 : boxSize;
   const wrapperStyle = {
