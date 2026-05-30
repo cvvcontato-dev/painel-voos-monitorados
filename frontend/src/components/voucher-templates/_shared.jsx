@@ -71,6 +71,17 @@ export function resolveBaggageWeight(carrierKey, baggage) {
   return defaultBaggageWeight(carrierKey, baggage && baggage.label);
 }
 
+// URL da página "minhas viagens / gerenciar reserva" por companhia.
+// O QR aponta pra cá (deep-link com localizador não é confiável entre as cias).
+export function manageBookingUrl(carrierKey, locator) {
+  switch ((carrierKey || '').toLowerCase()) {
+    case 'gol':   return 'https://b2c.voegol.com.br/minhas-viagens';
+    case 'latam': return 'https://www.latamairlines.com/br/pt/minha-viagem';
+    case 'azul':  return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+    default:      return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+  }
+}
+
 const WEEKDAYS_PTBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 export function dateLabelWithDow(t) {
   const base = (t.dateLabel || '').trim();

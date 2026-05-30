@@ -3,6 +3,7 @@ const path = require('path');
 const { exportsDir } = require('../helpers/voucherWorkspace');
 
 const WATERMARK_CSS = `
+  html, body { background: #ffffff !important; margin: 0 !important; }
   body::after {
     content: "Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.";
     position: fixed; bottom: 8px; left: 0; right: 0;
@@ -21,7 +22,7 @@ async function renderVoucher({ voucherId, format, cookieHeader, baseUrl }) {
   launchOpts.args = ['--no-sandbox', '--disable-setuid-sandbox'];
   const browser = await chromium.launch(launchOpts);
   try {
-    const context = await browser.newContext({ viewport: { width: 820, height: 1200 } });
+    const context = await browser.newContext({ viewport: { width: 820, height: 1200 }, colorScheme: 'light' });
     if (cookieHeader) {
       const url = new URL(baseUrl);
       const isHttps = url.protocol === 'https:';
