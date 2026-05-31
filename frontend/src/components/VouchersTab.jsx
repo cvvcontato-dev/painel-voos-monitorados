@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 
@@ -24,6 +24,10 @@ export default function VouchersTab({ showToast }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
   const fileInputRef = useRef(null);
   const iframeRef = useRef(null);
 
@@ -144,6 +148,22 @@ export default function VouchersTab({ showToast }) {
       showToast?.('Modelo alterado', 'success');
     } catch (err) {
       showToast?.(err?.response?.data?.detail || 'Falha ao alterar modelo', 'error');
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!emailRecipients.trim() || sendingEmail || !selectedId) return;
+    setSendingEmail(true);
+    try {
+      const result = await api.sendEmail(selectedId, emailRecipients, emailMessage);
+      showToast?.(`E-mail enviado para ${result.sent} destinatário(s)`, 'success');
+      setEmailModalOpen(false);
+      setEmailRecipients('');
+      setEmailMessage('');
+    } catch (e) {
+      showToast?.(`Erro ao enviar: ${e?.response?.data?.error || e.message}`, 'error');
+    } finally {
+      setSendingEmail(false);
     }
   }
 
@@ -460,8 +480,15 @@ export default function VouchersTab({ showToast }) {
               </a>
               <button
                 type="button"
+                onClick={() => setEmailModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all ml-auto"
+              >
+                <Mail className="w-4 h-4" /> Enviar por e-mail
+              </button>
+              <button
+                type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all ml-auto"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all"
               >
                 <Trash2 className="w-4 h-4" /> Excluir
               </button>
@@ -490,6 +517,53 @@ export default function VouchersTab({ showToast }) {
           )}
         </div>
       </div>
+
+      {emailModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !sendingEmail && setEmailModalOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Enviar voucher por e-mail</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-slate-700 dark:text-slate-300 mb-1">Destinatários</label>
+                <input
+                  type="text"
+                  value={emailRecipients}
+                  onChange={e => setEmailRecipients(e.target.value)}
+                  placeholder="cliente@exemplo.com, outro@exemplo.com"
+                  disabled={sendingEmail}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">Múltiplos e-mails separados por vírgula.</p>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-700 dark:text-slate-300 mb-1">Mensagem personalizada (opcional)</label>
+                <textarea
+                  value={emailMessage}
+                  onChange={e => setEmailMessage(e.target.value)}
+                  placeholder="Olá! Segue o voucher conforme combinado…"
+                  rows={5}
+                  disabled={sendingEmail}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEmailModalOpen(false)}
+                  disabled={sendingEmail}
+                  className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                >Cancelar</button>
+                <button
+                  type="button"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail || !emailRecipients.trim()}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >{sendingEmail ? 'Enviando…' : 'Enviar'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

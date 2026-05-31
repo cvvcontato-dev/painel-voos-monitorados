@@ -196,4 +196,98 @@ async function sendEmail(to, flight, options = {}) {
     }
 }
 
-module.exports = { sendTelegram, sendEmail };
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function formatPassengerNames(passengers) {
+    const names = (passengers || []).map(p => p && p.name).filter(Boolean);
+    if (names.length === 0) return 'Cliente';
+    if (names.length <= 3) return names.join(' e ');
+    return `${names[0]}, ${names[1]} e mais ${names.length - 2}`;
+}
+
+function buildVoucherEmailHtml({ voucherData, settings, customMessage }) {
+    const vd = voucherData || {};
+    const passengerNames = escapeHtml(formatPassengerNames(vd.passengers));
+    const locator = escapeHtml(vd.reservation?.locator || 'N/A');
+    const origin = escapeHtml(vd.route?.origin || '');
+    const destination = escapeHtml(vd.route?.destination || '');
+    const status = escapeHtml(vd.reservation?.status || 'Confirmado');
+    const s = settings || {};
+    const contactLine = escapeHtml([s.contact_phone, s.contact_email, s.contact_site].filter(Boolean).join(' · '));
+
+    const trimmedMsg = (customMessage || '').trim();
+    const customBox = trimmedMsg
+        ? `<div style="background: #f0f6fc; border-left: 4px solid #3871c1; border-radius: 6px; padding: 12px 14px; margin: 0 0 16px; font-size: 14px; color: #1a2a48; white-space: pre-wrap;">${escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</div>`
+        : '';
+
+    return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; background: #f4f6f9; padding: 24px; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+    <div style="background: linear-gradient(90deg, #3871c1, #00569e); color: white; padding: 22px 28px;">
+      <div style="font-size: 18px; font-weight: 700;">Clube do Voo Viagens</div>
+      <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">Confirmação de reserva</div>
+    </div>
+    <div style="padding: 24px 28px; color: #1a2a48;">
+      <p style="margin: 0 0 14px; font-size: 15px;">Olá, <strong>${passengerNames}</strong>,</p>
+      ${customBox}
+      <p style="margin: 0 0 14px; font-size: 14px; line-height: 1.6; color: #1a2a48;">
+        Sua reserva está confirmada. Em anexo você encontra o voucher completo com todas as informações da viagem.
+      </p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background: #f4f6f9; border-radius: 8px;">
+        <tr><td style="padding: 10px 14px; color: #6b7a90; font-size: 12px;">Localizador</td><td style="padding: 10px 14px; text-align: right; font-weight: 700; font-size: 14px; letter-spacing: 1px;">${locator}</td></tr>
+        <tr><td style="padding: 10px 14px; color: #6b7a90; font-size: 12px; border-top: 1px solid #e5eaf0;">Trajeto</td><td style="padding: 10px 14px; text-align: right; font-weight: 600; font-size: 14px; border-top: 1px solid #e5eaf0;">${origin} → ${destination}</td></tr>
+        <tr><td style="padding: 10px 14px; color: #6b7a90; font-size: 12px; border-top: 1px solid #e5eaf0;">Status</td><td style="padding: 10px 14px; text-align: right; font-weight: 600; font-size: 14px; color: #16a34a; border-top: 1px solid #e5eaf0;">● ${status}</td></tr>
+      </table>
+
+      <p style="margin: 0; font-size: 13px; color: #6b7a90;">Desejamos uma excelente viagem!</p>
+    </div>
+    <div style="padding: 16px 28px; background: #f4f6f9; border-top: 1px solid #e5eaf0; font-size: 11px; color: #6b7a90; text-align: center;">
+      ${contactLine}
+      <div style="margin-top: 8px; color: #9aa5b8;">Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.</div>
+    </div>
+  </div>
+</body></html>`;
+}
+
+async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage }) {
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
+        }
+        const vd = voucherData || {};
+        const locator = vd.reservation?.locator || 'N/A';
+        const names = (vd.passengers || []).map(p => p && p.name).filter(Boolean);
+        let subject;
+        if (names.length > 2) {
+            subject = `Voucher de viagem — ${locator} | ${names[0]} e mais ${names.length - 1}`;
+        } else {
+            subject = `Voucher de viagem — ${locator} | ${formatPassengerNames(vd.passengers)}`;
+        }
+
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            to: to.join(', '),
+            bcc: bcc || undefined,
+            subject,
+            html: buildVoucherEmailHtml({ voucherData: vd, settings, customMessage }),
+            attachments: [{ filename: `Voucher-${locator}.pdf`, path: attachmentPath }]
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`[NOTIFIER] ✓ Voucher e-mail enviado para ${to.join(', ')} | MessageId: ${info.messageId}`);
+        return { sucesso: true, messageId: info.messageId, subject };
+    } catch (error) {
+        console.error('[NOTIFIER] Erro ao enviar voucher por e-mail:', error.message);
+        return { sucesso: false, erro: error.message };
+    }
+}
+
+module.exports = { sendTelegram, sendEmail, sendVoucherEmail, buildVoucherEmailHtml };

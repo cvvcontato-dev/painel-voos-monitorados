@@ -9,6 +9,7 @@ const { validate } = require('../services/voucherSchema');
 const { normalize } = require('../services/voucherNormalizer');
 const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
+const { sendVoucherEmail } = require('../services/notifier');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -157,6 +158,64 @@ router.delete('/:id', (req, res) => {
         res.status(204).end();
       });
     });
+});
+
+router.post('/:id/send-email', async (req, res) => {
+  let raw = req.body?.emails;
+  if (Array.isArray(raw)) raw = raw.join(',');
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return res.status(400).json({ error: 'destinatários obrigatórios' });
+  }
+  const emails = Array.from(new Set(
+    raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  ));
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emails.length || emails.some(e => !EMAIL_RE.test(e))) {
+    return res.status(400).json({ error: 'e-mail inválido' });
+  }
+  const customMessage = typeof req.body?.message === 'string' ? req.body.message : '';
+
+  db.get(`SELECT * FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], async (err, row) => {
+    if (err) { console.error('[VOUCHERS] erro ao buscar para envio', err.message); return res.status(500).json({ error: 'erro ao buscar voucher' }); }
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    let unified;
+    try { unified = JSON.parse(row.unified_json); } catch { return res.status(500).json({ error: 'voucher corrompido' }); }
+
+    db.get(`SELECT contact_phone, contact_email, contact_site, contact_extra FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
+      const settings = settingsRow || {};
+      let pdfPath = null;
+      try {
+        const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+        pdfPath = await renderVoucher({
+          voucherId: req.params.id,
+          format: 'pdf',
+          cookieHeader: req.headers.cookie,
+          baseUrl
+        });
+        const result = await sendVoucherEmail({
+          to: emails,
+          bcc: process.env.EMAIL_USER || null,
+          voucherData: unified,
+          settings,
+          attachmentPath: pdfPath,
+          customMessage
+        });
+        if (result.sucesso) {
+          audit(req.params.id, req.session.userId, 'email_sent', { to: emails, bcc: !!process.env.EMAIL_USER, subject: result.subject, messageId: result.messageId }, null);
+          res.json({ sent: emails.length, messageId: result.messageId, subject: result.subject });
+        } else {
+          audit(req.params.id, req.session.userId, 'email_failed', { to: emails, erro: result.erro }, null);
+          res.status(500).json({ error: 'falha ao enviar e-mail', details: result.erro });
+        }
+      } catch (e) {
+        console.error('[VOUCHERS] erro no fluxo de envio', e.message);
+        audit(req.params.id, req.session.userId, 'email_failed', { to: emails, erro: e.message }, null);
+        res.status(500).json({ error: 'falha ao processar envio' });
+      } finally {
+        if (pdfPath) require('fs').unlink(pdfPath, () => {});
+      }
+    });
+  });
 });
 
 module.exports = router;

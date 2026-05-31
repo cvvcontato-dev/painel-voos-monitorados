@@ -23,3 +23,6 @@ export const exportUrl = (id, format) => `/api/vouchers/${id}/export?format=${fo
 export const getSettings = () => api.get('/api/vouchers/settings').then(r => r.data);
 
 export const updateSettings = (s) => api.put('/api/vouchers/settings', s).then(r => r.data);
+
+export const sendEmail = (id, emails, message) =>
+  api.post(`/api/vouchers/${id}/send-email`, { emails, message }).then(r => r.data);
