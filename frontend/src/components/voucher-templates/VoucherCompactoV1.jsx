@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime,
+  THEMES, detectCarrierKey, fmtTime, baggagePolicy,
   CarrierLogo, IconPlane, IconBag, IconUser, IconPhone, IconMail, IconGlobe
 } from './_shared';
 import { airportName } from './_airports';
@@ -48,31 +48,23 @@ const IconSuitcase = ({ color = '#1a2a48', size = 16 }) => (
   </svg>
 );
 
-// Splits the baggage array into two slots: handbag (~10kg) and checked (~23kg) per direction.
-// Returns { mao: {qty, weight}, despachada: {qty, weight} } — qty defaults to 0 if not present.
-// Peso de mão padrão por cia: Azul/multi = 10kg, Latam/Gol = 12kg. Despachada = 23kg sempre.
-function handWeight(carrierKey) {
-  return (carrierKey === 'latam' || carrierKey === 'gol') ? '12kg' : '10kg';
-}
-
+// Splits the baggage array into 3 slots: personal, handbag, checked per direction.
+// Returns { personal, mao, despachada } each with { qty, weightText, dimensionsText }.
 function splitBaggage(allBags, direction, carrierKey) {
   const dirBags = allBags.filter(b => (b.direction || '').toLowerCase() === direction);
-  const hand = handWeight(carrierKey);
-  const isHand = b => {
-    const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
-    return /mochila|bolsa|m[aã]o|hand/.test(text) || /\b1[02]\s*kg\b/.test(text);
-  };
-  const isChecked = b => {
-    const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
-    return /despach|mala|checked/.test(text) || /\b23\s*kg\b/.test(text);
-  };
-  const mao = dirBags.find(isHand);
-  const desp = dirBags.find(isChecked);
-  // Fallbacks: if exactly one bag and we couldn't categorize, treat as hand bag.
-  const fallbackHand = !mao && !desp && dirBags.length === 1 ? dirBags[0] : null;
+  const lower = b => `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
+  const isPersonal = b => /mochila|bolsa|sacola|pessoal|personal/.test(lower(b));
+  const isHand = b => /m[aã]o|carry/.test(lower(b)) || /\b1[02]\s*kg\b/.test(lower(b));
+  const isChecked = b => /despach|por[aã]o|\bmala\b|checked/.test(lower(b)) || /\b23\s*kg\b/.test(lower(b));
+
+  const personalExtracted = dirBags.find(isPersonal);
+  const handExtracted = dirBags.find(isHand);
+  const checkedExtracted = dirBags.find(isChecked);
+
   return {
-    mao: mao ? { qty: mao.quantity ?? 1, weight: mao.weightText || hand } : (fallbackHand ? { qty: fallbackHand.quantity ?? 1, weight: fallbackHand.weightText || hand } : { qty: 0, weight: hand }),
-    despachada: desp ? { qty: desp.quantity ?? 1, weight: desp.weightText || '23kg' } : { qty: 0, weight: '23kg' }
+    personal:    { qty: personalExtracted ? (personalExtracted.quantity ?? 1) : 1, ...baggagePolicy(carrierKey, 'personal') },
+    mao:         { qty: handExtracted ? (handExtracted.quantity ?? 1) : 1,         ...baggagePolicy(carrierKey, 'handbag') },
+    despachada:  { qty: checkedExtracted ? (checkedExtracted.quantity ?? 1) : 0,   ...baggagePolicy(carrierKey, 'checked') }
   };
 }
 
@@ -236,22 +228,35 @@ export default function VoucherCompactoV1({ data }) {
                       </div>
                       <div style={{ fontSize: 12, color: THEME.text }}>—</div>
                     </div>
-                    {/* Right: Bagagens — 2 fixed slots (mão + despachada) */}
+                    {/* Right: Bagagens — 3 fixed slots (pessoal + mão + despachada) */}
                     <div>
                       <div style={{ fontSize: 11, color: THEME.textMuted, marginBottom: 8 }}>Bagagens</div>
-                      <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                          <IconBag color={THEME.text} size={20} />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.personal.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Pessoal</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.personal.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.personal.dimensionsText}</div>
+                          </div>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                           <IconBag color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
-                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.mao.weight}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Mão</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.mao.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.mao.dimensionsText}</div>
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                           <IconSuitcase color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
-                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.despachada.weight}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Despachada</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.despachada.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.despachada.dimensionsText}</div>
                           </div>
                         </div>
                       </div>

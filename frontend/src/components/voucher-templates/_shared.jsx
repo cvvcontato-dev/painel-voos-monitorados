@@ -71,6 +71,123 @@ export function resolveBaggageWeight(carrierKey, baggage) {
   return defaultBaggageWeight(carrierKey, baggage && baggage.label);
 }
 
+// Regras oficiais por companhia (peso máximo + dimensões máximas) para cada tipo de bagagem.
+// Kind: 'personal' (item pessoal) | 'handbag' (mão) | 'checked' (despachada).
+export const BAGGAGE_RULES = {
+  azul: {
+    personal: { weightText: 'Sem peso máx.',  dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '10 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: '80 × 50 × 28 cm (ou soma 158 cm)' }
+  },
+  gol: {
+    personal: { weightText: '10 kg',          dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '12 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: '80 × 50 × 28 cm (ou soma 158 cm)' }
+  },
+  latam: {
+    personal: { weightText: '10 kg',          dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '12 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: 'Soma de 158 cm (A + C + L)' }
+  }
+};
+
+// Para carrier desconhecido (ex.: 'multi' usado em headers), cair em azul como base segura.
+export function baggagePolicy(carrierKey, kind) {
+  const rules = BAGGAGE_RULES[carrierKey] || BAGGAGE_RULES.azul;
+  return rules[kind];
+}
+
+// Classifica uma linha de bagagem extraída pelo Gemini em uma das 3 categorias.
+export function classifyBaggage(label) {
+  const l = (label || '').toLowerCase();
+  if (/mochila|bolsa|sacola|pessoal|personal/.test(l)) return 'personal';
+  if (/despach|por[aã]o|\bmala\b|checked/.test(l)) return 'checked';
+  // Default mão (carry-on)
+  if (/m[aã]o|carry/.test(l) || /\b1[02]\s*kg\b/.test(l)) return 'handbag';
+  return 'handbag';
+}
+
+// Nome canônico para exibir cada tipo.
+export const BAGGAGE_LABEL = {
+  personal: 'Item pessoal',
+  handbag:  'Bagagem de mão',
+  checked:  'Bagagem despachada'
+};
+
+// Detecta o carrier de UM trecho (não do voucher inteiro).
+export function tripCarrier(trip, fallbackCarrier) {
+  const name = (trip?.airlineDisplayName || '').toLowerCase();
+  if (name.includes('azul')) return 'azul';
+  if (name.includes('gol')) return 'gol';
+  if (name.includes('latam') || name.includes('tam ')) return 'latam';
+  const fn = (trip?.flightNumber || '').toUpperCase();
+  if (/^(G3|GLO)/.test(fn)) return 'gol';
+  if (/^AD/.test(fn)) return 'azul';
+  if (/^(LA|JJ|LATAM)/.test(fn)) return 'latam';
+  return (fallbackCarrier || 'azul').toLowerCase();
+}
+
+// Gera os blocos de bagagem a renderizar.
+// Cada bloco = { direction, carrierKey, label, items[] }
+// items[] sempre tem 3 entradas: personal, handbag, checked (mesmo se qty=0).
+// Quando todos os trechos da direção são da mesma cia → 1 bloco por direção (label vazio).
+// Quando há mais de uma cia na MESMA direção → 1 bloco por trecho (label com voo+cia).
+export function buildBaggageBlocks(data) {
+  const trips = data?.trips || [];
+  const extracted = data?.baggage || [];
+  const fallback = data?.carrier;
+
+  // Ordem das direções (preservar primeira aparição)
+  const directions = [];
+  const seenDir = new Set();
+  for (const t of trips) {
+    const d = t.direction || 'ida';
+    if (!seenDir.has(d)) { seenDir.add(d); directions.push(d); }
+  }
+
+  function itemsFor(carrierKey, direction) {
+    // Pega quantidades a partir do que o Gemini extraiu para essa direção
+    const dirBags = extracted.filter(b => (b.direction || '').toLowerCase() === direction);
+    function qtyOf(kind) {
+      const found = dirBags.find(b => classifyBaggage(b.label) === kind);
+      if (found && typeof found.quantity === 'number') return found.quantity;
+      // Defaults: passageiro sempre tem item pessoal e mão; despachada só se vier explícita.
+      if (kind === 'personal') return 1;
+      if (kind === 'handbag') return 1;
+      return 0;
+    }
+    return ['personal', 'handbag', 'checked'].map(kind => {
+      const policy = baggagePolicy(carrierKey, kind);
+      return {
+        kind,
+        label: BAGGAGE_LABEL[kind],
+        weightText: policy.weightText,
+        dimensionsText: policy.dimensionsText,
+        quantity: qtyOf(kind)
+      };
+    });
+  }
+
+  const blocks = [];
+  for (const dir of directions) {
+    const tripsInDir = trips.filter(t => (t.direction || 'ida') === dir);
+    const carriers = Array.from(new Set(tripsInDir.map(t => tripCarrier(t, fallback))));
+
+    if (carriers.length <= 1) {
+      const ck = carriers[0] || (fallback || 'azul').toLowerCase();
+      blocks.push({ direction: dir, carrierKey: ck, label: '', items: itemsFor(ck, dir) });
+    } else {
+      for (const t of tripsInDir) {
+        const ck = tripCarrier(t, fallback);
+        const carrierName = ck.charAt(0).toUpperCase() + ck.slice(1);
+        const trecho = `${t.flightNumber || ''} (${carrierName})`.trim();
+        blocks.push({ direction: dir, carrierKey: ck, label: trecho, items: itemsFor(ck, dir) });
+      }
+    }
+  }
+  return blocks;
+}
+
 // URL da página "minhas viagens / gerenciar reserva" por companhia.
 // O QR aponta pra cá (deep-link com localizador não é confiável entre as cias).
 export function manageBookingUrl(carrierKey, locator) {

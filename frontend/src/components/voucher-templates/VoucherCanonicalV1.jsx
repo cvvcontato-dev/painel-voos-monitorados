@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight,
+  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight, buildBaggageBlocks,
   manageBookingUrl, CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
 } from './_shared';
 
@@ -72,18 +72,6 @@ export default function VoucherCanonicalV1({ data }) {
   const trips = data.trips || [];
   const baggage = data.baggage || [];
   const passengers = data.passengers || [];
-
-  // Group baggage by direction (preserving first-seen order).
-  const baggageDirections = [];
-  const baggageByDirection = {};
-  for (const b of baggage) {
-    const dir = b.direction || '';
-    if (!(dir in baggageByDirection)) {
-      baggageByDirection[dir] = [];
-      baggageDirections.push(dir);
-    }
-    baggageByDirection[dir].push(b);
-  }
 
   const airlineName = carrierKey === 'multi' ? theme.name : (data.branding?.airlineName || theme.name);
 
@@ -177,28 +165,40 @@ export default function VoucherCanonicalV1({ data }) {
       </section>
 
       {/* BAGAGENS */}
-      {baggage.length > 0 && (
-        <section style={{ padding: '8px 32px 12px' }}>
-          <SectionTitle accent={theme.accent}>Bagagens</SectionTitle>
-          <div style={{ marginTop: 12 }}>
-            {baggageDirections.map(dir => (
-              <div key={dir} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 6 }}>{baggageSubtitle(dir)}</div>
-                {baggageByDirection[dir].map((b, j) => (
-                  <div key={j} style={{ background: '#f4f6f9', borderRadius: 6, padding: '7px 12px', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <IconBag color="#6b7a90" size={16} />
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2a48' }}>{b.label}</span>
-                      {resolveBaggageWeight(carrierKey, b) && <span style={{ fontSize: 10, color: '#9aa5b8', marginTop: 2 }}>{resolveBaggageWeight(carrierKey, b)}</span>}
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a48' }}>{b.quantity}</div>
+      {(() => {
+        const blocks = buildBaggageBlocks(data);
+        if (!blocks.length) return null;
+        return (
+          <section style={{ padding: '8px 32px 12px' }}>
+            <SectionTitle accent={theme.accent}>Bagagens</SectionTitle>
+            <div style={{ marginTop: 12 }}>
+              {blocks.map((bl, idx) => {
+                const dirLabel = bl.direction === 'ida' ? 'IDA' : bl.direction === 'volta' ? 'VOLTA' : (bl.direction || '').toUpperCase();
+                const subtitle = bl.label
+                  ? `BAGAGENS DE ${dirLabel} — TRECHO ${bl.label} — POR PASSAGEIRO`
+                  : `BAGAGENS DE ${dirLabel} — POR PASSAGEIRO`;
+                return (
+                  <div key={idx} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 6 }}>{subtitle}</div>
+                    {bl.items.map((it, j) => (
+                      <div key={j} style={{ background: '#f4f6f9', borderRadius: 6, padding: '7px 12px', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <IconBag color="#6b7a90" size={16} />
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2a48' }}>{it.label}</span>
+                          <span style={{ fontSize: 10, color: '#9aa5b8', marginTop: 2 }}>
+                            {it.weightText} · {it.dimensionsText}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a48' }}>{it.quantity}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* RESUMO DA RESERVA */}
       <section style={{ marginTop: 'auto', padding: '10px 32px 4px' }}>
