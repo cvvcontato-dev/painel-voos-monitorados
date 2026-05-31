@@ -46,9 +46,9 @@ function tripSubtitle(direction) {
 
 function baggageSubtitle(direction) {
   const d = (direction || '').toLowerCase();
-  if (d === 'ida' || d === 'outbound') return 'BAGAGENS DE IDA';
-  if (d === 'volta' || d === 'return' || d === 'inbound') return 'BAGAGENS DE VOLTA';
-  return 'BAGAGENS';
+  if (d === 'ida' || d === 'outbound') return 'BAGAGENS DE IDA — POR PASSAGEIRO';
+  if (d === 'volta' || d === 'return' || d === 'inbound') return 'BAGAGENS DE VOLTA — POR PASSAGEIRO';
+  return 'BAGAGENS — POR PASSAGEIRO';
 }
 
 export default function VoucherCanonicalV1({ data }) {
@@ -133,13 +133,13 @@ export default function VoucherCanonicalV1({ data }) {
       {/* PASSAGEIROS */}
       <section style={{ padding: '14px 32px 8px' }}>
         <SectionTitle accent={theme.accent}>Passageiros</SectionTitle>
-        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'stretch' }}>
           {passengers.map(p => (
-            <div key={p.order} style={{ background: '#f4f6f9', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div key={p.order} style={{ background: '#f4f6f9', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'stretch', gap: 10 }}>
               <span style={{ display: 'inline-block', minWidth: 24, fontSize: 11, color: '#9aa5b8' }}>{String(p.order).padStart(2, '0')}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2a48' }}>{p.name}</div>
-                <div style={{ fontSize: 10, color: '#6b7a90', marginTop: 2 }}>{paxTypeLabel(p.type)}</div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2a48', flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 10, color: '#6b7a90', marginTop: 4 }}>{paxTypeLabel(p.type)}</div>
               </div>
             </div>
           ))}
