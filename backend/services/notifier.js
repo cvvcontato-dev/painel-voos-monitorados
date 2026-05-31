@@ -285,7 +285,7 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
 
     // ----- Header -----
     const headerHtml = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;background:linear-gradient(135deg,#00569e,#3871c1);">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;">
         <tr>
           <td style="padding:22px 28px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -409,7 +409,7 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
     const ctaHtml = `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding:20px 28px 0;">
         <tr><td>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;background:linear-gradient(135deg,#00569e,#3871c1);border-radius:14px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;border-radius:14px;">
             <tr>
               <td align="center" style="padding:24px 20px;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
                 <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Pronto para embarcar?</div>
@@ -520,12 +520,8 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
         const vd = voucherData || {};
         const locator = vd.reservation?.locator || 'N/A';
         const names = (vd.passengers || []).map(p => p && p.name).filter(Boolean);
-        let subject;
-        if (names.length > 2) {
-            subject = `Voucher de viagem — ${locator} | ${names[0]} e mais ${names.length - 1}`;
-        } else {
-            subject = `Voucher de viagem — ${locator} | ${formatPassengerNames(vd.passengers)}`;
-        }
+        // Assunto fixo conforme padrão da agência.
+        const subject = 'Eba! Sua viagem está confirmada';
 
         const mailOptions = {
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
