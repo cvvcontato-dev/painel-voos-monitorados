@@ -59,7 +59,7 @@ export default function VoucherCanonicalV1({ data }) {
     if (!data) return;
     const ck = detectCarrierKey(data);
     const url = manageBookingUrl(ck, data?.reservation?.locator);
-    QRCode.toDataURL(url, { width: 120, margin: 0 }).then(setQrUrl).catch(() => {});
+    QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
   }, [data]);
 
   useEffect(() => {
@@ -234,10 +234,13 @@ export default function VoucherCanonicalV1({ data }) {
           </div>
           {qrUrl && (
             <div style={{ textAlign: 'center' }}>
-              <img src={qrUrl} alt="QR localizador" style={{ width: 78, height: 78, background: 'white', padding: 4, border: '1px solid #e5eaf0', display: 'block' }} />
+              <img src={qrUrl} alt="QR localizador" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#888', marginTop: 4, textAlign: 'center' }}>Detalhes online</div>
             </div>
           )}
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
+          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
         </div>
       </footer>
     </div>
