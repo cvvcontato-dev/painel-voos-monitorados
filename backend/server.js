@@ -37,6 +37,7 @@ const flightsRouter = require('./routes/flights');
 const settingsRouter = require('./routes/settings');
 const promotionsRouter = require('./routes/promotions');
 const vouchersRouter = require('./routes/vouchers');
+const itinerarioRouter = require('./routes/itinerario');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,6 +69,10 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production',
     }
 }));
+
+// Public hosted itinerary page (HMAC-signed token, no login required).
+// Mounted BEFORE any /api auth — clients click the link from the e-mail.
+app.use('/itinerario', itinerarioRouter);
 
 // 1. CSRF middleware for all /api routes
 app.use('/api', csrfMiddleware);

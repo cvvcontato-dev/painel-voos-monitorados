@@ -250,7 +250,10 @@ function directionLabel(direction, idx, total) {
     return `Trecho ${idx + 1}`;
 }
 
-function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUrl }) {
+// E-mail SIMPLIFICADO (Caminho A — padrão Airbnb/Booking): mini-resumo + CTA grande
+// "Ver itinerário completo" que abre a página pública hospedada (token HMAC).
+// Mantém regras de e-mail (tables, inline styles, 600px) — alvo < 20KB.
+function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUrl, itinerarioUrl }) {
     const vd = voucherData || {};
     const s = settings || {};
     const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -258,7 +261,6 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
 
     const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
     const locator = (vd.reservation?.locator || 'N/A').toString();
-    const fallbackCarrier = (vd.carrier || 'azul').toLowerCase();
     const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
     const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
 
@@ -270,14 +272,136 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
     const isOneWay = !periodRight || periodLeft === periodRight;
     const periodText = isOneWay ? (periodLeft || '—') : `${periodLeft} → ${periodRight}`;
 
-    const safeBookingUrl = bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '#';
+    const safeItinerarioUrl = itinerarioUrl && /^https?:\/\//i.test(itinerarioUrl) ? itinerarioUrl : (bookingUrl || '#');
 
+    const contactPhone = s.contact_phone || '';
+    const contactEmail = s.contact_email || '';
+    const contactSite = s.contact_site || 'www.clubedovooviagens.com.br';
+    const contactSiteHref = /^https?:\/\//i.test(contactSite) ? contactSite : `https://${contactSite}`;
+
+    // Custom message
+    const trimmedMsg = (customMessage || '').trim();
+    const customBox = trimmedMsg
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;"><tr><td bgcolor="#f0f6fc" style="background:#f0f6fc;border-left:4px solid #3871c1;border-radius:6px;padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a2a48;line-height:1.55;">${escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</td></tr></table>`
+        : '';
+
+    // ----- Header -----
+    const headerHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;">
+        <tr>
+          <td style="padding:20px 28px;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
+            <div style="font-size:18px;font-weight:700;line-height:1.2;">Clube do Voo Viagens</div>
+            <div style="font-size:12px;opacity:0.85;margin-top:4px;">Confirmação de reserva</div>
+          </td>
+        </tr>
+      </table>`;
+
+    // ----- Body -----
+    const bodyHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td style="padding:28px 28px 8px;font-family:Arial,Helvetica,sans-serif;color:#0e1726;">
+            <p style="margin:0 0 8px;font-size:16px;line-height:1.5;">Olá, <strong>${escapeHtml(firstPaxName)}</strong>,</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#1a2a48;">Eba! Sua viagem está confirmada.</p>
+            ${customBox}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f6f8fb" style="background:#f6f8fb;border:1px solid #e9ecf2;border-radius:10px;margin:0 0 22px;">
+              <tr>
+                <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#0e1726;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td style="padding:4px 0;color:#5b6878;width:38%;">Localizador</td>
+                      <td style="padding:4px 0;font-weight:700;color:#00569e;letter-spacing:1px;">${escapeHtml(locator)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:4px 0;color:#5b6878;">Trecho</td>
+                      <td style="padding:4px 0;font-weight:700;">${escapeHtml(origin)} → ${escapeHtml(destination)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:4px 0;color:#5b6878;">Período</td>
+                      <td style="padding:4px 0;font-weight:700;">${escapeHtml(periodText)}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" style="padding:4px 0 8px;">
+                  <a href="${escapeHtml(safeItinerarioUrl)}"
+                     style="display:inline-block;background:#00569e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:16px 32px;border-radius:10px;letter-spacing:0.4px;">
+                    Ver itinerário completo →
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:18px 0 0;font-size:13px;color:#5b6878;line-height:1.55;">
+              Você também encontrará o voucher em PDF anexo a este e-mail.
+            </p>
+          </td>
+        </tr>
+      </table>`;
+
+    // ----- Footer -----
+    const contactBits = [];
+    if (contactPhone) contactBits.push(`<span style="color:#0e1726;"><strong>WhatsApp:</strong> ${escapeHtml(contactPhone)}</span>`);
+    if (contactEmail) contactBits.push(`<a href="mailto:${escapeHtml(contactEmail)}" style="color:#00569e;text-decoration:none;"><strong>Email:</strong> ${escapeHtml(contactEmail)}</a>`);
+    contactBits.push(`<a href="${escapeHtml(contactSiteHref)}" style="color:#00569e;text-decoration:none;">${escapeHtml(contactSite)}</a>`);
+
+    const footerHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding:24px 28px 28px;">
+        <tr>
+          <td style="font-family:Arial,Helvetica,sans-serif;color:#5b6878;font-size:12px;line-height:1.7;border-top:1px solid #e9ecf2;padding-top:18px;">
+            ${contactBits.join('<br>')}
+            <div style="margin-top:14px;color:#9aa3b2;font-size:11px;">Email automático — para suporte, use os canais acima.</div>
+          </td>
+        </tr>
+      </table>`;
+
+    return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirmação de Reserva</title></head>
+<body style="margin:0;padding:0;background:#e9ecf2;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#e9ecf2" style="background:#e9ecf2;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" style="width:600px;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);">
+          <tr><td>${headerHtml}</td></tr>
+          <tr><td>${bodyHtml}</td></tr>
+          <tr><td>${footerHtml}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body></html>`;
+}
+
+// --- versão antiga removida (substituída pelo e-mail simplificado + página hospedada) ---
+// eslint-disable-next-line no-unused-vars
+function _unusedLegacyEmail__REMOVED({ voucherData, settings, customMessage, bookingUrl }) {
+  return null; }
+/* legacy body kept out — see git history for the full "Itinerário Executivo" inline e-mail.
+function _legacy({ voucherData, settings, customMessage, bookingUrl }) {
+    const vd = voucherData || {};
+    const s = settings || {};
+    const trips = Array.isArray(vd.trips) ? vd.trips : [];
+    const passengers = Array.isArray(vd.passengers) ? vd.passengers : [];
+    const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
+    const locator = (vd.reservation?.locator || 'N/A').toString();
+    const fallbackCarrier = (vd.carrier || 'azul').toLowerCase();
+    const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
+    const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
+    const firstDep = trips[0]?.departure?.datetime;
+    const lastArr = trips[trips.length - 1]?.arrival?.datetime;
+    const periodLeft = fmtDate(firstDep);
+    const periodRight = fmtDate(lastArr);
+    const isOneWay = !periodRight || periodLeft === periodRight;
+    const periodText = isOneWay ? (periodLeft || '—') : `${periodLeft} → ${periodRight}`;
+    const safeBookingUrl = bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '#';
     const contactPhone = s.contact_phone || '';
     const contactEmail = s.contact_email || '';
     const contactSite = s.contact_site || 'https://www.clubedovooviagens.com.br';
     const contactSiteHref = /^https?:\/\//i.test(contactSite) ? contactSite : `https://${contactSite}`;
-
-    // Custom message
     const trimmedMsg = (customMessage || '').trim();
     const customBox = trimmedMsg
         ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;"><tr><td bgcolor="#f0f6fc" style="background:#f0f6fc;border-left:4px solid #3871c1;border-radius:6px;padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a2a48;line-height:1.55;">${escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</td></tr></table>`
@@ -511,8 +635,9 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
   </table>
 </body></html>`;
 }
+*/
 
-async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, bookingUrl }) {
+async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, bookingUrl, itinerarioUrl }) {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
@@ -528,7 +653,7 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
             to: to.join(', '),
             bcc: bcc || undefined,
             subject,
-            html: buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl }),
+            html: buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl, itinerarioUrl }),
             attachments: [{ filename: `Voucher-${locator}.pdf`, path: attachmentPath }]
         };
 

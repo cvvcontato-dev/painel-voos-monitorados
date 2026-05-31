@@ -11,6 +11,7 @@ const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
 const { sendVoucherEmail } = require('../services/notifier');
 const { manageBookingUrl } = require('../helpers/voucherCarrier');
+const { sign: signVoucherToken } = require('../helpers/voucherToken');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -206,6 +207,7 @@ router.post('/:id/send-email', async (req, res) => {
           firstPassengerLastName,
           unified.route?.origin
         );
+        const itinerarioUrl = `${baseUrl}/itinerario/${signVoucherToken(req.params.id)}`;
         const result = await sendVoucherEmail({
           to: emails,
           bcc: process.env.EMAIL_USER || null,
@@ -213,7 +215,8 @@ router.post('/:id/send-email', async (req, res) => {
           settings,
           attachmentPath: pdfPath,
           customMessage,
-          bookingUrl
+          bookingUrl,
+          itinerarioUrl
         });
         if (result.sucesso) {
           audit(req.params.id, req.session.userId, 'email_sent', { to: emails, bcc: !!process.env.EMAIL_USER, subject: result.subject, messageId: result.messageId }, null);
