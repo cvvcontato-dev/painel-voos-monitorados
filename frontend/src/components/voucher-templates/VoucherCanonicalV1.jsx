@@ -59,7 +59,7 @@ export default function VoucherCanonicalV1({ data }) {
   useEffect(() => {
     if (!data) return;
     const ck = detectCarrierKey(data);
-    const url = manageBookingUrl(ck, data?.reservation?.locator, firstPassengerLastName(data));
+    const url = manageBookingUrl(ck, data?.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
     QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
   }, [data]);
 
@@ -77,7 +77,7 @@ export default function VoucherCanonicalV1({ data }) {
   // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
   // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
   const airlineName = theme.name;
-  const bookingUrl = manageBookingUrl(carrierKey, data.reservation?.locator, firstPassengerLastName(data));
+  const bookingUrl = manageBookingUrl(carrierKey, data.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
 
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>

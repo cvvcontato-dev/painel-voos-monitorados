@@ -189,26 +189,30 @@ export function buildBaggageBlocks(data) {
 }
 
 // URL para "gerenciar reserva / minhas viagens" por companhia.
-// Quando o sobrenome do passageiro estiver disponível, gera um deep-link com pré-preenchimento.
-// Caso contrário, cai pra página de busca, onde o passageiro digita manualmente.
-export function manageBookingUrl(carrierKey, locator, lastName) {
-  const loc = encodeURIComponent((locator || '').trim());
+// Cada cia exige parâmetros diferentes:
+//   - Azul:  precisa de pnr + origin (IATA da origem)
+//   - Gol:   precisa de codigoReserva + origem (IATA) + sobrenome
+//   - Latam: precisa de orderId + lastname
+// Se faltar parâmetro obrigatório, cai pra página genérica de busca.
+export function manageBookingUrl(carrierKey, locator, lastName, origin) {
+  const loc  = encodeURIComponent((locator  || '').trim());
   const last = encodeURIComponent((lastName || '').trim());
+  const orig = encodeURIComponent((origin   || '').trim());
   switch ((carrierKey || '').toLowerCase()) {
     case 'gol':
-      return last
-        ? `https://b2c.voegol.com.br/passenger-information-flow?reservationCode=${loc}&lastName=${last}`
+      return (loc && orig && last)
+        ? `https://b2c.voegol.com.br/minhas-viagens/encontrar-viagem?codigoReserva=${loc}&origem=${orig}&sobrenome=${last}`
         : 'https://b2c.voegol.com.br/minhas-viagens';
     case 'latam':
-      return last
-        ? `https://www.latamairlines.com/br/pt/check-in?pnr=${loc}&lastName=${last}`
-        : 'https://www.latamairlines.com/br/pt/minha-viagem';
+      return (loc && last)
+        ? `https://www.latamairlines.com/br/pt/minhas-viagens/second-detail/?orderId=${loc}&lastname=${last}`
+        : 'https://www.latamairlines.com/br/pt/minhas-viagens';
     case 'azul':
-      return last
-        ? `https://viajemais.voeazul.com.br/MinhaReserva/Index?localizador=${loc}&sobrenome=${last}`
-        : 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+      return (loc && orig)
+        ? `https://www.voeazul.com.br/br/pt/home/minhas-viagens/confirmacao?pnr=${loc}&origin=${orig}`
+        : 'https://www.voeazul.com.br/br/pt/home/minhas-viagens';
     default:
-      return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+      return 'https://www.voeazul.com.br/br/pt/home/minhas-viagens';
   }
 }
 
