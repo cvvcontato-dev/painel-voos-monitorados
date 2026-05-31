@@ -17,7 +17,7 @@ router.get('/:token', (req, res) => {
     }
     let unified;
     try { unified = JSON.parse(row.unified_json); } catch { return res.status(500).send('Erro ao ler reserva'); }
-    db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, (sErr, settingsRow) => {
+    db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
       const settings = settingsRow || {};
       const p = (unified.passengers || [])[0];
       const lastName = p?.name ? p.name.trim().split(/\s+/).pop() : '';
@@ -27,11 +27,16 @@ router.get('/:token', (req, res) => {
         lastName,
         unified.route?.origin
       );
-      const html = renderItinerarioPage({ voucherData: unified, settings, bookingUrl });
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('X-Robots-Tag', 'noindex,nofollow');
-      res.send(html);
+      try {
+        const html = await renderItinerarioPage({ voucherData: unified, settings, bookingUrl });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Robots-Tag', 'noindex,nofollow');
+        res.send(html);
+      } catch (e) {
+        console.error('[itinerario] render error', e);
+        res.status(500).send('Erro ao renderizar itinerário');
+      }
     });
   });
 });

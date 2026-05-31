@@ -143,10 +143,21 @@ function carrierDisplayName(carrierKey) {
   return CARRIER_DISPLAY[String(carrierKey || '').toLowerCase()] || 'Companhia aérea';
 }
 
+// Short brand name (no "Linhas Aéreas"/"Airlines" sufixo) — para uso compacto em e-mail/itinerário.
+const CARRIER_SHORT = {
+  azul: 'Azul',
+  gol: 'Gol',
+  latam: 'Latam'
+};
+function carrierShortName(carrierKey) {
+  return CARRIER_SHORT[String(carrierKey || '').toLowerCase()] || 'Companhia aérea';
+}
+
 module.exports = {
   airportCity,
   manageBookingUrl,
   tripCarrier,
   normalizeFlightNumber,
-  carrierDisplayName
+  carrierDisplayName,
+  carrierShortName
 };
