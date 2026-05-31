@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime, baggagePolicy,
+  THEMES, detectCarrierKey, fmtTime, baggagePolicy, normalizeFlightNumber,
   CarrierLogo, IconPlane, IconBag, IconUser, IconPhone, IconMail, IconGlobe
 } from './_shared';
 import { airportName } from './_airports';
@@ -166,7 +166,7 @@ export default function VoucherCompactoV1({ data }) {
                         <IconPlane color={THEME.text} size={16} />
                         <span>{t.arrival?.airport}</span>
                       </div>
-                      <div style={{ fontSize: 11, color: THEME.textMuted, marginTop: 4 }}>Voo {t.flightNumber}</div>
+                      <div style={{ fontSize: 11, color: THEME.textMuted, marginTop: 4 }}>Voo {normalizeFlightNumber(t.flightNumber)}</div>
                       {t.cabinClass && (
                         <div style={{ display: 'inline-block', marginTop: 6, background: THEME.pillBg, color: THEME.accent, padding: '2px 12px', borderRadius: 999, fontSize: 10, fontWeight: 700 }}>{t.cabinClass}</div>
                       )}

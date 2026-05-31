@@ -188,15 +188,54 @@ export function buildBaggageBlocks(data) {
   return blocks;
 }
 
-// URL da página "minhas viagens / gerenciar reserva" por companhia.
-// O QR aponta pra cá (deep-link com localizador não é confiável entre as cias).
-export function manageBookingUrl(carrierKey, locator) {
+// URL para "gerenciar reserva / minhas viagens" por companhia.
+// Quando o sobrenome do passageiro estiver disponível, gera um deep-link com pré-preenchimento.
+// Caso contrário, cai pra página de busca, onde o passageiro digita manualmente.
+export function manageBookingUrl(carrierKey, locator, lastName) {
+  const loc = encodeURIComponent((locator || '').trim());
+  const last = encodeURIComponent((lastName || '').trim());
   switch ((carrierKey || '').toLowerCase()) {
-    case 'gol':   return 'https://b2c.voegol.com.br/minhas-viagens';
-    case 'latam': return 'https://www.latamairlines.com/br/pt/minha-viagem';
-    case 'azul':  return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
-    default:      return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+    case 'gol':
+      return last
+        ? `https://b2c.voegol.com.br/passenger-information-flow?reservationCode=${loc}&lastName=${last}`
+        : 'https://b2c.voegol.com.br/minhas-viagens';
+    case 'latam':
+      return last
+        ? `https://www.latamairlines.com/br/pt/check-in?pnr=${loc}&lastName=${last}`
+        : 'https://www.latamairlines.com/br/pt/minha-viagem';
+    case 'azul':
+      return last
+        ? `https://viajemais.voeazul.com.br/MinhaReserva/Index?localizador=${loc}&sobrenome=${last}`
+        : 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+    default:
+      return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
   }
+}
+
+// Extrai o sobrenome (última palavra) do nome do primeiro passageiro, pra usar em deep-links.
+export function firstPassengerLastName(data) {
+  const p = (data?.passengers || [])[0];
+  if (!p?.name) return '';
+  const parts = p.name.trim().split(/\s+/);
+  return parts[parts.length - 1] || '';
+}
+
+// Normaliza o número do voo para usar SEMPRE o código IATA-2 da cia, mesmo que o Gemini
+// retorne o ICAO (GLO em vez de G3, AZU em vez de AD, TAM/LAN em vez de LA).
+// Ex.: "GLO 1471" → "G3 1471"  |  "GLO1471" → "G3 1471"  |  "AD 4001" → "AD 4001" (inalterado).
+const FLIGHT_PREFIX_MAP = {
+  GLO: 'G3', G3: 'G3',
+  AZU: 'AD', AD: 'AD',
+  TAM: 'LA', LAN: 'LA', LATAM: 'LA', LA: 'LA', JJ: 'LA'
+};
+export function normalizeFlightNumber(flightNumber) {
+  if (!flightNumber) return '';
+  const fn = String(flightNumber).trim().toUpperCase();
+  // Captura o prefixo (letras) e o restante (número)
+  const m = fn.match(/^([A-Z]{2,5})\s*([0-9]+[A-Z]?)$/);
+  if (!m) return flightNumber; // formato inesperado — devolve como veio
+  const prefix = FLIGHT_PREFIX_MAP[m[1]] || m[1];
+  return `${prefix} ${m[2]}`;
 }
 
 const WEEKDAYS_PTBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];

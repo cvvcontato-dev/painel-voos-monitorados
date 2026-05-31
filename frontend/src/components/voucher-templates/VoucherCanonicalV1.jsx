@@ -3,7 +3,8 @@ import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
   THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight, buildBaggageBlocks,
-  manageBookingUrl, CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
+  manageBookingUrl, firstPassengerLastName, normalizeFlightNumber,
+  CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
 } from './_shared';
 
 function paxTypeLabel(type) {
@@ -58,7 +59,7 @@ export default function VoucherCanonicalV1({ data }) {
   useEffect(() => {
     if (!data) return;
     const ck = detectCarrierKey(data);
-    const url = manageBookingUrl(ck, data?.reservation?.locator);
+    const url = manageBookingUrl(ck, data?.reservation?.locator, firstPassengerLastName(data));
     QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
   }, [data]);
 
@@ -73,7 +74,10 @@ export default function VoucherCanonicalV1({ data }) {
   const baggage = data.baggage || [];
   const passengers = data.passengers || [];
 
-  const airlineName = carrierKey === 'multi' ? theme.name : (data.branding?.airlineName || theme.name);
+  // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
+  // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
+  const airlineName = theme.name;
+  const bookingUrl = manageBookingUrl(carrierKey, data.reservation?.locator, firstPassengerLastName(data));
 
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -152,7 +156,7 @@ export default function VoucherCanonicalV1({ data }) {
                   <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>{t.departure?.airport} ·</div>
                 </div>
                 {/* Center separator */}
-                <Separator flightNumber={t.flightNumber} durationText={t.durationText} accent={theme.accent} />
+                <Separator flightNumber={normalizeFlightNumber(t.flightNumber)} durationText={t.durationText} accent={theme.accent} />
                 {/* Arrival */}
                 <div style={{ minWidth: 110, textAlign: 'right' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.arrival?.datetime)}</div>
@@ -233,10 +237,10 @@ export default function VoucherCanonicalV1({ data }) {
             </div>
           </div>
           {qrUrl && (
-            <div style={{ textAlign: 'center' }}>
-              <img src={qrUrl} alt="QR localizador" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#888', marginTop: 4, textAlign: 'center' }}>Detalhes online</div>
-            </div>
+            <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
+              <img src={qrUrl} alt="Gerenciar reserva" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>Gerenciar reserva</div>
+            </a>
           )}
         </div>
         <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
