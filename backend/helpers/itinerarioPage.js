@@ -109,7 +109,9 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
   const tripsHtml = trips.map((t, idx) => {
     const ck = tripCarrier(t, fallbackCarrier);
     const carrierShort = carrierShortName(ck);
-    const flightNo = normalizeFlightNumber(t.flightNumber || '');
+    // Como "Azul · Voo {n}" já carrega a cia no rótulo, exibimos só o número (sem o prefixo AD/G3/LA).
+    const flightNoFull = normalizeFlightNumber(t.flightNumber || '');
+    const flightNo = flightNoFull.replace(/^[A-Z]{2}\s*/, ''); // "AD 2411" → "2411"
     const tripLocator = t.locator || locator;
     const depTime = fmtTime(t.departure?.datetime);
     const depDate = fmtDateBR(t.departure?.datetime);
@@ -256,7 +258,7 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
             <div style="font-size:13px;color:#5b6878;margin-top:2px;">${escapeHtml(originCity)}</div>
           </td>
           <td valign="middle" width="34%" align="center" style="vertical-align:middle;text-align:center;width:34%;">
-            <div style="font-size:24px;color:#00569e;line-height:1;margin-bottom:8px;">&#8646;</div>
+            <div style="font-size:24px;color:#00569e;line-height:1;margin-bottom:8px;">&#8644;</div>
             <div style="font-size:12px;color:#5b6878;">${escapeHtml(periodText)}</div>
           </td>
           <td valign="middle" width="33%" align="right" class="route-right" style="vertical-align:middle;text-align:right;width:33%;">
