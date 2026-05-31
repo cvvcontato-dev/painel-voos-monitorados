@@ -284,6 +284,9 @@ export default function VoucherCompactoV1({ data }) {
             {settings.contact_extra && <div style={{ color: '#777' }}>{settings.contact_extra}</div>}
           </div>
         </div>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
+          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
+        </div>
       </footer>
     </div>
   );
