@@ -59,6 +59,16 @@ const STUB = {
   branding: { airlineName: 'Azul', logoUrl: null, primaryColor: '#003DA5' }
 };
 
+// Erros transientes do Gemini que vale tentar de novo (alta demanda, instabilidade,
+// rate-limit temporário). 4xx de input (400, 401, 403) NÃO devem ser repetidos.
+function isTransientGeminiError(err) {
+  const msg = String(err && err.message || '').toLowerCase();
+  return /\b(429|500|502|503|504)\b/.test(msg)
+      || /service unavailable|high demand|temporar|overload|fetch failed|timeout|econnreset/i.test(msg);
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 async function extractVoucher(buffer, mimetype) {
   if (!SUPPORTED.includes(mimetype)) {
     throw new Error(`mimetype não suportado: ${mimetype}`);
@@ -69,12 +79,35 @@ async function extractVoucher(buffer, mimetype) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
   const part = { inlineData: { data: buffer.toString('base64'), mimeType: mimetype } };
-  const result = await model.generateContent([PROMPT, part]);
-  const text = result.response.text().trim().replace(/^```json\s*|\s*```$/g, '');
-  const parsed = JSON.parse(text);
-  // Strip any stale meta from Gemini so normalizer's fresh parsedAt wins
-  delete parsed.meta;
-  return normalize(parsed);
+
+  // Retry com backoff exponencial: 0s, 2s, 5s. Total até 3 tentativas.
+  // Cobre 503 "high demand" e flakes de rede que são comuns no Gemini.
+  const delays = [0, 2000, 5000];
+  let lastErr;
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    if (delays[attempt] > 0) await sleep(delays[attempt]);
+    try {
+      const result = await model.generateContent([PROMPT, part]);
+      const text = result.response.text().trim().replace(/^```json\s*|\s*```$/g, '');
+      const parsed = JSON.parse(text);
+      delete parsed.meta; // garante que o normalizer ponha parsedAt fresco
+      return normalize(parsed);
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientGeminiError(err) || attempt === delays.length - 1) {
+        // Erro permanente OU última tentativa esgotada: lança imediatamente.
+        if (isTransientGeminiError(err)) {
+          const wrap = new Error('Gemini indisponível no momento (alta demanda). Tente novamente em alguns instantes.');
+          wrap.code = 'gemini_unavailable';
+          wrap.cause = err;
+          throw wrap;
+        }
+        throw err;
+      }
+      console.warn(`[VOUCHER-EXTRACT] tentativa ${attempt + 1}/${delays.length} falhou (transitório): ${err.message}. Retentando…`);
+    }
+  }
+  throw lastErr;
 }
 
 module.exports = { extractVoucher, STUB };

@@ -53,6 +53,19 @@ router.post('/', upload.single('file'), async (req, res) => {
     );
   } catch (err) {
     console.error('[VOUCHERS] erro ao processar upload', err.message);
+    // Erros transientes do Gemini: devolve 503 com mensagem útil pro frontend.
+    if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
+      return res.status(503).json({
+        error: 'Serviço de extração (Gemini) está com alta demanda no momento. Tente novamente em alguns instantes.',
+        retryable: true
+      });
+    }
+    if (/quota|exceeded/i.test(err.message)) {
+      return res.status(429).json({
+        error: 'Cota da API Gemini esgotada. Aguarde alguns minutos e tente novamente.',
+        retryable: true
+      });
+    }
     res.status(500).json({ error: 'erro ao processar voucher' });
   }
 });

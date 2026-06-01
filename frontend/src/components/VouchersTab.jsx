@@ -113,7 +113,9 @@ export default function VouchersTab({ showToast }) {
       if (r?.id) await select(r.id);
       showToast?.('Voucher importado com sucesso', 'success');
     } catch (err) {
-      showToast?.(err?.response?.data?.detail || 'Falha no upload do voucher', 'error');
+      // Prefere a mensagem do servidor (ex.: "Gemini com alta demanda…"); cai pra mensagem genérica.
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      showToast?.(serverMsg || 'Falha no upload do voucher', 'error');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
