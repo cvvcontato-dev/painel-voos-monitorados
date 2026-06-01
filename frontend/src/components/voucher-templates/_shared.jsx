@@ -216,12 +216,26 @@ export function manageBookingUrl(carrierKey, locator, lastName, origin) {
   }
 }
 
-// Extrai o sobrenome (última palavra) do nome do primeiro passageiro, pra usar em deep-links.
+// Extrai o sobrenome do primeiro passageiro pra usar em deep-links.
+// Trata os 2 formatos:
+//   "JOAO DA SILVA"   → "SILVA"   (última palavra)
+//   "SILVA, MAYARA"   → "SILVA"   (última palavra ANTES da vírgula = sobrenome paterno)
+//   "SILVA SANTOS, MARIA"  → "SANTOS"
+// Mantenha em sincronia com backend/helpers/voucherCarrier.js#lastNameOf.
 export function firstPassengerLastName(data) {
   const p = (data?.passengers || [])[0];
   if (!p?.name) return '';
-  const parts = p.name.trim().split(/\s+/);
-  return parts[parts.length - 1] || '';
+  const trimmed = String(p.name).trim();
+  if (!trimmed) return '';
+  // Formato invertido: "SOBRENOME(S), NOME(S)"
+  if (trimmed.includes(',')) {
+    const surnamePart = trimmed.split(',', 2)[0].trim();
+    const parts = surnamePart.split(/\s+/).filter(Boolean);
+    return (parts[parts.length - 1] || '').toUpperCase();
+  }
+  // Formato normal: "NOME(S) SOBRENOME(S)"
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || '').toUpperCase();
 }
 
 // Normaliza o número do voo para usar SEMPRE o código IATA-2 da cia, mesmo que o Gemini

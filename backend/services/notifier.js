@@ -309,11 +309,13 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         : contactSiteHref;
 
     // QR Code PNG embutido como data URL — mais compatível com clientes de e-mail (Gmail/Outlook
-    // bloqueiam ou renderizam SVG inline inconsistentemente). Aponta pro itinerário hospedado
-    // se houver; senão pro site da agência.
+    // bloqueiam ou renderizam SVG inline inconsistentemente).
+    // PRIORIDADE: aponta pro check-in da cia (bookingUrl). Se não houver, cai pro itinerário hospedado.
+    // É o mesmo destino do botão "FAZER CHECK-IN" — escaneando OU clicando, o passageiro vai pro check-in.
     let qrDataUrl = '';
+    const qrTarget = (safeBookingUrl && safeBookingUrl !== '#') ? safeBookingUrl
+                   : (safeItinerarioUrl || contactSiteHref);
     try {
-        const qrTarget = safeItinerarioUrl || contactSiteHref;
         qrDataUrl = await QRCode.toDataURL(qrTarget, {
             width: 192,           // 96px exibido em retina = 2x
             margin: 1,
@@ -542,7 +544,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:4px;">
                     <tr>
                       <td align="center" valign="middle" style="padding:8px;line-height:0;">
-                        ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code" width="96" height="96" style="display:block;width:96px;height:96px;border:0;outline:none;">` : '<div style="width:96px;height:96px;background:#E5E7EB;"></div>'}
+                        ${qrDataUrl ? `<a href="${escapeHtml(qrTarget)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;border:0;outline:none;"><img src="${qrDataUrl}" alt="QR Code — clique ou escaneie pra check-in" width="96" height="96" style="display:block;width:96px;height:96px;border:0;outline:none;"></a>` : '<div style="width:96px;height:96px;background:#E5E7EB;"></div>'}
                       </td>
                     </tr>
                   </table>
