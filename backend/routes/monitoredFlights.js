@@ -10,8 +10,13 @@ const DATA_VOO_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ALLOWED_CADENCIAS = [15, 30, 60, 120, 240, 360, 720, 1440];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function isValidUrl(s) {
+  try { const u = new URL(s); return u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch { return false; }
+}
+
 function validateCreatePayload(body) {
-  const { cliente, numero_voo, data_voo, email_cliente, cadencia_minutos } = body;
+  const { cliente, numero_voo, data_voo, email_cliente, cadencia_minutos, link_gerenciamento } = body;
   if (!cliente || typeof cliente !== 'string') return 'cliente é obrigatório';
   if (!numero_voo || !NUMERO_VOO_REGEX.test(numero_voo))
     return 'numero_voo inválido (ex.: LA8084, G31234)';
@@ -26,6 +31,8 @@ function validateCreatePayload(body) {
   if (email_cliente && !EMAIL_REGEX.test(email_cliente)) return 'email_cliente inválido';
   if (cadencia_minutos !== undefined && !ALLOWED_CADENCIAS.includes(Number(cadencia_minutos)))
     return `cadencia_minutos deve ser um de: ${ALLOWED_CADENCIAS.join(', ')}`;
+  if (link_gerenciamento && !isValidUrl(link_gerenciamento))
+    return 'link_gerenciamento deve ser uma URL http(s) válida';
 
   return null;
 }
@@ -75,14 +82,15 @@ router.post('/', (req, res) => {
     req.body.telegram_chat_id || null,
     cadencia,
     proxima,
+    req.body.link_gerenciamento || null,
     now, now
   ];
 
   db.run(
     `INSERT INTO monitored_flights_status
        (cliente, numero_voo, data_voo, email_cliente, telegram_chat_id,
-        cadencia_minutos, proxima_verificacao, criado_em, atualizado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        cadencia_minutos, proxima_verificacao, link_gerenciamento, criado_em, atualizado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params,
     function (err) {
       if (err) {
@@ -100,13 +108,16 @@ router.post('/', (req, res) => {
 
 // PUT update
 router.put('/:id', (req, res) => {
-  const { cliente, email_cliente, telegram_chat_id, cadencia_minutos, monitoramento_ativo } = req.body;
+  const { cliente, email_cliente, telegram_chat_id, cadencia_minutos, monitoramento_ativo, link_gerenciamento } = req.body;
 
   if (email_cliente !== undefined && email_cliente !== '' && email_cliente !== null
       && !EMAIL_REGEX.test(email_cliente))
     return res.status(400).json({ error: 'email_cliente inválido' });
   if (cadencia_minutos !== undefined && !ALLOWED_CADENCIAS.includes(Number(cadencia_minutos)))
     return res.status(400).json({ error: `cadencia_minutos deve ser um de: ${ALLOWED_CADENCIAS.join(', ')}` });
+  if (link_gerenciamento !== undefined && link_gerenciamento !== '' && link_gerenciamento !== null
+      && !isValidUrl(link_gerenciamento))
+    return res.status(400).json({ error: 'link_gerenciamento deve ser uma URL http(s) válida' });
 
   db.get('SELECT * FROM monitored_flights_status WHERE id = ?', [req.params.id], (err, existing) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -126,6 +137,7 @@ router.put('/:id', (req, res) => {
          cadencia_minutos = ?,
          monitoramento_ativo = COALESCE(?, monitoramento_ativo),
          proxima_verificacao = ?,
+         link_gerenciamento = ?,
          atualizado_em = ?
        WHERE id = ?`,
       [
@@ -135,6 +147,7 @@ router.put('/:id', (req, res) => {
         newCadencia,
         monitoramento_ativo !== undefined ? (monitoramento_ativo ? 1 : 0) : null,
         newProxima,
+        link_gerenciamento !== undefined ? (link_gerenciamento || null) : existing.link_gerenciamento,
         now,
         req.params.id
       ],

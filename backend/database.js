@@ -115,7 +115,9 @@ function runMigrations() {
         "ALTER TABLE flights ADD COLUMN preco_atual REAL",
         "ALTER TABLE flights ADD COLUMN ultima_verificacao TEXT",
         "ALTER TABLE flights ADD COLUMN alerta_enviado INTEGER DEFAULT 0",
-        "ALTER TABLE flights ADD COLUMN status TEXT DEFAULT 'ativo'"
+        "ALTER TABLE flights ADD COLUMN status TEXT DEFAULT 'ativo'",
+        // Link de gerenciamento da reserva (companhia aérea) no monitoramento de status
+        "ALTER TABLE monitored_flights_status ADD COLUMN link_gerenciamento TEXT"
     ];
 
     migrations.forEach(sql => {

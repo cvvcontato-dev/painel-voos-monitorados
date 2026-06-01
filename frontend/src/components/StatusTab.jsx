@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../hooks/useApi';
-import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
 
@@ -154,6 +154,17 @@ export default function StatusTab({ showToast }) {
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-400 text-xs">{f.monitoramento_ativo ? untilNow(f.proxima_verificacao) : <span className="text-slate-400 dark:text-slate-600">pausado</span>}</td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        {f.link_gerenciamento && (
+                          <a
+                            href={f.link_gerenciamento}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 dark:bg-slate-800 dark:hover:bg-emerald-500/20 dark:text-slate-400 dark:hover:text-emerald-400 rounded-lg cursor-pointer inline-flex items-center"
+                            title="Abrir gerenciamento da reserva"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
                         <button onClick={() => handleCheckNow(f.id)} disabled={checkingId === f.id} className="p-2 bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-700 dark:bg-slate-800 dark:hover:bg-amber-500/20 dark:text-slate-400 dark:hover:text-amber-400 rounded-lg cursor-pointer disabled:opacity-50" title="Checar agora">
                           <RefreshCw className={`w-4 h-4 ${checkingId === f.id ? 'animate-spin' : ''}`} />
                         </button>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, User, Plane, Calendar, Mail, MessageSquare, Clock } from 'lucide-react';
+import { X, User, Plane, Calendar, Mail, MessageSquare, Clock, Link as LinkIcon } from 'lucide-react';
 
 const CADENCIA_OPTIONS = [
   { value: 15, label: 'A cada 15 minutos' },
@@ -28,10 +28,11 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
         data_voo: editing.data_voo,
         email_cliente: editing.email_cliente || '',
         telegram_chat_id: editing.telegram_chat_id || '',
-        cadencia_minutos: editing.cadencia_minutos
+        cadencia_minutos: editing.cadencia_minutos,
+        link_gerenciamento: editing.link_gerenciamento || ''
       });
     } else {
-      reset({ cliente:'', numero_voo:'', data_voo:'', email_cliente:'', telegram_chat_id:'', cadencia_minutos:60 });
+      reset({ cliente:'', numero_voo:'', data_voo:'', email_cliente:'', telegram_chat_id:'', cadencia_minutos:60, link_gerenciamento:'' });
     }
   }, [editing, reset, isOpen]);
 
@@ -79,6 +80,23 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
             <select {...register('cadencia_minutos', { required: true, valueAsNumber: true })} className={`${inputCls} appearance-none`}>
               {CADENCIA_OPTIONS.map(o => <option key={o.value} value={o.value} className="bg-white dark:bg-slate-900">{o.label}</option>)}
             </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <LinkIcon className="w-4 h-4" /> Link de Gerenciamento da Reserva
+            </label>
+            <input
+              type="url"
+              {...register('link_gerenciamento', {
+                pattern: { value: /^https?:\/\/.+/i, message: 'URL inválida (use http:// ou https://)' }
+              })}
+              className={inputCls}
+              placeholder="https://www.voeazul.com.br/br/pt/minhas-reservas/..."
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-500">
+              Opcional — link da companhia aérea para o cliente gerenciar a reserva (check-in, alterações).
+            </p>
+            {errors.link_gerenciamento && <span className="text-xs text-red-700 dark:text-red-400">{errors.link_gerenciamento.message}</span>}
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700/50">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg cursor-pointer">Cancelar</button>
