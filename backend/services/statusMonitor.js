@@ -203,7 +203,29 @@ async function processOne(flight) {
 }
 
 // ---------- Public entry points ----------
+/**
+ * Today's date in Brasília (America/Sao_Paulo, fixed UTC-3 since 2019)
+ * formatted as YYYY-MM-DD — same format stored in data_voo.
+ */
+function todayBrasiliaYmd() {
+  const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
 async function checkDueFlights() {
+  // Step 1: auto-pause any flights whose date has already passed (Brasília tz).
+  // Concluded flights stay in the table but stop consuming AviationStack quota.
+  const today = todayBrasiliaYmd();
+  const concluded = await dbRun(
+    `UPDATE monitored_flights_status
+     SET monitoramento_ativo = 0, atualizado_em = ?
+     WHERE monitoramento_ativo = 1 AND data_voo < ?`,
+    [nowUtcIso(), today]
+  );
+  if (concluded.changes > 0) {
+    console.log(`[STATUS-MON] ${concluded.changes} voo(s) concluído(s) — monitoramento auto-pausado.`);
+  }
+
   const due = await dbAll(
     `SELECT * FROM monitored_flights_status
      WHERE proxima_verificacao <= ? AND monitoramento_ativo = 1

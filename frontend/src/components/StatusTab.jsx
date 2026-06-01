@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../hooks/useApi';
-import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
 
@@ -12,8 +12,24 @@ const STATUS_STYLES = {
   delayed:   { color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',             icon: '🟡', label: 'Atrasado' },
   cancelled: { color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',                         icon: '🔴', label: 'Cancelado' },
   diverted:  { color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',                         icon: '🔴', label: 'Desviado' },
-  landed:    { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20',             icon: '⚫', label: 'Pousou' }
+  landed:    { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20',             icon: '⚫', label: 'Pousou' },
+  concluded: { color: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:text-slate-400 dark:border-slate-600/40',             icon: '✓',  label: 'Concluído' }
 };
+
+/** Today's date in Brasília (fixed UTC-3 since 2019) as YYYY-MM-DD. */
+function todayBrasiliaYmd() {
+  const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A flight is "concluded" once its date has passed, regardless of the
+ *  real-time API status. Cancelled flights keep their original label so
+ *  the cancellation stays visible even after the date passes. */
+function isConcluded(flight) {
+  if (!flight.data_voo) return false;
+  if (flight.status_atual === 'cancelled' || flight.status_atual === 'diverted') return false;
+  return flight.data_voo < todayBrasiliaYmd();
+}
 
 function formatTimeShort(iso) {
   if (!iso) return '—';
@@ -36,6 +52,18 @@ export default function StatusTab({ showToast }) {
   const [editing, setEditing] = useState(null);
   const [historyId, setHistoryId] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
+  const [hideConcluded, setHideConcluded] = useState(() => {
+    try { return localStorage.getItem('status_hide_concluded') === '1'; }
+    catch { return false; }
+  });
+
+  const toggleHideConcluded = () => {
+    setHideConcluded(prev => {
+      const next = !prev;
+      try { localStorage.setItem('status_hide_concluded', next ? '1' : '0'); } catch {/* ignore */}
+      return next;
+    });
+  };
 
   const fetchFlights = useCallback(async () => {
     try { setFlights((await api.get(API_URL)).data); }
@@ -87,19 +115,35 @@ export default function StatusTab({ showToast }) {
     finally { setCheckingId(null); }
   };
 
+  const concluidosCount = flights.filter(isConcluded).length;
+  const visibleFlights = hideConcluded ? flights.filter(f => !isConcluded(f)) : flights;
+
   const stats = {
     total: flights.length,
-    ativos: flights.filter(f => f.monitoramento_ativo).length,
+    ativos: flights.filter(f => f.monitoramento_ativo && !isConcluded(f)).length,
     alertas24h: 0,
     proximaCheck: flights
-      .filter(f => f.monitoramento_ativo && f.proxima_verificacao)
+      .filter(f => f.monitoramento_ativo && !isConcluded(f) && f.proxima_verificacao)
       .map(f => f.proxima_verificacao)
       .sort()[0]
   };
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end items-center gap-3 mb-4">
+        {concluidosCount > 0 && (
+          <button
+            onClick={toggleHideConcluded}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
+                       bg-white border-slate-200 text-slate-700 hover:bg-slate-50
+                       dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            title={hideConcluded ? 'Mostrar voos concluídos' : 'Ocultar voos concluídos'}
+          >
+            {hideConcluded
+              ? <><Eye className="w-4 h-4" /> Mostrar concluídos ({concluidosCount})</>
+              : <><EyeOff className="w-4 h-4" /> Ocultar concluídos ({concluidosCount})</>}
+          </button>
+        )}
         <button onClick={() => { setEditing(null); setModalOpen(true); }}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
           <Plus className="w-5 h-5" /> Monitorar Voo
@@ -131,12 +175,18 @@ export default function StatusTab({ showToast }) {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
               {isLoading ? (
                 <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-600 dark:text-slate-400">Carregando...</td></tr>
-              ) : flights.length === 0 ? (
+              ) : visibleFlights.length === 0 ? (
                 <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-600 dark:text-slate-400">
-                  <Plane className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3 opacity-50" />Nenhum voo sendo monitorado.
+                  <Plane className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3 opacity-50" />
+                  {hideConcluded && flights.length > 0
+                    ? `Nenhum voo ativo — ${concluidosCount} voo(s) concluído(s) ocultos.`
+                    : 'Nenhum voo sendo monitorado.'}
                 </td></tr>
-              ) : flights.map(f => {
-                const style = STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' };
+              ) : visibleFlights.map(f => {
+                const concluded = isConcluded(f);
+                const style = concluded
+                  ? STATUS_STYLES.concluded
+                  : (STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' });
                 return (
                   <tr key={f.id} className="hover:bg-slate-100/60 dark:hover:bg-slate-800/30 group">
                     <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-200">{f.cliente}</td>
