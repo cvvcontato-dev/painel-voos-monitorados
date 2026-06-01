@@ -77,7 +77,7 @@ function buildMessage(rawPromo) {
   lines.push(`✨ *Personalize: * ${customization}`);
   lines.push(`📲 *${cta} *`);
   lines.push('');
-  lines.push(`⚠️ Os valores anunciados estão sujeitos a alterações sem aviso prévio.`);
+  lines.push(`⚠️ _Os valores anunciados estão sujeitos a alterações sem aviso prévio. _`);
   return lines.join('\n');
 }
 

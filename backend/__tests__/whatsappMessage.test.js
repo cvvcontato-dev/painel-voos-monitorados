@@ -26,8 +26,8 @@ test('matches the approved domestic template line by line', () => {
   expect(msg).toContain('💰 *Valor total para 2 pessoas: * R$ 2411 (taxas inclusas)');
   expect(msg).toContain('✨ *Personalize: * Precisa de outras datas ou roteiro? Fale conosco!');
   expect(msg).toContain('📲 *Garanta já sua viagem inesquecível! *');
-  // Disclaimer fixo no final
-  expect(msg).toContain('⚠️ Os valores anunciados estão sujeitos a alterações sem aviso prévio.');
+  // Disclaimer fixo no final, em itálico (underscores estilo WhatsApp)
+  expect(msg).toContain('⚠️ _Os valores anunciados estão sujeitos a alterações sem aviso prévio. _');
 });
 
 test('never leaks the agency commission', () => {
