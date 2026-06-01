@@ -71,15 +71,189 @@ export function resolveBaggageWeight(carrierKey, baggage) {
   return defaultBaggageWeight(carrierKey, baggage && baggage.label);
 }
 
-// URL da página "minhas viagens / gerenciar reserva" por companhia.
-// O QR aponta pra cá (deep-link com localizador não é confiável entre as cias).
-export function manageBookingUrl(carrierKey, locator) {
-  switch ((carrierKey || '').toLowerCase()) {
-    case 'gol':   return 'https://b2c.voegol.com.br/minhas-viagens';
-    case 'latam': return 'https://www.latamairlines.com/br/pt/minha-viagem';
-    case 'azul':  return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
-    default:      return 'https://www.voeazul.com.br/br/pt/minhas-viagens';
+// Regras oficiais por companhia (peso máximo + dimensões máximas) para cada tipo de bagagem.
+// Kind: 'personal' (item pessoal) | 'handbag' (mão) | 'checked' (despachada).
+export const BAGGAGE_RULES = {
+  azul: {
+    personal: { weightText: 'Sem peso máx.',  dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '10 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: '80 × 50 × 28 cm (ou soma 158 cm)' }
+  },
+  gol: {
+    personal: { weightText: '10 kg',          dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '12 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: '80 × 50 × 28 cm (ou soma 158 cm)' }
+  },
+  latam: {
+    personal: { weightText: '10 kg',          dimensionsText: '45 × 35 × 20 cm' },
+    handbag:  { weightText: '12 kg',          dimensionsText: '55 × 35 × 25 cm' },
+    checked:  { weightText: '23 kg',          dimensionsText: 'Soma de 158 cm (A + C + L)' }
   }
+};
+
+// Para carrier desconhecido (ex.: 'multi' usado em headers), cair em azul como base segura.
+export function baggagePolicy(carrierKey, kind) {
+  const rules = BAGGAGE_RULES[carrierKey] || BAGGAGE_RULES.azul;
+  return rules[kind];
+}
+
+// Classifica uma linha de bagagem extraída pelo Gemini em uma das 3 categorias.
+export function classifyBaggage(label) {
+  const l = (label || '').toLowerCase();
+  if (/mochila|bolsa|sacola|pessoal|personal/.test(l)) return 'personal';
+  if (/despach|por[aã]o|\bmala\b|checked/.test(l)) return 'checked';
+  // Default mão (carry-on)
+  if (/m[aã]o|carry/.test(l) || /\b1[02]\s*kg\b/.test(l)) return 'handbag';
+  return 'handbag';
+}
+
+// Nome canônico para exibir cada tipo.
+export const BAGGAGE_LABEL = {
+  personal: 'Item pessoal',
+  handbag:  'Bagagem de mão',
+  checked:  'Bagagem despachada'
+};
+
+// Detecta o carrier de UM trecho (não do voucher inteiro).
+export function tripCarrier(trip, fallbackCarrier) {
+  const name = (trip?.airlineDisplayName || '').toLowerCase();
+  if (name.includes('azul')) return 'azul';
+  if (name.includes('gol')) return 'gol';
+  if (name.includes('latam') || name.includes('tam ')) return 'latam';
+  const fn = (trip?.flightNumber || '').toUpperCase();
+  if (/^(G3|GLO)/.test(fn)) return 'gol';
+  if (/^AD/.test(fn)) return 'azul';
+  if (/^(LA|JJ|LATAM)/.test(fn)) return 'latam';
+  return (fallbackCarrier || 'azul').toLowerCase();
+}
+
+// Gera os blocos de bagagem a renderizar.
+// Cada bloco = { direction, carrierKey, label, items[] }
+// items[] sempre tem 3 entradas: personal, handbag, checked (mesmo se qty=0).
+// Quando todos os trechos da direção são da mesma cia → 1 bloco por direção (label vazio).
+// Quando há mais de uma cia na MESMA direção → 1 bloco por trecho (label com voo+cia).
+export function buildBaggageBlocks(data) {
+  const trips = data?.trips || [];
+  const extracted = data?.baggage || [];
+  const fallback = data?.carrier;
+
+  // Ordem das direções (preservar primeira aparição)
+  const directions = [];
+  const seenDir = new Set();
+  for (const t of trips) {
+    const d = t.direction || 'ida';
+    if (!seenDir.has(d)) { seenDir.add(d); directions.push(d); }
+  }
+
+  function itemsFor(carrierKey, direction) {
+    // Pega quantidades a partir do que o Gemini extraiu para essa direção
+    const dirBags = extracted.filter(b => (b.direction || '').toLowerCase() === direction);
+    function qtyOf(kind) {
+      const found = dirBags.find(b => classifyBaggage(b.label) === kind);
+      if (found && typeof found.quantity === 'number') return found.quantity;
+      // Defaults: passageiro sempre tem item pessoal e mão; despachada só se vier explícita.
+      if (kind === 'personal') return 1;
+      if (kind === 'handbag') return 1;
+      return 0;
+    }
+    return ['personal', 'handbag', 'checked'].map(kind => {
+      const policy = baggagePolicy(carrierKey, kind);
+      return {
+        kind,
+        label: BAGGAGE_LABEL[kind],
+        weightText: policy.weightText,
+        dimensionsText: policy.dimensionsText,
+        quantity: qtyOf(kind)
+      };
+    });
+  }
+
+  const blocks = [];
+  for (const dir of directions) {
+    const tripsInDir = trips.filter(t => (t.direction || 'ida') === dir);
+    const carriers = Array.from(new Set(tripsInDir.map(t => tripCarrier(t, fallback))));
+
+    if (carriers.length <= 1) {
+      const ck = carriers[0] || (fallback || 'azul').toLowerCase();
+      blocks.push({ direction: dir, carrierKey: ck, label: '', items: itemsFor(ck, dir) });
+    } else {
+      for (const t of tripsInDir) {
+        const ck = tripCarrier(t, fallback);
+        const carrierName = ck.charAt(0).toUpperCase() + ck.slice(1);
+        const trecho = `${t.flightNumber || ''} (${carrierName})`.trim();
+        blocks.push({ direction: dir, carrierKey: ck, label: trecho, items: itemsFor(ck, dir) });
+      }
+    }
+  }
+  return blocks;
+}
+
+// URL para "gerenciar reserva / minhas viagens" por companhia.
+// Cada cia exige parâmetros diferentes:
+//   - Azul:  precisa de pnr + origin (IATA da origem)
+//   - Gol:   precisa de codigoReserva + origem (IATA) + sobrenome
+//   - Latam: precisa de orderId + lastname
+// Se faltar parâmetro obrigatório, cai pra página genérica de busca.
+export function manageBookingUrl(carrierKey, locator, lastName, origin) {
+  const loc  = encodeURIComponent((locator  || '').trim());
+  const last = encodeURIComponent((lastName || '').trim());
+  const orig = encodeURIComponent((origin   || '').trim());
+  switch ((carrierKey || '').toLowerCase()) {
+    case 'gol':
+      return (loc && orig && last)
+        ? `https://b2c.voegol.com.br/minhas-viagens/encontrar-viagem?codigoReserva=${loc}&origem=${orig}&sobrenome=${last}`
+        : 'https://b2c.voegol.com.br/minhas-viagens';
+    case 'latam':
+      return (loc && last)
+        ? `https://www.latamairlines.com/br/pt/minhas-viagens/second-detail/?orderId=${loc}&lastname=${last}`
+        : 'https://www.latamairlines.com/br/pt/minhas-viagens';
+    case 'azul':
+      return (loc && orig)
+        ? `https://www.voeazul.com.br/br/pt/home/minhas-viagens/confirmacao?pnr=${loc}&origin=${orig}`
+        : 'https://www.voeazul.com.br/br/pt/home/minhas-viagens';
+    default:
+      return 'https://www.voeazul.com.br/br/pt/home/minhas-viagens';
+  }
+}
+
+// Extrai o sobrenome do primeiro passageiro pra usar em deep-links.
+// Trata os 2 formatos:
+//   "JOAO DA SILVA"   → "SILVA"   (última palavra)
+//   "SILVA, MAYARA"   → "SILVA"   (última palavra ANTES da vírgula = sobrenome paterno)
+//   "SILVA SANTOS, MARIA"  → "SANTOS"
+// Mantenha em sincronia com backend/helpers/voucherCarrier.js#lastNameOf.
+export function firstPassengerLastName(data) {
+  const p = (data?.passengers || [])[0];
+  if (!p?.name) return '';
+  const trimmed = String(p.name).trim();
+  if (!trimmed) return '';
+  // Formato invertido: "SOBRENOME(S), NOME(S)"
+  if (trimmed.includes(',')) {
+    const surnamePart = trimmed.split(',', 2)[0].trim();
+    const parts = surnamePart.split(/\s+/).filter(Boolean);
+    return (parts[parts.length - 1] || '').toUpperCase();
+  }
+  // Formato normal: "NOME(S) SOBRENOME(S)"
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || '').toUpperCase();
+}
+
+// Normaliza o número do voo para usar SEMPRE o código IATA-2 da cia, mesmo que o Gemini
+// retorne o ICAO (GLO em vez de G3, AZU em vez de AD, TAM/LAN em vez de LA).
+// Ex.: "GLO 1471" → "G3 1471"  |  "GLO1471" → "G3 1471"  |  "AD 4001" → "AD 4001" (inalterado).
+const FLIGHT_PREFIX_MAP = {
+  GLO: 'G3', G3: 'G3',
+  AZU: 'AD', AD: 'AD',
+  TAM: 'LA', LAN: 'LA', LATAM: 'LA', LA: 'LA', JJ: 'LA'
+};
+export function normalizeFlightNumber(flightNumber) {
+  if (!flightNumber) return '';
+  const fn = String(flightNumber).trim().toUpperCase();
+  // Captura o prefixo (letras) e o restante (número)
+  const m = fn.match(/^([A-Z]{2,5})\s*([0-9]+[A-Z]?)$/);
+  if (!m) return flightNumber; // formato inesperado — devolve como veio
+  const prefix = FLIGHT_PREFIX_MAP[m[1]] || m[1];
+  return `${prefix} ${m[2]}`;
 }
 
 const WEEKDAYS_PTBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -93,8 +267,66 @@ export function dateLabelWithDow(t) {
   return `${dow}, ${base}`;
 }
 
-export function CarrierLogo({ carrierKey, theme, large = false, bare = false }) {
+export function CarrierLogo({ carrierKey, theme, large = false, bare = false, secondaryCarrierKey = null }) {
   const [failed, setFailed] = useState(false);
+  const [failed2, setFailed2] = useState(false);
+
+  // Caso multi-cia com 2 carriers conhecidos: renderiza as 2 logos lado a lado.
+  // (Vouchers merge têm primaryCarrier + secondaryCarrier setados em data.reservation.)
+  const isDual = !!secondaryCarrierKey
+    && secondaryCarrierKey !== 'multi'
+    && carrierKey !== 'multi'
+    && secondaryCarrierKey !== carrierKey;
+
+  if (isDual && !bare) {
+    // Card branco mais largo com as 2 logos lado a lado, separadas por divisor sutil.
+    const boxH = large ? 80 : 56;
+    const boxW = large ? 180 : Math.round(boxH * 1.8); // ~100px no caso default
+    return (
+      <div style={{
+        width: boxW, height: boxH, background: 'white', borderRadius: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: large ? 'none' : '0 2px 6px rgba(0,0,0,0.12)',
+        padding: '6px 8px', gap: 8
+      }}>
+        {failed
+          ? <span style={{ fontSize: large ? 22 : 18, fontWeight: 800, color: theme.accent }}>{(THEMES[carrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${carrierKey}.png`}
+                 alt={carrierKey}
+                 style={{ maxHeight: '100%', maxWidth: '45%', objectFit: 'contain' }}
+                 onError={() => setFailed(true)} />}
+        <span style={{ width: 1, height: '70%', background: '#e5eaf0' }} />
+        {failed2
+          ? <span style={{ fontSize: large ? 22 : 18, fontWeight: 800, color: theme.accent }}>{(THEMES[secondaryCarrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${secondaryCarrierKey}.png`}
+                 alt={secondaryCarrierKey}
+                 style={{ maxHeight: '100%', maxWidth: '45%', objectFit: 'contain' }}
+                 onError={() => setFailed2(true)} />}
+      </div>
+    );
+  }
+
+  // Modo bare multi-cia (Compacto): 2 logos pequenas em linha, sem card branco.
+  if (isDual && bare) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {failed
+          ? <span style={{ fontSize: 18, fontWeight: 800, color: theme.accent }}>{(THEMES[carrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${carrierKey}.png`}
+                 alt={carrierKey}
+                 style={{ maxHeight: 48, maxWidth: 90, objectFit: 'contain', display: 'block' }}
+                 onError={() => setFailed(true)} />}
+        <span style={{ width: 1, height: 36, background: '#c8d0dc' }} />
+        {failed2
+          ? <span style={{ fontSize: 18, fontWeight: 800, color: theme.accent }}>{(THEMES[secondaryCarrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${secondaryCarrierKey}.png`}
+                 alt={secondaryCarrierKey}
+                 style={{ maxHeight: 48, maxWidth: 90, objectFit: 'contain', display: 'block' }}
+                 onError={() => setFailed2(true)} />}
+      </div>
+    );
+  }
+
   if (bare && !failed && carrierKey !== 'multi') {
     return (
       <img

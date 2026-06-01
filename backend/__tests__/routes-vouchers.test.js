@@ -76,6 +76,22 @@ test('GET /:id/export for missing voucher returns 404', async () => {
   expect(res.status).toBe(404);
 });
 
+test('POST /:id/send-email com body vazio retorna 400', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+    .attach('file', Buffer.from('%PDF-1.4'), { filename: 'a.pdf', contentType: 'application/pdf' });
+  const r = await agent.post(`/api/vouchers/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({});
+  expect(r.status).toBe(400);
+});
+
+test('POST /:id/send-email com email invalido retorna 400', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+    .attach('file', Buffer.from('%PDF-1.4'), { filename: 'a.pdf', contentType: 'application/pdf' });
+  const r = await agent.post(`/api/vouchers/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({ emails: 'naoehemail' });
+  expect(r.status).toBe(400);
+});
+
 test('PUT with invalid unified returns 422', async () => {
   const { agent, csrf } = await authed();
   const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)

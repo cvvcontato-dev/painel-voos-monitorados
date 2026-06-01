@@ -1,4 +1,15 @@
-const CARRIERS = ['azul', 'gol', 'latam'];
+// 'multi' = voucher resultante do merge de 2 vouchers de cias diferentes (ida + volta).
+// Nesse caso, reservation.primaryCarrier e reservation.secondaryCarrier devem estar setados.
+const CARRIERS = ['azul', 'gol', 'latam', 'multi'];
+
+// Campos OPCIONAIS conhecidos (não rejeitados — schema é tolerante a extras):
+//   reservation.secondaryLocator: string | null   — localizador da volta quando difere do principal
+//   reservation.secondaryCarrier: string | null   — carrier da volta quando difere do principal
+//   reservation.primaryCarrier:   string | null   — carrier da ida (set quando carrier === 'multi')
+//   trips[].locator:              string | null   — localizador específico daquele trip (merge)
+//   meta.merged:                  boolean         — true se veio de mergeVouchers
+//   meta.outboundSourceHash:      string | null
+//   meta.returnSourceHash:        string | null
 const LAYOUT_VERSIONS = ['azul.confirmacao.v1'];
 const PASSENGER_TYPES = ['adulto', 'crianca', 'bebe'];
 const DIRECTIONS = ['ida', 'volta', 'multi'];

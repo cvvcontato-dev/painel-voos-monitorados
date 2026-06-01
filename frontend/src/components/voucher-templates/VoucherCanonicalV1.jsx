@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight,
-  manageBookingUrl, CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
+  THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight, buildBaggageBlocks,
+  manageBookingUrl, firstPassengerLastName, normalizeFlightNumber,
+  CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
 } from './_shared';
 
 function paxTypeLabel(type) {
@@ -46,20 +47,35 @@ function tripSubtitle(direction) {
 
 function baggageSubtitle(direction) {
   const d = (direction || '').toLowerCase();
-  if (d === 'ida' || d === 'outbound') return 'BAGAGENS DE IDA';
-  if (d === 'volta' || d === 'return' || d === 'inbound') return 'BAGAGENS DE VOLTA';
-  return 'BAGAGENS';
+  if (d === 'ida' || d === 'outbound') return 'BAGAGENS DE IDA — POR PASSAGEIRO';
+  if (d === 'volta' || d === 'return' || d === 'inbound') return 'BAGAGENS DE VOLTA — POR PASSAGEIRO';
+  return 'BAGAGENS — POR PASSAGEIRO';
 }
 
 export default function VoucherCanonicalV1({ data }) {
   const [qrUrl, setQrUrl] = useState('');
+  const [qrUrlSecondary, setQrUrlSecondary] = useState('');
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
 
   useEffect(() => {
     if (!data) return;
-    const ck = detectCarrierKey(data);
-    const url = manageBookingUrl(ck, data?.reservation?.locator);
-    QRCode.toDataURL(url, { width: 120, margin: 0 }).then(setQrUrl).catch(() => {});
+    const isMulti = (data.carrier || '').toLowerCase() === 'multi'
+      && !!data.reservation?.primaryCarrier
+      && !!data.reservation?.secondaryCarrier;
+    const primaryCk = isMulti
+      ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
+      : detectCarrierKey(data);
+    const url = manageBookingUrl(primaryCk, data?.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
+    QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
+
+    if (isMulti && data.reservation?.secondaryCarrier) {
+      const secCk = data.reservation.secondaryCarrier.toLowerCase();
+      const secLoc = data.reservation?.secondaryLocator || data.reservation?.locator;
+      const url2 = manageBookingUrl(secCk, secLoc, firstPassengerLastName(data), data?.route?.destination);
+      QRCode.toDataURL(url2, { width: 200, margin: 2 }).then(setQrUrlSecondary).catch(() => {});
+    } else {
+      setQrUrlSecondary('');
+    }
   }, [data]);
 
   useEffect(() => {
@@ -73,19 +89,31 @@ export default function VoucherCanonicalV1({ data }) {
   const baggage = data.baggage || [];
   const passengers = data.passengers || [];
 
-  // Group baggage by direction (preserving first-seen order).
-  const baggageDirections = [];
-  const baggageByDirection = {};
-  for (const b of baggage) {
-    const dir = b.direction || '';
-    if (!(dir in baggageByDirection)) {
-      baggageByDirection[dir] = [];
-      baggageDirections.push(dir);
-    }
-    baggageByDirection[dir].push(b);
-  }
-
-  const airlineName = carrierKey === 'multi' ? theme.name : (data.branding?.airlineName || theme.name);
+  // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
+  // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
+  // Em voucher multi-cia (merge), mostra "Azul + Gol" em vez de "Voo combinado".
+  const _multiCia = (data.carrier || '').toLowerCase() === 'multi'
+    && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
+    && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
+  const _primaryCk = _multiCia ? data.reservation.primaryCarrier.toLowerCase() : null;
+  const _secondaryCk = _multiCia ? data.reservation.secondaryCarrier.toLowerCase() : null;
+  const _shortNameOf = (ck) => ({ azul: 'Azul', gol: 'Gol', latam: 'Latam' }[ck] || ck);
+  const airlineName = _multiCia
+    ? `${_shortNameOf(_primaryCk)} + ${_shortNameOf(_secondaryCk)}`
+    : theme.name;
+  const secondaryLocator = data.reservation?.secondaryLocator || '';
+  const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
+  const isMultiCarrier = (data.carrier || '').toLowerCase() === 'multi'
+    && !!data.reservation?.primaryCarrier
+    && !!data.reservation?.secondaryCarrier;
+  const primaryCarrierKey = isMultiCarrier
+    ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
+    : carrierKey;
+  const secondaryCarrierKey = (data.reservation?.secondaryCarrier || '').toLowerCase();
+  const bookingUrl = manageBookingUrl(primaryCarrierKey, data.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
+  const secondaryBookingUrl = isMultiCarrier && secondaryCarrierKey
+    ? manageBookingUrl(secondaryCarrierKey, secondaryLocator || data.reservation?.locator, firstPassengerLastName(data), data?.route?.destination)
+    : null;
 
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -94,7 +122,11 @@ export default function VoucherCanonicalV1({ data }) {
         {/* Top row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <CarrierLogo carrierKey={carrierKey} theme={theme} />
+            <CarrierLogo
+              carrierKey={_multiCia ? _primaryCk : carrierKey}
+              secondaryCarrierKey={_multiCia ? _secondaryCk : null}
+              theme={theme}
+            />
             <div>
               <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.1, color: 'white' }}>{airlineName}</div>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>Reserva Confirmada</div>
@@ -102,7 +134,14 @@ export default function VoucherCanonicalV1({ data }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)' }}>Localizador</div>
-            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: 'white', lineHeight: 1.1, marginTop: 2 }}>{data.reservation?.locator}</div>
+            {hasDualLocator ? (
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 2, color: 'white', lineHeight: 1.25, marginTop: 2 }}>
+                <div>Ida: {data.reservation?.locator}</div>
+                <div>Volta: {secondaryLocator}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: 'white', lineHeight: 1.1, marginTop: 2 }}>{data.reservation?.locator}</div>
+            )}
           </div>
         </div>
 
@@ -133,13 +172,13 @@ export default function VoucherCanonicalV1({ data }) {
       {/* PASSAGEIROS */}
       <section style={{ padding: '14px 32px 8px' }}>
         <SectionTitle accent={theme.accent}>Passageiros</SectionTitle>
-        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'stretch' }}>
           {passengers.map(p => (
-            <div key={p.order} style={{ background: '#f4f6f9', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div key={p.order} style={{ background: '#f4f6f9', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'stretch', gap: 10 }}>
               <span style={{ display: 'inline-block', minWidth: 24, fontSize: 11, color: '#9aa5b8' }}>{String(p.order).padStart(2, '0')}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2a48' }}>{p.name}</div>
-                <div style={{ fontSize: 10, color: '#6b7a90', marginTop: 2 }}>{paxTypeLabel(p.type)}</div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2a48', flex: 1 }}>{p.name}</div>
+                <div style={{ fontSize: 10, color: '#6b7a90', marginTop: 4 }}>{paxTypeLabel(p.type)}</div>
               </div>
             </div>
           ))}
@@ -152,7 +191,12 @@ export default function VoucherCanonicalV1({ data }) {
         <div style={{ marginTop: 12 }}>
           {trips.map((t, i) => (
             <div key={i} style={{ padding: '10px 0', borderBottom: i < trips.length - 1 ? '1px solid #e5eaf0' : 'none' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 8 }}>{tripSubtitle(t.direction)}</div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 8 }}>
+                {tripSubtitle(t.direction)}
+                {t.locator && t.locator !== data.reservation?.locator && (
+                  <span style={{ marginLeft: 8, color: theme.accent, letterSpacing: 1 }}>· LOC {t.locator}</span>
+                )}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Date column */}
                 <div style={{ minWidth: 120 }}>
@@ -164,7 +208,7 @@ export default function VoucherCanonicalV1({ data }) {
                   <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>{t.departure?.airport} ·</div>
                 </div>
                 {/* Center separator */}
-                <Separator flightNumber={t.flightNumber} durationText={t.durationText} accent={theme.accent} />
+                <Separator flightNumber={normalizeFlightNumber(t.flightNumber)} durationText={t.durationText} accent={theme.accent} />
                 {/* Arrival */}
                 <div style={{ minWidth: 110, textAlign: 'right' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.arrival?.datetime)}</div>
@@ -177,28 +221,40 @@ export default function VoucherCanonicalV1({ data }) {
       </section>
 
       {/* BAGAGENS */}
-      {baggage.length > 0 && (
-        <section style={{ padding: '8px 32px 12px' }}>
-          <SectionTitle accent={theme.accent}>Bagagens</SectionTitle>
-          <div style={{ marginTop: 12 }}>
-            {baggageDirections.map(dir => (
-              <div key={dir} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 6 }}>{baggageSubtitle(dir)}</div>
-                {baggageByDirection[dir].map((b, j) => (
-                  <div key={j} style={{ background: '#f4f6f9', borderRadius: 6, padding: '7px 12px', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <IconBag color="#6b7a90" size={16} />
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2a48' }}>{b.label}</span>
-                      {resolveBaggageWeight(carrierKey, b) && <span style={{ fontSize: 10, color: '#9aa5b8', marginTop: 2 }}>{resolveBaggageWeight(carrierKey, b)}</span>}
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a48' }}>{b.quantity}</div>
+      {(() => {
+        const blocks = buildBaggageBlocks(data);
+        if (!blocks.length) return null;
+        return (
+          <section style={{ padding: '8px 32px 12px' }}>
+            <SectionTitle accent={theme.accent}>Bagagens</SectionTitle>
+            <div style={{ marginTop: 12 }}>
+              {blocks.map((bl, idx) => {
+                const dirLabel = bl.direction === 'ida' ? 'IDA' : bl.direction === 'volta' ? 'VOLTA' : (bl.direction || '').toUpperCase();
+                const subtitle = bl.label
+                  ? `BAGAGENS DE ${dirLabel} — TRECHO ${bl.label} — POR PASSAGEIRO`
+                  : `BAGAGENS DE ${dirLabel} — POR PASSAGEIRO`;
+                return (
+                  <div key={idx} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 6 }}>{subtitle}</div>
+                    {bl.items.map((it, j) => (
+                      <div key={j} style={{ background: '#f4f6f9', borderRadius: 6, padding: '7px 12px', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <IconBag color="#6b7a90" size={16} />
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2a48' }}>{it.label}</span>
+                          <span style={{ fontSize: 10, color: '#9aa5b8', marginTop: 2 }}>
+                            {it.weightText} · {it.dimensionsText}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2a48' }}>{it.quantity}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* RESUMO DA RESERVA */}
       <section style={{ marginTop: 'auto', padding: '10px 32px 4px' }}>
@@ -233,11 +289,24 @@ export default function VoucherCanonicalV1({ data }) {
             </div>
           </div>
           {qrUrl && (
-            <div style={{ textAlign: 'center' }}>
-              <img src={qrUrl} alt="QR localizador" style={{ width: 78, height: 78, background: 'white', padding: 4, border: '1px solid #e5eaf0', display: 'block' }} />
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: '#888', marginTop: 4, textAlign: 'center' }}>Detalhes online</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
+                <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
+                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>
+                  {isMultiCarrier ? `Check-in Ida` : 'Gerenciar reserva'}
+                </div>
+              </a>
+              {isMultiCarrier && qrUrlSecondary && secondaryBookingUrl && (
+                <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
+                  <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>Check-in Volta</div>
+                </a>
+              )}
             </div>
           )}
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
+          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
         </div>
       </footer>
     </div>

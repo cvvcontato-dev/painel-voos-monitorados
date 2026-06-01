@@ -2,13 +2,10 @@ const { chromium } = require('playwright');
 const path = require('path');
 const { exportsDir } = require('../helpers/voucherWorkspace');
 
+// Apenas força fundo branco no export (o disclaimer agora é um elemento normal
+// no rodapé de cada template, então não precisa mais ser injetado aqui).
 const WATERMARK_CSS = `
   html, body { background: #ffffff !important; margin: 0 !important; }
-  body::after {
-    content: "Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.";
-    position: fixed; bottom: 8px; left: 0; right: 0;
-    text-align: center; font-size: 9px; color: #666; font-family: Arial, sans-serif;
-  }
 `;
 
 async function renderVoucher({ voucherId, format, cookieHeader, baseUrl }) {

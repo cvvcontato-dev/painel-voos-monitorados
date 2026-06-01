@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../../api/voucherClient';
 import {
-  THEMES, detectCarrierKey, fmtTime,
+  THEMES, detectCarrierKey, fmtTime, baggagePolicy, normalizeFlightNumber,
   CarrierLogo, IconPlane, IconBag, IconUser, IconPhone, IconMail, IconGlobe
 } from './_shared';
 import { airportName } from './_airports';
@@ -48,31 +48,23 @@ const IconSuitcase = ({ color = '#1a2a48', size = 16 }) => (
   </svg>
 );
 
-// Splits the baggage array into two slots: handbag (~10kg) and checked (~23kg) per direction.
-// Returns { mao: {qty, weight}, despachada: {qty, weight} } — qty defaults to 0 if not present.
-// Peso de mão padrão por cia: Azul/multi = 10kg, Latam/Gol = 12kg. Despachada = 23kg sempre.
-function handWeight(carrierKey) {
-  return (carrierKey === 'latam' || carrierKey === 'gol') ? '12kg' : '10kg';
-}
-
+// Splits the baggage array into 3 slots: personal, handbag, checked per direction.
+// Returns { personal, mao, despachada } each with { qty, weightText, dimensionsText }.
 function splitBaggage(allBags, direction, carrierKey) {
   const dirBags = allBags.filter(b => (b.direction || '').toLowerCase() === direction);
-  const hand = handWeight(carrierKey);
-  const isHand = b => {
-    const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
-    return /mochila|bolsa|m[aã]o|hand/.test(text) || /\b1[02]\s*kg\b/.test(text);
-  };
-  const isChecked = b => {
-    const text = `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
-    return /despach|mala|checked/.test(text) || /\b23\s*kg\b/.test(text);
-  };
-  const mao = dirBags.find(isHand);
-  const desp = dirBags.find(isChecked);
-  // Fallbacks: if exactly one bag and we couldn't categorize, treat as hand bag.
-  const fallbackHand = !mao && !desp && dirBags.length === 1 ? dirBags[0] : null;
+  const lower = b => `${b.label || ''} ${b.weightText || ''}`.toLowerCase();
+  const isPersonal = b => /mochila|bolsa|sacola|pessoal|personal/.test(lower(b));
+  const isHand = b => /m[aã]o|carry/.test(lower(b)) || /\b1[02]\s*kg\b/.test(lower(b));
+  const isChecked = b => /despach|por[aã]o|\bmala\b|checked/.test(lower(b)) || /\b23\s*kg\b/.test(lower(b));
+
+  const personalExtracted = dirBags.find(isPersonal);
+  const handExtracted = dirBags.find(isHand);
+  const checkedExtracted = dirBags.find(isChecked);
+
   return {
-    mao: mao ? { qty: mao.quantity ?? 1, weight: mao.weightText || hand } : (fallbackHand ? { qty: fallbackHand.quantity ?? 1, weight: fallbackHand.weightText || hand } : { qty: 0, weight: hand }),
-    despachada: desp ? { qty: desp.quantity ?? 1, weight: desp.weightText || '23kg' } : { qty: 0, weight: '23kg' }
+    personal:    { qty: personalExtracted ? (personalExtracted.quantity ?? 1) : 1, ...baggagePolicy(carrierKey, 'personal') },
+    mao:         { qty: handExtracted ? (handExtracted.quantity ?? 1) : 1,         ...baggagePolicy(carrierKey, 'handbag') },
+    despachada:  { qty: checkedExtracted ? (checkedExtracted.quantity ?? 1) : 0,   ...baggagePolicy(carrierKey, 'checked') }
   };
 }
 
@@ -107,12 +99,38 @@ export default function VoucherCompactoV1({ data }) {
       {/* HEADER — logo bare on left, localizador center, "Visualizar reserva" button right */}
       <header style={{ padding: '36px 40px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ flex: '0 0 auto' }}>
-          {/* Bare large carrier logo — no white card around */}
-          <CarrierLogo carrierKey={carrierKey} theme={carrierTheme} bare />
+          {/* Bare large carrier logo — no white card around.
+              Em multi-cia (merge), mostra as 2 logos lado a lado. */}
+          {(() => {
+            const isMulti = (data.carrier || '').toLowerCase() === 'multi'
+              && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
+              && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
+            const primaryCk = isMulti ? data.reservation.primaryCarrier.toLowerCase() : carrierKey;
+            const secondaryCk = isMulti ? data.reservation.secondaryCarrier.toLowerCase() : null;
+            return (
+              <CarrierLogo
+                carrierKey={primaryCk}
+                secondaryCarrierKey={secondaryCk}
+                theme={carrierTheme}
+                bare
+              />
+            );
+          })()}
         </div>
         <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
           <div style={{ fontSize: 11, color: THEME.textFaint, letterSpacing: 1, textTransform: 'capitalize' }}>Localizador</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
+          {(() => {
+            const secondaryLocator = data.reservation?.secondaryLocator || '';
+            const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
+            return hasDualLocator ? (
+              <div style={{ fontSize: 14, fontWeight: 800, color: THEME.accent, letterSpacing: 1.5, marginTop: 2, lineHeight: 1.3 }}>
+                <div>Ida: {data.reservation?.locator}</div>
+                <div>Volta: {secondaryLocator}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
+            );
+          })()}
         </div>
         <div style={{ flex: '0 0 auto' }}>
           {/* Decorative — looks like a button but is non-functional in print */}
@@ -125,6 +143,8 @@ export default function VoucherCompactoV1({ data }) {
         {directions.map(dir => {
           const tripsInDir = trips.filter(t => (t.direction || '') === dir);
           const firstTrip = tripsInDir[0];
+          const tripLocator = firstTrip?.locator;
+          const showTripLocator = !!tripLocator && tripLocator !== data.reservation?.locator;
           return (
             <div key={dir} style={{ background: THEME.cardBg, borderRadius: 12, padding: '14px 18px', marginBottom: 12 }}>
               {/* Block top bar: direction + date + trechos pill */}
@@ -132,6 +152,9 @@ export default function VoucherCompactoV1({ data }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <IconPlane color={THEME.accent} size={18} />
                   <span style={{ fontSize: 14, fontWeight: 800, color: THEME.text, letterSpacing: 0.5 }}>{directionLabel(dir)}</span>
+                  {showTripLocator && (
+                    <span style={{ fontSize: 10, color: THEME.textMuted, marginLeft: 6 }}>· Localizador {tripLocator}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: THEME.text, fontWeight: 500 }}>{fullDateLabel(firstTrip)}</div>
                 <div style={{ background: THEME.pillBg, color: THEME.accent, padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
@@ -174,7 +197,7 @@ export default function VoucherCompactoV1({ data }) {
                         <IconPlane color={THEME.text} size={16} />
                         <span>{t.arrival?.airport}</span>
                       </div>
-                      <div style={{ fontSize: 11, color: THEME.textMuted, marginTop: 4 }}>Voo {t.flightNumber}</div>
+                      <div style={{ fontSize: 11, color: THEME.textMuted, marginTop: 4 }}>Voo {normalizeFlightNumber(t.flightNumber)}</div>
                       {t.cabinClass && (
                         <div style={{ display: 'inline-block', marginTop: 6, background: THEME.pillBg, color: THEME.accent, padding: '2px 12px', borderRadius: 999, fontSize: 10, fontWeight: 700 }}>{t.cabinClass}</div>
                       )}
@@ -236,22 +259,35 @@ export default function VoucherCompactoV1({ data }) {
                       </div>
                       <div style={{ fontSize: 12, color: THEME.text }}>—</div>
                     </div>
-                    {/* Right: Bagagens — 2 fixed slots (mão + despachada) */}
+                    {/* Right: Bagagens — 3 fixed slots (pessoal + mão + despachada) */}
                     <div>
                       <div style={{ fontSize: 11, color: THEME.textMuted, marginBottom: 8 }}>Bagagens</div>
-                      <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                          <IconBag color={THEME.text} size={20} />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.personal.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Pessoal</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.personal.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.personal.dimensionsText}</div>
+                          </div>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                           <IconBag color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
-                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.mao.weight}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.mao.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Mão</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.mao.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.mao.dimensionsText}</div>
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                           <IconSuitcase color={THEME.text} size={22} />
                           <div>
-                            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
-                            <div style={{ fontSize: 10, color: THEME.textFaint, marginTop: 3 }}>{bags.despachada.weight}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{bags.despachada.qty}</div>
+                            <div style={{ fontSize: 9, color: THEME.textFaint, marginTop: 2 }}>Despachada</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.despachada.weightText}</div>
+                            <div style={{ fontSize: 8, color: THEME.textFaint }}>{bags.despachada.dimensionsText}</div>
                           </div>
                         </div>
                       </div>
@@ -283,6 +319,9 @@ export default function VoucherCompactoV1({ data }) {
             {settings.contact_site && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}><IconGlobe color="#888" size={12} /> {settings.contact_site}</div>}
             {settings.contact_extra && <div style={{ color: '#777' }}>{settings.contact_extra}</div>}
           </div>
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
+          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
         </div>
       </footer>
     </div>

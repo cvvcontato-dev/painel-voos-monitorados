@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 
@@ -24,7 +24,18 @@ export default function VouchersTab({ showToast }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  // Modo de upload: 'single' (1 voucher) ou 'merge' (ida + volta separados)
+  const [uploadMode, setUploadMode] = useState('single');
+  const [outboundFile, setOutboundFile] = useState(null);
+  const [returnFile, setReturnFile] = useState(null);
+  const [merging, setMerging] = useState(false);
   const fileInputRef = useRef(null);
+  const outboundInputRef = useRef(null);
+  const returnInputRef = useRef(null);
   const iframeRef = useRef(null);
 
   const { register, control, handleSubmit, reset } = useForm({
@@ -109,10 +120,32 @@ export default function VouchersTab({ showToast }) {
       if (r?.id) await select(r.id);
       showToast?.('Voucher importado com sucesso', 'success');
     } catch (err) {
-      showToast?.(err?.response?.data?.detail || 'Falha no upload do voucher', 'error');
+      // Prefere a mensagem do servidor (ex.: "Gemini com alta demanda…"); cai pra mensagem genérica.
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      showToast?.(serverMsg || 'Falha no upload do voucher', 'error');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function onMergeUpload() {
+    if (!outboundFile || !returnFile) return;
+    setMerging(true);
+    try {
+      const r = await api.uploadMerge(outboundFile, returnFile);
+      await refresh();
+      if (r?.id) await select(r.id);
+      showToast?.('Vouchers combinados com sucesso', 'success');
+      setOutboundFile(null);
+      setReturnFile(null);
+      if (outboundInputRef.current) outboundInputRef.current.value = '';
+      if (returnInputRef.current) returnInputRef.current.value = '';
+    } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      showToast?.(serverMsg || 'Falha ao combinar vouchers', 'error');
+    } finally {
+      setMerging(false);
     }
   }
 
@@ -144,6 +177,22 @@ export default function VouchersTab({ showToast }) {
       showToast?.('Modelo alterado', 'success');
     } catch (err) {
       showToast?.(err?.response?.data?.detail || 'Falha ao alterar modelo', 'error');
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!emailRecipients.trim() || sendingEmail || !selectedId) return;
+    setSendingEmail(true);
+    try {
+      const result = await api.sendEmail(selectedId, emailRecipients, emailMessage);
+      showToast?.(`E-mail enviado para ${result.sent} destinatário(s)`, 'success');
+      setEmailModalOpen(false);
+      setEmailRecipients('');
+      setEmailMessage('');
+    } catch (e) {
+      showToast?.(`Erro ao enviar: ${e?.response?.data?.error || e.message}`, 'error');
+    } finally {
+      setSendingEmail(false);
     }
   }
 
@@ -239,30 +288,112 @@ export default function VouchersTab({ showToast }) {
 
         {/* Upload */}
         <div className={sectionCls}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <UploadCloud className="w-4 h-4" /> Importar voucher
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                PDF, PNG, JPEG ou WebP — extração automática dos dados.
-              </p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <UploadCloud className="w-4 h-4" /> Importar voucher
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  PDF, PNG, JPEG ou WebP — extração automática dos dados.
+                </p>
+              </div>
+              {/* Modo */}
+              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="uploadMode"
+                    value="single"
+                    checked={uploadMode === 'single'}
+                    onChange={() => setUploadMode('single')}
+                    disabled={uploading || merging}
+                  />
+                  Voucher único
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="uploadMode"
+                    value="merge"
+                    checked={uploadMode === 'merge'}
+                    onChange={() => setUploadMode('merge')}
+                    disabled={uploading || merging}
+                  />
+                  Ida + volta separados
+                </label>
+              </div>
             </div>
-            <label
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
-                          ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
-            >
-              <UploadCloud className="w-4 h-4" />
-              {uploading ? 'Enviando…' : 'Selecionar arquivo'}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/png,image/jpeg,image/webp"
-                onChange={onUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
+
+            {uploadMode === 'single' ? (
+              <div className="flex justify-end">
+                <label
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
+                              ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  {uploading ? 'Enviando…' : 'Selecionar arquivo'}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={onUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Voucher de IDA</label>
+                    <input
+                      ref={outboundInputRef}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp"
+                      onChange={(e) => setOutboundFile(e.target.files?.[0] || null)}
+                      disabled={merging}
+                      className="text-xs text-slate-700 dark:text-slate-300"
+                    />
+                    {outboundFile && (
+                      <p className="text-[11px] text-slate-500 mt-1 truncate">{outboundFile.name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Voucher de VOLTA</label>
+                    <input
+                      ref={returnInputRef}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp"
+                      onChange={(e) => setReturnFile(e.target.files?.[0] || null)}
+                      disabled={merging}
+                      className="text-xs text-slate-700 dark:text-slate-300"
+                    />
+                    {returnFile && (
+                      <p className="text-[11px] text-slate-500 mt-1 truncate">{returnFile.name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Os dois vouchers serão lidos e combinados em um único itinerário. Pode levar 10–20s.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onMergeUpload}
+                    disabled={!outboundFile || !returnFile || merging}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
+                                ${(!outboundFile || !returnFile || merging)
+                                  ? 'bg-indigo-300 cursor-not-allowed'
+                                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {merging ? 'Processando…' : 'Combinar e gerar voucher'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -460,8 +591,15 @@ export default function VouchersTab({ showToast }) {
               </a>
               <button
                 type="button"
+                onClick={() => setEmailModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all ml-auto"
+              >
+                <Mail className="w-4 h-4" /> Enviar por e-mail
+              </button>
+              <button
+                type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all ml-auto"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all"
               >
                 <Trash2 className="w-4 h-4" /> Excluir
               </button>
@@ -490,6 +628,53 @@ export default function VouchersTab({ showToast }) {
           )}
         </div>
       </div>
+
+      {emailModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !sendingEmail && setEmailModalOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Enviar voucher por e-mail</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-slate-700 dark:text-slate-300 mb-1">Destinatários</label>
+                <input
+                  type="text"
+                  value={emailRecipients}
+                  onChange={e => setEmailRecipients(e.target.value)}
+                  placeholder="cliente@exemplo.com, outro@exemplo.com"
+                  disabled={sendingEmail}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">Múltiplos e-mails separados por vírgula.</p>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-700 dark:text-slate-300 mb-1">Mensagem personalizada (opcional)</label>
+                <textarea
+                  value={emailMessage}
+                  onChange={e => setEmailMessage(e.target.value)}
+                  placeholder="Olá! Segue o voucher conforme combinado…"
+                  rows={5}
+                  disabled={sendingEmail}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEmailModalOpen(false)}
+                  disabled={sendingEmail}
+                  className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                >Cancelar</button>
+                <button
+                  type="button"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail || !emailRecipients.trim()}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >{sendingEmail ? 'Enviando…' : 'Enviar'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -270,7 +270,7 @@ function runMigrations() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         voucher_id INTEGER,
         user_id INTEGER NOT NULL,
-        action TEXT NOT NULL CHECK(action IN ('create','update','export','delete','retention_cleanup')),
+        action TEXT NOT NULL CHECK(action IN ('create','update','export','delete','retention_cleanup','email_sent','email_failed')),
         source_file_hash TEXT,
         details TEXT,
         ts TEXT NOT NULL DEFAULT (datetime('now'))
@@ -281,6 +281,31 @@ function runMigrations() {
             db.run(`CREATE INDEX IF NOT EXISTS idx_voucher_audit_voucher
                     ON voucher_audit_log(voucher_id, ts DESC)`, (err) => {
                 if (err) console.error('Error creating idx_voucher_audit_voucher:', err.message);
+            });
+
+            // One-time migration: extend action CHECK to include email_sent/email_failed
+            db.all("SELECT sql FROM sqlite_master WHERE type='table' AND name='voucher_audit_log'", (mErr, rows) => {
+                if (mErr || !rows.length) return;
+                const sql = rows[0].sql || '';
+                if (!sql.includes('email_sent')) {
+                    console.log('[DB] Migrando voucher_audit_log para incluir actions email_sent/email_failed');
+                    db.serialize(() => {
+                        db.run(`CREATE TABLE voucher_audit_log_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            voucher_id INTEGER,
+                            user_id INTEGER NOT NULL,
+                            action TEXT NOT NULL CHECK(action IN ('create','update','export','delete','retention_cleanup','email_sent','email_failed')),
+                            source_file_hash TEXT,
+                            details TEXT,
+                            ts TEXT NOT NULL DEFAULT (datetime('now'))
+                        )`);
+                        db.run(`INSERT INTO voucher_audit_log_new (id, voucher_id, user_id, action, source_file_hash, details, ts) SELECT id, voucher_id, user_id, action, source_file_hash, details, ts FROM voucher_audit_log`);
+                        db.run(`DROP TABLE voucher_audit_log`);
+                        db.run(`ALTER TABLE voucher_audit_log_new RENAME TO voucher_audit_log`);
+                        db.run(`CREATE INDEX IF NOT EXISTS idx_voucher_audit_voucher ON voucher_audit_log(voucher_id, ts DESC)`);
+                        console.log('[DB] Migração concluída');
+                    });
+                }
             });
         }
     });

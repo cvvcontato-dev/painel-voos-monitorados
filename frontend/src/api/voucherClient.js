@@ -13,6 +13,13 @@ export const upload = (file) => {
   return api.post('/api/vouchers/', fd).then(r => r.data);
 };
 
+export const uploadMerge = (outboundFile, returnFile) => {
+  const fd = new FormData();
+  fd.append('outbound', outboundFile);
+  fd.append('return', returnFile);
+  return api.post('/api/vouchers/merge', fd).then(r => r.data);
+};
+
 export const update = (id, unified) =>
   api.put(`/api/vouchers/${id}`, { unified }).then(r => r.data);
 
@@ -23,3 +30,6 @@ export const exportUrl = (id, format) => `/api/vouchers/${id}/export?format=${fo
 export const getSettings = () => api.get('/api/vouchers/settings').then(r => r.data);
 
 export const updateSettings = (s) => api.put('/api/vouchers/settings', s).then(r => r.data);
+
+export const sendEmail = (id, emails, message) =>
+  api.post(`/api/vouchers/${id}/send-email`, { emails, message }).then(r => r.data);
