@@ -54,13 +54,28 @@ function baggageSubtitle(direction) {
 
 export default function VoucherCanonicalV1({ data }) {
   const [qrUrl, setQrUrl] = useState('');
+  const [qrUrlSecondary, setQrUrlSecondary] = useState('');
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
 
   useEffect(() => {
     if (!data) return;
-    const ck = detectCarrierKey(data);
-    const url = manageBookingUrl(ck, data?.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
+    const isMulti = (data.carrier || '').toLowerCase() === 'multi'
+      && !!data.reservation?.primaryCarrier
+      && !!data.reservation?.secondaryCarrier;
+    const primaryCk = isMulti
+      ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
+      : detectCarrierKey(data);
+    const url = manageBookingUrl(primaryCk, data?.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
     QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
+
+    if (isMulti && data.reservation?.secondaryCarrier) {
+      const secCk = data.reservation.secondaryCarrier.toLowerCase();
+      const secLoc = data.reservation?.secondaryLocator || data.reservation?.locator;
+      const url2 = manageBookingUrl(secCk, secLoc, firstPassengerLastName(data), data?.route?.destination);
+      QRCode.toDataURL(url2, { width: 200, margin: 2 }).then(setQrUrlSecondary).catch(() => {});
+    } else {
+      setQrUrlSecondary('');
+    }
   }, [data]);
 
   useEffect(() => {
@@ -77,7 +92,19 @@ export default function VoucherCanonicalV1({ data }) {
   // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
   // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
   const airlineName = theme.name;
-  const bookingUrl = manageBookingUrl(carrierKey, data.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
+  const secondaryLocator = data.reservation?.secondaryLocator || '';
+  const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
+  const isMultiCarrier = (data.carrier || '').toLowerCase() === 'multi'
+    && !!data.reservation?.primaryCarrier
+    && !!data.reservation?.secondaryCarrier;
+  const primaryCarrierKey = isMultiCarrier
+    ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
+    : carrierKey;
+  const secondaryCarrierKey = (data.reservation?.secondaryCarrier || '').toLowerCase();
+  const bookingUrl = manageBookingUrl(primaryCarrierKey, data.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
+  const secondaryBookingUrl = isMultiCarrier && secondaryCarrierKey
+    ? manageBookingUrl(secondaryCarrierKey, secondaryLocator || data.reservation?.locator, firstPassengerLastName(data), data?.route?.destination)
+    : null;
 
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -94,7 +121,14 @@ export default function VoucherCanonicalV1({ data }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)' }}>Localizador</div>
-            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: 'white', lineHeight: 1.1, marginTop: 2 }}>{data.reservation?.locator}</div>
+            {hasDualLocator ? (
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 2, color: 'white', lineHeight: 1.25, marginTop: 2 }}>
+                <div>Ida: {data.reservation?.locator}</div>
+                <div>Volta: {secondaryLocator}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: 'white', lineHeight: 1.1, marginTop: 2 }}>{data.reservation?.locator}</div>
+            )}
           </div>
         </div>
 
@@ -144,7 +178,12 @@ export default function VoucherCanonicalV1({ data }) {
         <div style={{ marginTop: 12 }}>
           {trips.map((t, i) => (
             <div key={i} style={{ padding: '10px 0', borderBottom: i < trips.length - 1 ? '1px solid #e5eaf0' : 'none' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 8 }}>{tripSubtitle(t.direction)}</div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 8 }}>
+                {tripSubtitle(t.direction)}
+                {t.locator && t.locator !== data.reservation?.locator && (
+                  <span style={{ marginLeft: 8, color: theme.accent, letterSpacing: 1 }}>· LOC {t.locator}</span>
+                )}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* Date column */}
                 <div style={{ minWidth: 120 }}>
@@ -237,10 +276,20 @@ export default function VoucherCanonicalV1({ data }) {
             </div>
           </div>
           {qrUrl && (
-            <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
-              <img src={qrUrl} alt="Gerenciar reserva" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>Gerenciar reserva</div>
-            </a>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
+                <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
+                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>
+                  {isMultiCarrier ? `Check-in Ida` : 'Gerenciar reserva'}
+                </div>
+              </a>
+              {isMultiCarrier && qrUrlSecondary && secondaryBookingUrl && (
+                <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
+                  <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>Check-in Volta</div>
+                </a>
+              )}
+            </div>
           )}
         </div>
         <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>

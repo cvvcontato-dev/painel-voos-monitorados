@@ -12,6 +12,7 @@ const { uploadsDir } = require('../helpers/voucherWorkspace');
 const { sendVoucherEmail } = require('../services/notifier');
 const { manageBookingUrl } = require('../helpers/voucherCarrier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
+const { mergeVouchers } = require('../services/voucherMerger');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -67,6 +68,76 @@ router.post('/', upload.single('file'), async (req, res) => {
       });
     }
     res.status(500).json({ error: 'erro ao processar voucher' });
+  }
+});
+
+// Para merge: 2 arquivos (campos 'outbound' e 'return')
+const uploadDual = upload.fields([
+  { name: 'outbound', maxCount: 1 },
+  { name: 'return',   maxCount: 1 }
+]);
+
+router.post('/merge', uploadDual, async (req, res) => {
+  const outFile = req.files?.outbound?.[0];
+  const retFile = req.files?.return?.[0];
+  if (!outFile || !retFile) {
+    return res.status(400).json({ error: 'arquivos obrigatórios: outbound + return' });
+  }
+  try {
+    const [outUnified, retUnified] = await Promise.all([
+      extractVoucher(outFile.buffer, outFile.mimetype),
+      extractVoucher(retFile.buffer, retFile.mimetype)
+    ]);
+
+    // Cada extração já é normalizada + validada parcialmente. Mescla:
+    const unified = mergeVouchers(outUnified, retUnified);
+
+    // Validação final
+    const v = validate(unified);
+    if (!v.ok) {
+      console.error('[VOUCHERS] merge falhou na validação', v.errors);
+      return res.status(422).json({ error: 'schema inválido após merge', details: v.errors });
+    }
+
+    // Hash composto (concatena os 2 SHAs)
+    const outHash = 'sha256:' + crypto.createHash('sha256').update(outFile.buffer).digest('hex');
+    const retHash = 'sha256:' + crypto.createHash('sha256').update(retFile.buffer).digest('hex');
+    const composedHash = `merge:${outHash.slice(7, 19)}+${retHash.slice(7, 19)}`;
+    unified.meta.sourceFileHash = composedHash;
+
+    // Salva os DOIS arquivos originais (auditoria/LGPD)
+    const ts = Date.now();
+    const outPath = path.join(uploadsDir(), `${ts}-outbound-${outHash.slice(7, 15)}${path.extname(outFile.originalname) || ''}`);
+    const retPath = path.join(uploadsDir(), `${ts}-return-${retHash.slice(7, 15)}${path.extname(retFile.originalname) || ''}`);
+    fs.writeFileSync(outPath, outFile.buffer);
+    fs.writeFileSync(retPath, retFile.buffer);
+    // No source_file_path da row guardamos os 2 caminhos separados por '|'
+    const filePath = `${outPath}|${retPath}`;
+
+    db.run(
+      `INSERT INTO vouchers (user_id, carrier, layout_version, source_file_path, source_file_hash, unified_json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.session.userId, unified.carrier, unified.layoutVersion, filePath, composedHash, JSON.stringify(unified)],
+      function (err) {
+        if (err) {
+          try { fs.unlink(outPath, () => {}); fs.unlink(retPath, () => {}); } catch (_) {}
+          console.error('[VOUCHERS] erro ao salvar voucher merged', err.message);
+          return res.status(500).json({ error: 'falha ao salvar voucher' });
+        }
+        audit(this.lastID, req.session.userId, 'create', {
+          merged: true,
+          outboundFile: outFile.originalname,
+          returnFile: retFile.originalname
+        }, composedHash);
+        res.status(201).json({ id: this.lastID, unified });
+      }
+    );
+  } catch (err) {
+    console.error('[VOUCHERS] erro ao processar merge', err.message);
+    if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
+      return res.status(503).json({ error: 'Serviço de extração (Gemini) com alta demanda. Tente em instantes.', retryable: true });
+    }
+    res.status(500).json({ error: 'erro ao processar merge', details: err.message });
   }
 });
 
@@ -167,8 +238,11 @@ router.delete('/:id', (req, res) => {
       db.run(`DELETE FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], function (delErr) {
         if (delErr) { console.error('[VOUCHERS] erro ao deletar voucher', delErr.message); return res.status(500).json({ error: 'falha ao remover voucher' }); }
         if (this.changes === 0) return res.status(404).json({ error: 'não encontrado' });
-        try { if (row.source_file_path && fs.existsSync(row.source_file_path)) fs.unlinkSync(row.source_file_path); }
-        catch (e) { console.error('[VOUCHERS] arquivo órfão após delete', row.source_file_path, e.message); }
+        try {
+          // source_file_path pode ser "path1|path2" no caso de voucher merged.
+          const paths = String(row.source_file_path || '').split('|').filter(Boolean);
+          paths.forEach(p => { if (fs.existsSync(p)) fs.unlinkSync(p); });
+        } catch (e) { console.error('[VOUCHERS] arquivo órfão após delete', row.source_file_path, e.message); }
         audit(req.params.id, req.session.userId, 'delete', null, null);
         res.status(204).end();
       });
@@ -211,13 +285,27 @@ router.post('/:id/send-email', async (req, res) => {
         // (em vez de "MAYARA" que era o bug anterior).
         const firstPassengerLastName = require('../helpers/voucherCarrier')
           .lastNameOf((unified.passengers || [])[0]?.name);
-        const carrierKey = (unified.carrier || 'azul').toLowerCase();
+        const rawCarrier = (unified.carrier || 'azul').toLowerCase();
+        const isMulti = rawCarrier === 'multi';
+        const primaryCarrier = isMulti
+          ? (unified.reservation?.primaryCarrier || 'azul').toLowerCase()
+          : rawCarrier;
         const bookingUrl = manageBookingUrl(
-          carrierKey,
+          primaryCarrier,
           unified.reservation?.locator,
           firstPassengerLastName,
           unified.route?.origin
         );
+        // Quando multi-cia, calcula também a URL de check-in da volta.
+        let secondaryBookingUrl = null;
+        if (isMulti && unified.reservation?.secondaryCarrier) {
+          secondaryBookingUrl = manageBookingUrl(
+            unified.reservation.secondaryCarrier.toLowerCase(),
+            unified.reservation.secondaryLocator || unified.reservation.locator,
+            firstPassengerLastName,
+            unified.route?.destination
+          );
+        }
         const itinerarioUrl = `${baseUrl}/itinerario/${signVoucherToken(req.params.id)}`;
         const result = await sendVoucherEmail({
           to: emails,
@@ -227,6 +315,7 @@ router.post('/:id/send-email', async (req, res) => {
           attachmentPath: pdfPath,
           customMessage,
           bookingUrl,
+          secondaryBookingUrl,
           itinerarioUrl
         });
         if (result.sucesso) {

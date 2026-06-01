@@ -21,14 +21,28 @@ router.get('/:token', (req, res) => {
       const settings = settingsRow || {};
       // Usa helper compartilhado que entende "SILVA, MAYARA" → "SILVA".
       const lastName = lastNameOf((unified.passengers || [])[0]?.name);
+      const rawCarrier = (unified.carrier || 'azul').toLowerCase();
+      const isMulti = rawCarrier === 'multi';
+      const primaryCarrier = isMulti
+        ? (unified.reservation?.primaryCarrier || 'azul').toLowerCase()
+        : rawCarrier;
       const bookingUrl = manageBookingUrl(
-        (unified.carrier || 'azul').toLowerCase(),
+        primaryCarrier,
         unified.reservation?.locator,
         lastName,
         unified.route?.origin
       );
+      let secondaryBookingUrl = null;
+      if (isMulti && unified.reservation?.secondaryCarrier) {
+        secondaryBookingUrl = manageBookingUrl(
+          unified.reservation.secondaryCarrier.toLowerCase(),
+          unified.reservation.secondaryLocator || unified.reservation.locator,
+          lastName,
+          unified.route?.destination
+        );
+      }
       try {
-        const html = await renderItinerarioPage({ voucherData: unified, settings, bookingUrl });
+        const html = await renderItinerarioPage({ voucherData: unified, settings, bookingUrl, secondaryBookingUrl });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Robots-Tag', 'noindex,nofollow');

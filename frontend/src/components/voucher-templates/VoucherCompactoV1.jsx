@@ -104,7 +104,18 @@ export default function VoucherCompactoV1({ data }) {
         </div>
         <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
           <div style={{ fontSize: 11, color: THEME.textFaint, letterSpacing: 1, textTransform: 'capitalize' }}>Localizador</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
+          {(() => {
+            const secondaryLocator = data.reservation?.secondaryLocator || '';
+            const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
+            return hasDualLocator ? (
+              <div style={{ fontSize: 14, fontWeight: 800, color: THEME.accent, letterSpacing: 1.5, marginTop: 2, lineHeight: 1.3 }}>
+                <div>Ida: {data.reservation?.locator}</div>
+                <div>Volta: {secondaryLocator}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
+            );
+          })()}
         </div>
         <div style={{ flex: '0 0 auto' }}>
           {/* Decorative — looks like a button but is non-functional in print */}
@@ -117,6 +128,8 @@ export default function VoucherCompactoV1({ data }) {
         {directions.map(dir => {
           const tripsInDir = trips.filter(t => (t.direction || '') === dir);
           const firstTrip = tripsInDir[0];
+          const tripLocator = firstTrip?.locator;
+          const showTripLocator = !!tripLocator && tripLocator !== data.reservation?.locator;
           return (
             <div key={dir} style={{ background: THEME.cardBg, borderRadius: 12, padding: '14px 18px', marginBottom: 12 }}>
               {/* Block top bar: direction + date + trechos pill */}
@@ -124,6 +137,9 @@ export default function VoucherCompactoV1({ data }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <IconPlane color={THEME.accent} size={18} />
                   <span style={{ fontSize: 14, fontWeight: 800, color: THEME.text, letterSpacing: 0.5 }}>{directionLabel(dir)}</span>
+                  {showTripLocator && (
+                    <span style={{ fontSize: 10, color: THEME.textMuted, marginLeft: 6 }}>· Localizador {tripLocator}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: THEME.text, fontWeight: 500 }}>{fullDateLabel(firstTrip)}</div>
                 <div style={{ background: THEME.pillBg, color: THEME.accent, padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>

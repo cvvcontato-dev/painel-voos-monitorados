@@ -54,7 +54,7 @@ const SOCIAL_ICONS = {
 
 const CALENDAR_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#8a93a4" style="vertical-align:-2px;margin-right:6px;"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>';
 
-async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
+async function renderItinerarioPage({ voucherData, settings, bookingUrl, secondaryBookingUrl }) {
   const vd = voucherData || {};
   const s = settings || {};
   const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -62,7 +62,14 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
 
   const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
   const locator = (vd.reservation?.locator || 'N/A').toString();
-  const fallbackCarrier = (vd.carrier || 'azul').toLowerCase();
+  const secondaryLocator = vd.reservation?.secondaryLocator || '';
+  const hasDualLocator = !!secondaryLocator && secondaryLocator !== locator;
+  const isMultiCarrier = (vd.carrier || '').toLowerCase() === 'multi'
+    && !!vd.reservation?.primaryCarrier
+    && !!vd.reservation?.secondaryCarrier;
+  const primaryCarrierKey = (vd.reservation?.primaryCarrier || vd.carrier || 'azul').toLowerCase();
+  const secondaryCarrierKey = (vd.reservation?.secondaryCarrier || '').toLowerCase();
+  const fallbackCarrier = isMultiCarrier ? primaryCarrierKey : (vd.carrier || 'azul').toLowerCase();
   const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
   const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
   const originCity = airportCity(origin);
@@ -270,7 +277,9 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
             <td valign="middle" align="right" class="header-right" style="vertical-align:middle;text-align:right;">
               <div style="display:inline-block;background:#f4f5f7;border:1px solid #e9ecf2;border-radius:10px;padding:8px 14px;text-align:left;">
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#8a93a4;font-weight:600;">LOCALIZADOR</div>
-                <div style="font-size:18px;font-weight:700;color:#00569e;letter-spacing:1.5px;margin-top:2px;">${escapeHtml(locator)}</div>
+                ${hasDualLocator
+                  ? `<div style="font-size:13px;font-weight:700;color:#00569e;letter-spacing:1px;margin-top:2px;line-height:1.3;">Ida: ${escapeHtml(locator)}<br>Volta: ${escapeHtml(secondaryLocator)}</div>`
+                  : `<div style="font-size:18px;font-weight:700;color:#00569e;letter-spacing:1.5px;margin-top:2px;">${escapeHtml(locator)}</div>`}
               </div>
             </td>
           </tr>
@@ -315,7 +324,10 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl }) {
       <section class="cta-card" style="background:#00569e;border-radius:14px;padding:28px;margin:8px 28px 28px;text-align:center;">
         <div style="font-size:17px;font-weight:700;color:#ffffff;">Pronto para embarcar?</div>
         <div style="font-size:12.5px;color:#ffffff;opacity:0.85;margin:8px 0 20px;">Check-in disponível 48h antes da partida</div>
-        <a href="${escapeHtml(safeBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:13px 32px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);">FAZER CHECK-IN &rarr;</a>
+        ${(isMultiCarrier && secondaryBookingUrl)
+          ? `<a href="${escapeHtml(safeBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:12px 22px;border-radius:999px;font-weight:700;font-size:12.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);margin:4px 6px;">CHECK-IN IDA (${escapeHtml(carrierShortName(primaryCarrierKey).toUpperCase())}) &rarr;</a>
+             <a href="${escapeHtml(secondaryBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:12px 22px;border-radius:999px;font-weight:700;font-size:12.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);margin:4px 6px;">CHECK-IN VOLTA (${escapeHtml(carrierShortName(secondaryCarrierKey).toUpperCase())}) &rarr;</a>`
+          : `<a href="${escapeHtml(safeBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:13px 32px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);">FAZER CHECK-IN &rarr;</a>`}
       </section>
 
       <!-- Section 6: Próximos passos -->

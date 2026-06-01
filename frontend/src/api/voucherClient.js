@@ -13,6 +13,13 @@ export const upload = (file) => {
   return api.post('/api/vouchers/', fd).then(r => r.data);
 };
 
+export const uploadMerge = (outboundFile, returnFile) => {
+  const fd = new FormData();
+  fd.append('outbound', outboundFile);
+  fd.append('return', returnFile);
+  return api.post('/api/vouchers/merge', fd).then(r => r.data);
+};
+
 export const update = (id, unified) =>
   api.put(`/api/vouchers/${id}`, { unified }).then(r => r.data);
 

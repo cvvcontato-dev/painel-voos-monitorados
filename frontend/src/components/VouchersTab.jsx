@@ -28,7 +28,14 @@ export default function VouchersTab({ showToast }) {
   const [emailRecipients, setEmailRecipients] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  // Modo de upload: 'single' (1 voucher) ou 'merge' (ida + volta separados)
+  const [uploadMode, setUploadMode] = useState('single');
+  const [outboundFile, setOutboundFile] = useState(null);
+  const [returnFile, setReturnFile] = useState(null);
+  const [merging, setMerging] = useState(false);
   const fileInputRef = useRef(null);
+  const outboundInputRef = useRef(null);
+  const returnInputRef = useRef(null);
   const iframeRef = useRef(null);
 
   const { register, control, handleSubmit, reset } = useForm({
@@ -119,6 +126,26 @@ export default function VouchersTab({ showToast }) {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function onMergeUpload() {
+    if (!outboundFile || !returnFile) return;
+    setMerging(true);
+    try {
+      const r = await api.uploadMerge(outboundFile, returnFile);
+      await refresh();
+      if (r?.id) await select(r.id);
+      showToast?.('Vouchers combinados com sucesso', 'success');
+      setOutboundFile(null);
+      setReturnFile(null);
+      if (outboundInputRef.current) outboundInputRef.current.value = '';
+      if (returnInputRef.current) returnInputRef.current.value = '';
+    } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      showToast?.(serverMsg || 'Falha ao combinar vouchers', 'error');
+    } finally {
+      setMerging(false);
     }
   }
 
@@ -261,30 +288,112 @@ export default function VouchersTab({ showToast }) {
 
         {/* Upload */}
         <div className={sectionCls}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <UploadCloud className="w-4 h-4" /> Importar voucher
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                PDF, PNG, JPEG ou WebP — extração automática dos dados.
-              </p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <UploadCloud className="w-4 h-4" /> Importar voucher
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  PDF, PNG, JPEG ou WebP — extração automática dos dados.
+                </p>
+              </div>
+              {/* Modo */}
+              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="uploadMode"
+                    value="single"
+                    checked={uploadMode === 'single'}
+                    onChange={() => setUploadMode('single')}
+                    disabled={uploading || merging}
+                  />
+                  Voucher único
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="uploadMode"
+                    value="merge"
+                    checked={uploadMode === 'merge'}
+                    onChange={() => setUploadMode('merge')}
+                    disabled={uploading || merging}
+                  />
+                  Ida + volta separados
+                </label>
+              </div>
             </div>
-            <label
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
-                          ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
-            >
-              <UploadCloud className="w-4 h-4" />
-              {uploading ? 'Enviando…' : 'Selecionar arquivo'}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/png,image/jpeg,image/webp"
-                onChange={onUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
+
+            {uploadMode === 'single' ? (
+              <div className="flex justify-end">
+                <label
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
+                              ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  {uploading ? 'Enviando…' : 'Selecionar arquivo'}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={onUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Voucher de IDA</label>
+                    <input
+                      ref={outboundInputRef}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp"
+                      onChange={(e) => setOutboundFile(e.target.files?.[0] || null)}
+                      disabled={merging}
+                      className="text-xs text-slate-700 dark:text-slate-300"
+                    />
+                    {outboundFile && (
+                      <p className="text-[11px] text-slate-500 mt-1 truncate">{outboundFile.name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Voucher de VOLTA</label>
+                    <input
+                      ref={returnInputRef}
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg,image/webp"
+                      onChange={(e) => setReturnFile(e.target.files?.[0] || null)}
+                      disabled={merging}
+                      className="text-xs text-slate-700 dark:text-slate-300"
+                    />
+                    {returnFile && (
+                      <p className="text-[11px] text-slate-500 mt-1 truncate">{returnFile.name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Os dois vouchers serão lidos e combinados em um único itinerário. Pode levar 10–20s.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onMergeUpload}
+                    disabled={!outboundFile || !returnFile || merging}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
+                                ${(!outboundFile || !returnFile || merging)
+                                  ? 'bg-indigo-300 cursor-not-allowed'
+                                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {merging ? 'Processando…' : 'Combinar e gerar voucher'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
