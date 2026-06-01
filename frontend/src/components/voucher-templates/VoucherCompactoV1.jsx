@@ -330,16 +330,13 @@ export default function VoucherCompactoV1({ data }) {
       {/* FOOTER — compliance: agency logo + contact */}
       <footer style={{ marginTop: 'auto', padding: '16px 36px 14px', borderTop: `3px solid ${THEME.accent}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 56, maxWidth: 200, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
+          <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 88, maxWidth: 260, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
           <div style={{ fontSize: 11, color: '#555', textAlign: 'right', lineHeight: 1.6 }}>
             {settings.contact_phone && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}><IconPhone color="#888" size={12} /> {settings.contact_phone}</div>}
             {settings.contact_email && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}><IconMail color="#888" size={12} /> {settings.contact_email}</div>}
             {settings.contact_site && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}><IconGlobe color="#888" size={12} /> {settings.contact_site}</div>}
             {settings.contact_extra && <div style={{ color: '#777' }}>{settings.contact_extra}</div>}
           </div>
-        </div>
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
-          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
         </div>
       </footer>
     </div>
