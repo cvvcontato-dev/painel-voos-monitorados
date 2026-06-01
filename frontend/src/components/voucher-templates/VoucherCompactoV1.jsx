@@ -18,20 +18,38 @@ const THEME = {
   textFaint: '#9aa5b8'
 };
 
-function shortDate(iso) {
-  if (!iso) return '';
+// Fuso fixo BR — Playwright (export PDF) roda em UTC e horários ficavam +3h.
+const BR_TZ = 'America/Sao_Paulo';
+
+// Extrai partes (dd, mm, yyyy, dia-da-semana) sempre no fuso de Brasília.
+function brDateParts(iso) {
+  if (!iso) return null;
   const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  if (isNaN(d.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: BR_TZ, day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'long'
+  });
+  const out = {};
+  for (const p of fmt.formatToParts(d)) {
+    if (p.type === 'day') out.dd = p.value;
+    else if (p.type === 'month') out.mm = p.value;
+    else if (p.type === 'year') out.yyyy = p.value;
+    else if (p.type === 'weekday') out.dow = p.value;
+  }
+  return out;
+}
+
+function shortDate(iso) {
+  const p = brDateParts(iso);
+  if (!p) return '';
+  return `${p.dd}/${p.mm}/${p.yyyy}`;
 }
 
 function fullDateLabel(t) {
   if (!t || !t.departure?.datetime) return (t && t.dateLabel) || '';
-  const d = new Date(t.departure.datetime);
-  const dow = d.toLocaleDateString('pt-BR', { weekday: 'long' });
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dow.charAt(0).toUpperCase() + dow.slice(1)}, ${dd}/${mm}/${yyyy}`;
+  const p = brDateParts(t.departure.datetime);
+  if (!p) return '';
+  return `${p.dow.charAt(0).toUpperCase() + p.dow.slice(1)}, ${p.dd}/${p.mm}/${p.yyyy}`;
 }
 
 function directionLabel(dir) {
