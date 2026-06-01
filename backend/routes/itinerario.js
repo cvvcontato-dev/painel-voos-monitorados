@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../database');
 const { verify } = require('../helpers/voucherToken');
 const { renderItinerarioPage } = require('../helpers/itinerarioPage');
-const { manageBookingUrl } = require('../helpers/voucherCarrier');
+const { manageBookingUrl, lastNameOf } = require('../helpers/voucherCarrier');
 
 const router = express.Router();
 
@@ -19,8 +19,8 @@ router.get('/:token', (req, res) => {
     try { unified = JSON.parse(row.unified_json); } catch { return res.status(500).send('Erro ao ler reserva'); }
     db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
       const settings = settingsRow || {};
-      const p = (unified.passengers || [])[0];
-      const lastName = p?.name ? p.name.trim().split(/\s+/).pop() : '';
+      // Usa helper compartilhado que entende "SILVA, MAYARA" → "SILVA".
+      const lastName = lastNameOf((unified.passengers || [])[0]?.name);
       const bookingUrl = manageBookingUrl(
         (unified.carrier || 'azul').toLowerCase(),
         unified.reservation?.locator,

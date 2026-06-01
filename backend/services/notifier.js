@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
-const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName } = require('../helpers/voucherCarrier');
+const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName, firstNameOf, lastNameOf } = require('../helpers/voucherCarrier');
 
 // Single SMTP transporter instance — reused across calls
 const transporter = nodemailer.createTransport({
@@ -215,12 +215,8 @@ function formatPassengerNames(passengers) {
 
 // ----- helpers de formatação para o template de e-mail "Itinerário Executivo" -----
 
-function firstName(fullName) {
-    if (!fullName) return '';
-    const first = String(fullName).trim().split(/\s+/)[0] || '';
-    if (!first) return '';
-    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
-}
+// Delega para o helper compartilhado que trata "JOAO SILVA" e "SILVA, JOAO".
+const firstName = firstNameOf;
 
 function fmtTime(iso) {
     if (!iso) return '';

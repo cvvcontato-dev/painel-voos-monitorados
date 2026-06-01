@@ -5,7 +5,8 @@ const {
   airportCity,
   tripCarrier,
   normalizeFlightNumber,
-  carrierShortName
+  carrierShortName,
+  firstNameOf
 } = require('./voucherCarrier');
 
 function escapeHtml(s) {
@@ -35,12 +36,8 @@ function fmtDateBR(iso) {
   } catch { return ''; }
 }
 
-function firstName(fullName) {
-  if (!fullName) return '';
-  const first = String(fullName).trim().split(/\s+/)[0] || '';
-  if (!first) return '';
-  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
-}
+// Delega para o helper compartilhado que entende "SILVA, MAYARA" → "Mayara".
+const firstName = firstNameOf;
 
 function directionLabel(direction, idx) {
   const d = (direction || '').toLowerCase();

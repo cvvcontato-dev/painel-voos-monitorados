@@ -153,11 +153,67 @@ function carrierShortName(carrierKey) {
   return CARRIER_SHORT[String(carrierKey || '').toLowerCase()] || 'Companhia aérea';
 }
 
+// ============================================================================
+// parseFullName — trata os 2 formatos comuns de nome em vouchers:
+//
+//   1) Formato normal: "JOAO DA SILVA"
+//      → firstName: "JOAO", lastName: "SILVA" (última palavra)
+//
+//   2) Formato invertido (com vírgula): "SILVA, MAYARA"
+//      → firstName: "MAYARA" (primeira palavra DEPOIS da vírgula)
+//      → lastName: "SILVA"   (última palavra ANTES da vírgula = sobrenome paterno
+//                              na convenção BR)
+//
+// Convenção de sobrenome: usamos a ÚLTIMA palavra do bloco de sobrenomes.
+// Isso bate com o que as cias aéreas (Latam, Gol, Azul) usam como `lastname`
+// no deep-link de gerenciar reserva, e funciona pra:
+//   - "JOAO DA SILVA"          → SILVA
+//   - "JOAO DA SILVA SANTOS"   → SANTOS
+//   - "SILVA, MAYARA"          → SILVA
+//   - "SILVA SANTOS, MARIA"    → SANTOS
+// ============================================================================
+function parseFullName(fullName) {
+  const trimmed = String(fullName || '').trim();
+  if (!trimmed) return { firstName: '', lastName: '' };
+
+  if (trimmed.includes(',')) {
+    const [surnamePart, givenPart = ''] = trimmed.split(',', 2);
+    const surnames = surnamePart.trim().split(/\s+/).filter(Boolean);
+    const givens   = givenPart.trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: givens[0] || '',
+      lastName:  surnames[surnames.length - 1] || ''
+    };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    lastName:  parts[parts.length - 1] || ''
+  };
+}
+
+// Helpers convenientes que aplicam casing.
+function firstNameOf(fullName) {
+  const f = parseFullName(fullName).firstName;
+  if (!f) return '';
+  // Title Case: "MAYARA" → "Mayara", "joão" → "João"
+  return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
+}
+
+function lastNameOf(fullName) {
+  // Cias aéreas geralmente esperam UPPERCASE no parâmetro lastname da URL.
+  return parseFullName(fullName).lastName.toUpperCase();
+}
+
 module.exports = {
   airportCity,
   manageBookingUrl,
   tripCarrier,
   normalizeFlightNumber,
   carrierDisplayName,
-  carrierShortName
+  carrierShortName,
+  parseFullName,
+  firstNameOf,
+  lastNameOf
 };

@@ -207,12 +207,10 @@ router.post('/:id/send-email', async (req, res) => {
           cookieHeader: req.headers.cookie,
           baseUrl
         });
-        const firstPassengerLastName = (() => {
-          const p = (unified.passengers || [])[0];
-          if (!p?.name) return '';
-          const parts = p.name.trim().split(/\s+/);
-          return parts[parts.length - 1] || '';
-        })();
+        // Usa o helper compartilhado que entende "SILVA, MAYARA" → "SILVA"
+        // (em vez de "MAYARA" que era o bug anterior).
+        const firstPassengerLastName = require('../helpers/voucherCarrier')
+          .lastNameOf((unified.passengers || [])[0]?.name);
         const carrierKey = (unified.carrier || 'azul').toLowerCase();
         const bookingUrl = manageBookingUrl(
           carrierKey,
