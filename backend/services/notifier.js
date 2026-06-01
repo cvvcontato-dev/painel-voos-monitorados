@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
-const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName } = require('../helpers/voucherCarrier');
+const QRCode = require('qrcode');
+const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName } = require('../helpers/voucherCarrier');
 
 // Single SMTP transporter instance — reused across calls
 const transporter = nodemailer.createTransport({
@@ -250,10 +251,17 @@ function directionLabel(direction, idx, total) {
     return `Trecho ${idx + 1}`;
 }
 
-// E-mail SIMPLIFICADO (Caminho A — padrão Airbnb/Booking): mini-resumo + CTA grande
-// "Ver itinerário completo" que abre a página pública hospedada (token HMAC).
-// Mantém regras de e-mail (tables, inline styles, 600px) — alvo < 20KB.
-function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUrl, itinerarioUrl }) {
+// SVG icons (inline — email-safe)
+const SVG_SWAP_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M7 7h11l-3-3 1.4-1.4L21 7l-4.6 4.4L15 10l3-3H7V7zm10 10H6l3 3-1.4 1.4L3 17l4.6-4.4L9 14l-3 3h11v0z"/></svg>';
+const SVG_PLANE_BLUE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#00539C" xmlns="http://www.w3.org/2000/svg"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>';
+const SVG_IG_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.2c3.2 0 3.6 0 4.85.07 1.17.05 1.8.25 2.22.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.05.41 2.22.06 1.25.07 1.62.07 4.82 0 3.2 0 3.6-.07 4.85-.05 1.17-.25 1.8-.41 2.22-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.05.36-2.22.41-1.25.06-1.62.07-4.85.07-3.2 0-3.6 0-4.85-.07-1.17-.05-1.8-.25-2.22-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.05-.41-2.22C2.21 15.6 2.2 15.2 2.2 12s0-3.6.07-4.85c.05-1.17.25-1.8.41-2.22.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.05-.36 2.22-.41C8.4 2.21 8.8 2.2 12 2.2zm0 1.8c-3.15 0-3.52 0-4.76.07-1.07.05-1.65.23-2.04.38-.51.2-.88.44-1.27.83-.39.39-.63.76-.83 1.27-.15.39-.33.97-.38 2.04C2.65 9.83 2.64 10.2 2.64 12s0 2.17.08 3.41c.05 1.07.23 1.65.38 2.04.2.51.44.88.83 1.27.39.39.76.63 1.27.83.39.15.97.33 2.04.38 1.24.08 1.61.08 4.76.08 3.15 0 3.52 0 4.76-.08 1.07-.05 1.65-.23 2.04-.38.51-.2.88-.44 1.27-.83.39-.39.63-.76.83-1.27.15-.39.33-.97.38-2.04.08-1.24.08-1.61.08-3.41 0-1.8 0-2.17-.08-3.41-.05-1.07-.23-1.65-.38-2.04-.2-.51-.44-.88-.83-1.27a3.45 3.45 0 0 0-1.27-.83c-.39-.15-.97-.33-2.04-.38C15.52 4 15.15 4 12 4zm0 3.06a4.94 4.94 0 1 1 0 9.88 4.94 4.94 0 0 1 0-9.88zm0 1.8a3.14 3.14 0 1 0 0 6.28 3.14 3.14 0 0 0 0-6.28zm5.15-2.06a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z"/></svg>';
+const SVG_FB_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M22 12a10 10 0 1 0-11.56 9.88V14.9H7.9V12h2.54V9.8c0-2.51 1.49-3.9 3.78-3.9 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.9h-2.33v6.98A10 10 0 0 0 22 12z"/></svg>';
+const SVG_WA_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 14.4c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.42-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.21-.24-.58-.49-.5-.67-.51-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.47 1.07 2.88 1.22 3.08.15.2 2.1 3.21 5.08 4.5.71.3 1.26.49 1.7.62.71.22 1.36.19 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35zM12 2a10 10 0 0 0-8.49 15.31L2 22l4.81-1.5A10 10 0 1 0 12 2zm0 18.18a8.18 8.18 0 0 1-4.16-1.13l-.3-.18-2.86.89.91-2.78-.2-.32A8.18 8.18 0 1 1 12 20.18z"/></svg>';
+
+// E-mail no formato do MODELO COMPACTADO do usuário (header azul, route overview,
+// cards de voo, CTA, próximos passos numerados, support card com QR, footer escuro).
+// 100% inline styles + tables — email-safe (Gmail/Outlook/Apple Mail).
+async function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUrl, itinerarioUrl }) {
     const vd = voucherData || {};
     const s = settings || {};
     const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -261,8 +269,11 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
 
     const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
     const locator = (vd.reservation?.locator || 'N/A').toString();
+    const fallbackCarrier = (vd.carrier || 'azul').toLowerCase();
     const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
     const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
+    const originCity = airportCity(origin) || origin;
+    const destCity = airportCity(destination) || destination;
 
     // Período: usa primeira partida → última chegada
     const firstDep = trips[0]?.departure?.datetime;
@@ -270,104 +281,317 @@ function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUr
     const periodLeft = fmtDate(firstDep);
     const periodRight = fmtDate(lastArr);
     const isOneWay = !periodRight || periodLeft === periodRight;
-    const periodText = isOneWay ? (periodLeft || '—') : `${periodLeft} → ${periodRight}`;
 
-    const safeItinerarioUrl = itinerarioUrl && /^https?:\/\//i.test(itinerarioUrl) ? itinerarioUrl : (bookingUrl || '#');
+    const safeBookingUrl = bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '#';
+    const safeItinerarioUrl = itinerarioUrl && /^https?:\/\//i.test(itinerarioUrl) ? itinerarioUrl : '';
+
+    const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const logoUrl = `${publicBaseUrl}/voucher-assets/agency-logo.png`;
 
     const contactPhone = s.contact_phone || '';
     const contactEmail = s.contact_email || '';
     const contactSite = s.contact_site || 'www.clubedovooviagens.com.br';
     const contactSiteHref = /^https?:\/\//i.test(contactSite) ? contactSite : `https://${contactSite}`;
+    const phoneDigits = (contactPhone || '').replace(/\D/g, '');
+    const whatsappHref = phoneDigits
+        ? `https://wa.me/${phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits}`
+        : contactSiteHref;
 
-    // Custom message
+    // QR Code SVG (apoio/suporte) — aponta para o itinerário hospedado se houver, senão site
+    let qrSvg = '';
+    try {
+        const qrTarget = safeItinerarioUrl || contactSiteHref;
+        qrSvg = await QRCode.toString(qrTarget, {
+            type: 'svg',
+            width: 96,
+            margin: 1,
+            color: { dark: '#1A202C', light: '#ffffff' }
+        });
+        qrSvg = qrSvg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="96"').replace(/height="\d+"/, 'height="96"');
+    } catch { qrSvg = ''; }
+
+    // Custom message (acima do route overview)
     const trimmedMsg = (customMessage || '').trim();
     const customBox = trimmedMsg
-        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;"><tr><td bgcolor="#f0f6fc" style="background:#f0f6fc;border-left:4px solid #3871c1;border-radius:6px;padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a2a48;line-height:1.55;">${escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</td></tr></table>`
+        ? `<div style="background:#F0F6FC;border-left:4px solid #00539C;border-radius:6px;padding:14px 16px;margin-bottom:24px;font-size:14px;color:#2D3748;line-height:1.55;">${escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</div>`
         : '';
 
-    // ----- Header -----
+    // ===== Header (azul com logo) =====
     const headerHtml = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00569e" style="background:#00569e;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#00539C" style="background-color:#00539C;">
         <tr>
-          <td style="padding:20px 28px;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
-            <div style="font-size:18px;font-weight:700;line-height:1.2;">Clube do Voo Viagens</div>
-            <div style="font-size:12px;opacity:0.85;margin-top:4px;">Confirmação de reserva</div>
+          <td style="padding:24px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td valign="middle" style="padding-right:16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:9999px;">
+                    <tr>
+                      <td align="center" valign="middle" width="64" height="64" style="width:64px;height:64px;padding:8px;">
+                        <img src="${escapeHtml(logoUrl)}" alt="Clube do Voo" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:9999px;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
+                  <div style="font-size:20px;font-weight:700;line-height:1.2;letter-spacing:0.025em;">Clube do Voo Viagens</div>
+                  <div style="font-size:14px;opacity:0.9;margin-top:4px;">Confirmação de Reserva</div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>`;
 
-    // ----- Body -----
-    const bodyHtml = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+    // ===== Greeting + localizador =====
+    const greetingHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:32px;">
         <tr>
-          <td style="padding:28px 28px 8px;font-family:Arial,Helvetica,sans-serif;color:#0e1726;">
-            <p style="margin:0 0 8px;font-size:16px;line-height:1.5;">Olá, <strong>${escapeHtml(firstPaxName)}</strong>,</p>
-            <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#1a2a48;">Eba! Sua viagem está confirmada.</p>
-            ${customBox}
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f6f8fb" style="background:#f6f8fb;border:1px solid #e9ecf2;border-radius:10px;margin:0 0 22px;">
+          <td valign="top" style="font-family:Inter,Arial,Helvetica,sans-serif;">
+            <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Reserva Confirmada</div>
+            <h2 style="font-size:36px;font-weight:700;color:#2D3748;margin:0 0 16px;line-height:1.1;">Olá, ${escapeHtml(firstPaxName)}.</h2>
+            <p style="color:#718096;font-size:14px;line-height:1.625;margin:0;max-width:380px;">Sua viagem está pronta. Use este email como referência — todos os dados do seu voo, contatos e próximos passos estão abaixo.</p>
+          </td>
+          <td valign="top" align="right" width="140" style="padding-left:12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E5E7EB;border-radius:4px;">
               <tr>
-                <td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#0e1726;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <td align="center" style="padding:16px;font-family:Inter,Arial,Helvetica,sans-serif;min-width:120px;">
+                  <div style="font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Localizador</div>
+                  <div style="color:#00539C;font-weight:700;font-size:20px;letter-spacing:0.1em;">${escapeHtml(locator)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+
+    // ===== Route Overview (azul escuro) =====
+    const periodHtml = isOneWay
+        ? escapeHtml(periodLeft || '—')
+        : `${escapeHtml(periodLeft)} &rarr;<br>${escapeHtml(periodRight)}`;
+    const routeOverviewHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#004A8F" style="background-color:#004A8F;border-radius:8px;margin-bottom:24px;">
+        <tr>
+          <td style="padding:24px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="left" valign="middle" width="33%">
+                  <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8;margin-bottom:4px;">Origem</div>
+                  <div style="font-size:48px;font-weight:700;line-height:1;margin-bottom:4px;">${escapeHtml(origin)}</div>
+                  <div style="font-size:14px;">${escapeHtml(originCity)}</div>
+                </td>
+                <td align="center" valign="middle" width="34%" style="padding:0 12px;">
+                  <div style="margin-bottom:8px;line-height:1;">${SVG_SWAP_WHITE}</div>
+                  <div style="font-size:12px;opacity:0.9;white-space:nowrap;">${periodHtml}</div>
+                </td>
+                <td align="right" valign="middle" width="33%">
+                  <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8;margin-bottom:4px;">Destino</div>
+                  <div style="font-size:48px;font-weight:700;line-height:1;margin-bottom:4px;">${escapeHtml(destination)}</div>
+                  <div style="font-size:14px;">${escapeHtml(destCity)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+
+    // ===== Flight cards =====
+    const flightCard = (t, idx) => {
+        const ck = tripCarrier(t, fallbackCarrier);
+        const carrierLabel = t.airlineDisplayName || carrierDisplayName(ck) || 'Companhia aérea';
+        // O modelo usa "Azul · Voo 2411" — apenas o número
+        const flightNoRaw = normalizeFlightNumber(t.flightNumber || '');
+        const flightNoOnly = (flightNoRaw.match(/\d+/) || [''])[0] || flightNoRaw;
+        const carrierShort = carrierShortName(ck);
+        const depTime = fmtTime(t.departure?.datetime) || '--:--';
+        const depDate = fmtDate(t.departure?.datetime) || '';
+        const arrDate = fmtDate(t.arrival?.datetime) || '';
+        const depIata = (t.departure?.airport || '').toUpperCase();
+        const arrIata = (t.arrival?.airport || '').toUpperCase();
+        const depCity = airportCity(depIata) || depIata;
+        const arrCity = airportCity(arrIata) || arrIata;
+        const tripLocator = t.locator || locator;
+        const dir = (t.direction || '').toLowerCase();
+        const title = dir === 'ida' ? 'Voo de Ida' : (dir === 'volta' ? 'Voo de Volta' : `Trecho ${idx + 1}`);
+
+        return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #E5E7EB;border-top:4px solid #00539C;border-radius:4px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+        <tr>
+          <td style="padding:24px;font-family:Inter,Arial,Helvetica,sans-serif;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;">
+              <tr>
+                <td valign="top" align="left">
+                  <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">${escapeHtml(title)}</div>
+                  <div style="color:#718096;font-size:14px;">${escapeHtml(carrierShort || carrierLabel)} &middot; Voo ${escapeHtml(flightNoOnly)}</div>
+                </td>
+                <td valign="top" align="right">
+                  <div style="color:#718096;font-size:12px;margin-bottom:4px;">Confirmado</div>
+                  <div style="font-size:14px;font-weight:600;color:#2D3748;"><span style="color:#22c55e;">&bull;</span> Localizador ${escapeHtml(tripLocator)}</div>
+                </td>
+              </tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td valign="middle" align="left" width="38%">
+                  <div style="color:#718096;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Partida</div>
+                  <div style="font-size:30px;font-weight:700;color:#2D3748;margin-bottom:4px;line-height:1;">${escapeHtml(depTime)}</div>
+                  <div style="font-size:14px;font-weight:600;color:#2D3748;">${escapeHtml(depIata)} &middot; ${escapeHtml(depCity)}</div>
+                  <div style="font-size:12px;color:#718096;">${escapeHtml(depDate)}</div>
+                </td>
+                <td valign="middle" align="center" width="24%" style="border-top:1px dashed #CBD5E1;padding:0 8px;position:relative;">
+                  <div style="background:#ffffff;display:inline-block;padding:0 10px;margin-top:-10px;line-height:1;">${SVG_PLANE_BLUE}</div>
+                </td>
+                <td valign="middle" align="right" width="38%">
+                  <div style="color:#718096;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Chegada</div>
+                  <div style="font-size:30px;font-weight:700;color:#2D3748;margin-bottom:4px;line-height:1;">${escapeHtml(arrIata)}</div>
+                  <div style="font-size:14px;font-weight:600;color:#2D3748;">${escapeHtml(arrCity)}</div>
+                  <div style="font-size:12px;color:#718096;">${escapeHtml(arrDate)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>`;
+    };
+    const tripsHtml = trips.length > 0
+        ? `<div style="margin-bottom:32px;">${trips.map(flightCard).join('')}</div>`
+        : '';
+
+    // ===== CTA "Fazer Check-in" =====
+    const ctaHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#004A8F" style="background-color:#004A8F;border-radius:8px;margin-bottom:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+        <tr>
+          <td align="center" style="padding:32px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
+            <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;opacity:0.9;">Pronto para embarcar?</div>
+            <div style="font-size:24px;font-weight:700;margin-bottom:24px;">Check-in disponível 48h antes da partida</div>
+            <a href="${escapeHtml(safeBookingUrl)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;padding:12px 32px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);">Fazer Check-in &rarr;</a>
+          </td>
+        </tr>
+      </table>`;
+
+    const itinerarioLinkHtml = safeItinerarioUrl
+        ? `<div style="text-align:center;margin-top:16px;margin-bottom:24px;font-family:Inter,Arial,Helvetica,sans-serif;">
+             <a href="${escapeHtml(safeItinerarioUrl)}" style="color:#00539C;font-size:12px;text-decoration:underline;">Ver itinerário completo na web</a>
+           </div>`
+        : '<div style="margin-bottom:24px;"></div>';
+
+    // ===== Próximos passos =====
+    const firstCarrierShort = trips[0]
+        ? (carrierShortName(tripCarrier(trips[0], fallbackCarrier)) || carrierDisplayName(tripCarrier(trips[0], fallbackCarrier)))
+        : carrierShortName(fallbackCarrier);
+
+    const stepItem = (n, title, desc) => `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;">
+        <tr>
+          <td valign="top" width="48" style="padding-right:16px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#004A8F" style="background-color:#004A8F;border-radius:9999px;">
+              <tr>
+                <td align="center" valign="middle" width="32" height="32" style="width:32px;height:32px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;font-weight:700;font-size:14px;line-height:32px;">${n}</td>
+              </tr>
+            </table>
+          </td>
+          <td valign="top" style="font-family:Inter,Arial,Helvetica,sans-serif;">
+            <div style="font-weight:700;color:#2D3748;font-size:16px;margin-bottom:4px;">${escapeHtml(title)}</div>
+            <div style="color:#718096;font-size:14px;line-height:1.625;">${escapeHtml(desc)}</div>
+          </td>
+        </tr>
+      </table>`;
+
+    const stepsHtml = `
+      <div style="margin-bottom:40px;font-family:Inter,Arial,Helvetica,sans-serif;">
+        <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Próximos Passos</div>
+        <div style="font-size:24px;font-weight:700;color:#2D3748;margin-bottom:24px;">Preparando-se para o voo</div>
+        ${stepItem(1, 'Chegue cedo ao aeroporto', `Recomendamos chegar com pelo menos 2 horas de antecedência. Verifique os requisitos de bagagem da ${firstCarrierShort}.`)}
+        ${stepItem(2, 'Documentos em mãos', 'Tenha um documento oficial com foto e o localizador da reserva acessíveis. Estes dados serão solicitados no check-in.')}
+        ${stepItem(3, 'Check-in assistido', 'Nossa equipe pode realizar o check-in para você e enviar o cartão de embarque diretamente. Basta nos avisar.')}
+      </div>`;
+
+    // ===== Support Card =====
+    const supportContactLines = [];
+    if (contactPhone) {
+        supportContactLines.push(`<div style="margin-bottom:4px;"><span style="font-weight:700;color:#2D3748;">WhatsApp:</span> <a href="${escapeHtml(whatsappHref)}" style="color:#00539C;text-decoration:none;">${escapeHtml(contactPhone)}</a></div>`);
+    }
+    if (contactEmail) {
+        supportContactLines.push(`<div><span style="font-weight:700;color:#2D3748;">Email:</span> <a href="mailto:${escapeHtml(contactEmail)}" style="color:#00539C;text-decoration:none;">${escapeHtml(contactEmail)}</a></div>`);
+    }
+    const supportHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#F3F4F6" style="background-color:#F3F4F6;border-radius:8px;margin-bottom:32px;">
+        <tr>
+          <td style="padding:24px;font-family:Inter,Arial,Helvetica,sans-serif;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td valign="middle" align="left">
+                  <div style="color:#718096;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">Assistência</div>
+                  <div style="font-weight:700;color:#2D3748;font-size:18px;margin-bottom:8px;">Estamos aqui para ajudar</div>
+                  <div style="color:#718096;font-size:14px;margin-bottom:16px;">Dúvidas, alterações ou pedidos especiais — escaneie o QR ou fale conosco.</div>
+                  <div style="font-size:14px;">${supportContactLines.join('')}</div>
+                </td>
+                <td valign="middle" align="right" width="120" style="padding-left:16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:4px;">
                     <tr>
-                      <td style="padding:4px 0;color:#5b6878;width:38%;">Localizador</td>
-                      <td style="padding:4px 0;font-weight:700;color:#00569e;letter-spacing:1px;">${escapeHtml(locator)}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:4px 0;color:#5b6878;">Trecho</td>
-                      <td style="padding:4px 0;font-weight:700;">${escapeHtml(origin)} → ${escapeHtml(destination)}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:4px 0;color:#5b6878;">Período</td>
-                      <td style="padding:4px 0;font-weight:700;">${escapeHtml(periodText)}</td>
+                      <td align="center" valign="middle" style="padding:8px;line-height:0;">
+                        ${qrSvg || '<div style="width:96px;height:96px;background:#E5E7EB;"></div>'}
+                      </td>
                     </tr>
                   </table>
                 </td>
               </tr>
             </table>
-
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-              <tr>
-                <td align="center" style="padding:4px 0 8px;">
-                  <a href="${escapeHtml(safeItinerarioUrl)}"
-                     style="display:inline-block;background:#00569e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:16px 32px;border-radius:10px;letter-spacing:0.4px;">
-                    Ver itinerário completo →
-                  </a>
-                </td>
-              </tr>
-            </table>
-
-            <p style="margin:18px 0 0;font-size:13px;color:#5b6878;line-height:1.55;">
-              Você também encontrará o voucher em PDF anexo a este e-mail.
-            </p>
           </td>
         </tr>
       </table>`;
 
-    // ----- Footer -----
-    const contactBits = [];
-    if (contactPhone) contactBits.push(`<span style="color:#0e1726;"><strong>WhatsApp:</strong> ${escapeHtml(contactPhone)}</span>`);
-    if (contactEmail) contactBits.push(`<a href="mailto:${escapeHtml(contactEmail)}" style="color:#00569e;text-decoration:none;"><strong>Email:</strong> ${escapeHtml(contactEmail)}</a>`);
-    contactBits.push(`<a href="${escapeHtml(contactSiteHref)}" style="color:#00569e;text-decoration:none;">${escapeHtml(contactSite)}</a>`);
+    // ===== Signoff =====
+    const signoffHtml = `
+      <div style="border-top:1px solid #E5E7EB;padding-top:24px;margin-top:32px;font-family:Inter,Arial,Helvetica,sans-serif;">
+        <p style="color:#718096;font-size:14px;margin:0;">Boa viagem,</p>
+        <p style="color:#718096;font-size:14px;margin:0;">&middot; Clube do Voo Viagens</p>
+        <p style="color:#718096;font-size:12px;margin-top:8px;margin-bottom:0;">Você também encontra o voucher detalhado em <strong>PDF anexo</strong> a este email.</p>
+      </div>`;
 
+    // ===== Footer escuro =====
+    const socialBtn = (href, svg) => `<a href="${escapeHtml(href || contactSiteHref)}" style="display:inline-block;color:#ffffff;text-decoration:none;margin:0 12px;">${svg}</a>`;
     const footerHtml = `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding:24px 28px 28px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#1A202C" style="background-color:#1A202C;">
         <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;color:#5b6878;font-size:12px;line-height:1.7;border-top:1px solid #e9ecf2;padding-top:18px;">
-            ${contactBits.join('<br>')}
-            <div style="margin-top:14px;color:#9aa3b2;font-size:11px;">Email automático — para suporte, use os canais acima.</div>
+          <td align="center" style="padding:32px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
+            <div style="margin-bottom:16px;">
+              ${socialBtn(contactSiteHref, SVG_IG_WHITE)}${socialBtn(contactSiteHref, SVG_FB_WHITE)}${socialBtn(whatsappHref, SVG_WA_WHITE)}
+            </div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:8px;">
+              <a href="${escapeHtml(contactSiteHref)}" style="color:#ffffff;text-decoration:none;">${escapeHtml(contactSite)}</a>
+            </div>
+            <div style="font-size:12px;color:#9ca3af;font-style:italic;">Email automático — não responda diretamente. Use os canais acima.</div>
+          </td>
+        </tr>
+      </table>`;
+
+    // ===== Main content =====
+    const mainHtml = `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td style="padding:32px;font-family:Inter,Arial,Helvetica,sans-serif;">
+            ${greetingHtml}
+            ${customBox}
+            ${routeOverviewHtml}
+            ${tripsHtml}
+            ${ctaHtml}
+            ${itinerarioLinkHtml}
+            ${stepsHtml}
+            ${supportHtml}
+            ${signoffHtml}
           </td>
         </tr>
       </table>`;
 
     return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirmação de Reserva</title></head>
-<body style="margin:0;padding:0;background:#e9ecf2;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#e9ecf2" style="background:#e9ecf2;">
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirmação de Reserva - Clube do Voo Viagens</title></head>
+<body style="margin:0;padding:0;background-color:#E2E8F0;font-family:Inter,Arial,Helvetica,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#E2E8F0" style="background-color:#E2E8F0;">
     <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" style="width:600px;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);">
+      <td align="center" style="padding:32px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
           <tr><td>${headerHtml}</td></tr>
-          <tr><td>${bodyHtml}</td></tr>
+          <tr><td>${mainHtml}</td></tr>
           <tr><td>${footerHtml}</td></tr>
         </table>
       </td>
@@ -653,7 +877,7 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
             to: to.join(', '),
             bcc: bcc || undefined,
             subject,
-            html: buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl, itinerarioUrl }),
+            html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl, itinerarioUrl }),
             attachments: [{ filename: `Voucher-${locator}.pdf`, path: attachmentPath }]
         };
 
