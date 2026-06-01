@@ -99,8 +99,23 @@ export default function VoucherCompactoV1({ data }) {
       {/* HEADER — logo bare on left, localizador center, "Visualizar reserva" button right */}
       <header style={{ padding: '36px 40px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 32 }}>
         <div style={{ flex: '0 0 auto' }}>
-          {/* Bare large carrier logo — no white card around */}
-          <CarrierLogo carrierKey={carrierKey} theme={carrierTheme} bare />
+          {/* Bare large carrier logo — no white card around.
+              Em multi-cia (merge), mostra as 2 logos lado a lado. */}
+          {(() => {
+            const isMulti = (data.carrier || '').toLowerCase() === 'multi'
+              && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
+              && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
+            const primaryCk = isMulti ? data.reservation.primaryCarrier.toLowerCase() : carrierKey;
+            const secondaryCk = isMulti ? data.reservation.secondaryCarrier.toLowerCase() : null;
+            return (
+              <CarrierLogo
+                carrierKey={primaryCk}
+                secondaryCarrierKey={secondaryCk}
+                theme={carrierTheme}
+                bare
+              />
+            );
+          })()}
         </div>
         <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
           <div style={{ fontSize: 11, color: THEME.textFaint, letterSpacing: 1, textTransform: 'capitalize' }}>Localizador</div>

@@ -91,7 +91,16 @@ export default function VoucherCanonicalV1({ data }) {
 
   // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
   // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
-  const airlineName = theme.name;
+  // Em voucher multi-cia (merge), mostra "Azul + Gol" em vez de "Voo combinado".
+  const _multiCia = (data.carrier || '').toLowerCase() === 'multi'
+    && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
+    && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
+  const _primaryCk = _multiCia ? data.reservation.primaryCarrier.toLowerCase() : null;
+  const _secondaryCk = _multiCia ? data.reservation.secondaryCarrier.toLowerCase() : null;
+  const _shortNameOf = (ck) => ({ azul: 'Azul', gol: 'Gol', latam: 'Latam' }[ck] || ck);
+  const airlineName = _multiCia
+    ? `${_shortNameOf(_primaryCk)} + ${_shortNameOf(_secondaryCk)}`
+    : theme.name;
   const secondaryLocator = data.reservation?.secondaryLocator || '';
   const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
   const isMultiCarrier = (data.carrier || '').toLowerCase() === 'multi'
@@ -113,7 +122,11 @@ export default function VoucherCanonicalV1({ data }) {
         {/* Top row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <CarrierLogo carrierKey={carrierKey} theme={theme} />
+            <CarrierLogo
+              carrierKey={_multiCia ? _primaryCk : carrierKey}
+              secondaryCarrierKey={_multiCia ? _secondaryCk : null}
+              theme={theme}
+            />
             <div>
               <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.1, color: 'white' }}>{airlineName}</div>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>Reserva Confirmada</div>

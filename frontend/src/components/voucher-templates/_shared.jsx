@@ -267,8 +267,66 @@ export function dateLabelWithDow(t) {
   return `${dow}, ${base}`;
 }
 
-export function CarrierLogo({ carrierKey, theme, large = false, bare = false }) {
+export function CarrierLogo({ carrierKey, theme, large = false, bare = false, secondaryCarrierKey = null }) {
   const [failed, setFailed] = useState(false);
+  const [failed2, setFailed2] = useState(false);
+
+  // Caso multi-cia com 2 carriers conhecidos: renderiza as 2 logos lado a lado.
+  // (Vouchers merge têm primaryCarrier + secondaryCarrier setados em data.reservation.)
+  const isDual = !!secondaryCarrierKey
+    && secondaryCarrierKey !== 'multi'
+    && carrierKey !== 'multi'
+    && secondaryCarrierKey !== carrierKey;
+
+  if (isDual && !bare) {
+    // Card branco mais largo com as 2 logos lado a lado, separadas por divisor sutil.
+    const boxH = large ? 80 : 56;
+    const boxW = large ? 180 : Math.round(boxH * 1.8); // ~100px no caso default
+    return (
+      <div style={{
+        width: boxW, height: boxH, background: 'white', borderRadius: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: large ? 'none' : '0 2px 6px rgba(0,0,0,0.12)',
+        padding: '6px 8px', gap: 8
+      }}>
+        {failed
+          ? <span style={{ fontSize: large ? 22 : 18, fontWeight: 800, color: theme.accent }}>{(THEMES[carrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${carrierKey}.png`}
+                 alt={carrierKey}
+                 style={{ maxHeight: '100%', maxWidth: '45%', objectFit: 'contain' }}
+                 onError={() => setFailed(true)} />}
+        <span style={{ width: 1, height: '70%', background: '#e5eaf0' }} />
+        {failed2
+          ? <span style={{ fontSize: large ? 22 : 18, fontWeight: 800, color: theme.accent }}>{(THEMES[secondaryCarrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${secondaryCarrierKey}.png`}
+                 alt={secondaryCarrierKey}
+                 style={{ maxHeight: '100%', maxWidth: '45%', objectFit: 'contain' }}
+                 onError={() => setFailed2(true)} />}
+      </div>
+    );
+  }
+
+  // Modo bare multi-cia (Compacto): 2 logos pequenas em linha, sem card branco.
+  if (isDual && bare) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {failed
+          ? <span style={{ fontSize: 18, fontWeight: 800, color: theme.accent }}>{(THEMES[carrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${carrierKey}.png`}
+                 alt={carrierKey}
+                 style={{ maxHeight: 48, maxWidth: 90, objectFit: 'contain', display: 'block' }}
+                 onError={() => setFailed(true)} />}
+        <span style={{ width: 1, height: 36, background: '#c8d0dc' }} />
+        {failed2
+          ? <span style={{ fontSize: 18, fontWeight: 800, color: theme.accent }}>{(THEMES[secondaryCarrierKey]?.initial) || '✈'}</span>
+          : <img src={`/voucher-assets/carrier-logos/${secondaryCarrierKey}.png`}
+                 alt={secondaryCarrierKey}
+                 style={{ maxHeight: 48, maxWidth: 90, objectFit: 'contain', display: 'block' }}
+                 onError={() => setFailed2(true)} />}
+      </div>
+    );
+  }
+
   if (bare && !failed && carrierKey !== 'multi') {
     return (
       <img
