@@ -9,6 +9,14 @@ function money(v, { decimals = false } = {}) {
   return 'R$ ' + n.toLocaleString('pt-BR', opts);
 }
 
+// Variante usada na linha "Valor total" — sem separador de milhar.
+// Inteiros viram "R$ 3804"; valores com centavos viram "R$ 3804,50".
+function moneyNoThousands(v) {
+  const n = Number(v) || 0;
+  if (Number.isInteger(n)) return `R$ ${n}`;
+  return `R$ ${n.toFixed(2).replace('.', ',')}`;
+}
+
 function baggageLabel(b = []) {
   const parts = [];
   if (b.includes('carry_on')) parts.push('bagagem de mão');
@@ -50,21 +58,26 @@ function buildMessage(rawPromo) {
   const customization = p.customization_text || 'Precisa de outras datas ou roteiro? Fale conosco!';
   const passengers = p.passengers || 2;
 
+  // Formato WhatsApp: rótulos em *negrito*. Por solicitação do cliente, o
+  // asterisco de fechamento vem com um espaço antes (`*Origem: *`), e o
+  // título/CTA são totalmente negritados incluindo o ponto de exclamação.
   const lines = [];
-  lines.push(`✈️${flag} ${p.destination_city}: Pacote Exclusivo Clube do Voo Viagens! 🌟`);
+  lines.push(`✈️${flag} *${p.destination_city}: Pacote Exclusivo Clube do Voo Viagens! * 🌟`);
   lines.push('');
-  lines.push(`🌍 Origem: ${p.origin_code || ''}${p.origin_city ? ` (${p.origin_city})` : ''}`);
-  lines.push(`📍 Destino: ${p.destination_city}${p.destination_country ? `-${p.destination_country}` : ''}`);
-  lines.push(`📅 Disponibilidade: ${availabilityLine(p)}`);
-  lines.push(`👫 Para: ${passengers} pessoas`);
+  lines.push(`🌍 *Origem: * ${p.origin_code || ''}${p.origin_city ? ` (${p.origin_city})` : ''}`);
+  lines.push(`📍 *Destino: * ${p.destination_city}${p.destination_country ? `-${p.destination_country}` : ''}`);
+  lines.push(`📅 *Disponibilidade: * ${availabilityLine(p)}`);
+  lines.push(`👫 *Para: * ${passengers} pessoas`);
   lines.push('');
-  lines.push(`🏨 Hospedagem: ${hotelLine(p)}`);
-  lines.push(`✈️ Voo: ${flightLine(p)}`);
+  lines.push(`🏨 *Hospedagem: * ${hotelLine(p)}`);
+  lines.push(`✈️ *Voo: * ${flightLine(p)}`);
   lines.push('');
-  lines.push(`💳 Pagamento: ${p.installments || 10}x de ${money(p.installment_amount, { decimals: true })} (sem juros)`);
-  lines.push(`💰 Valor total para ${passengers} pessoas: ${money(p.total_price)} (taxas inclusas)`);
-  lines.push(`✨ Personalize: ${customization}`);
-  lines.push(`📲 ${cta}`);
+  lines.push(`💳 *Pagamento: * ${p.installments || 10}x de ${money(p.installment_amount, { decimals: true })} (sem juros)`);
+  lines.push(`💰 *Valor total para ${passengers} pessoas: * ${moneyNoThousands(p.total_price)} (taxas inclusas)`);
+  lines.push(`✨ *Personalize: * ${customization}`);
+  lines.push(`📲 *${cta} *`);
+  lines.push('');
+  lines.push(`⚠️ Os valores anunciados estão sujeitos a alterações sem aviso prévio.`);
   return lines.join('\n');
 }
 

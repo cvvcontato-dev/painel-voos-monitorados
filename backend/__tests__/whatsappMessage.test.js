@@ -14,17 +14,20 @@ const domestic = normalize({
 
 test('matches the approved domestic template line by line', () => {
   const msg = buildMessage(domestic);
-  expect(msg).toContain('✈️🇧🇷 Porto Seguro: Pacote Exclusivo Clube do Voo Viagens! 🌟');
-  expect(msg).toContain('🌍 Origem: SSA (Salvador)');
-  expect(msg).toContain('📍 Destino: Porto Seguro-Brasil');
-  expect(msg).toContain('📅 Disponibilidade: Datas em Setembro (7 noites, sob consulta)');
-  expect(msg).toContain('👫 Para: 2 pessoas');
-  expect(msg).toContain('🏨 Hospedagem: Rede Andrade Terra Brasil (3 estrelas, Muito bom 8.1, Porto Seguro, com Café da Manhã)');
-  expect(msg).toContain('✈️ Voo: Direto (GOL - Incluso bagagem de mão)');
-  expect(msg).toContain('💳 Pagamento: 10x de R$ 241,10 (sem juros)');
-  expect(msg).toContain('💰 Valor total para 2 pessoas: R$ 2.411 (taxas inclusas)');
-  expect(msg).toContain('✨ Personalize: Precisa de outras datas ou roteiro? Fale conosco!');
-  expect(msg).toContain('📲 Garanta já sua viagem inesquecível!');
+  expect(msg).toContain('✈️🇧🇷 *Porto Seguro: Pacote Exclusivo Clube do Voo Viagens! * 🌟');
+  expect(msg).toContain('🌍 *Origem: * SSA (Salvador)');
+  expect(msg).toContain('📍 *Destino: * Porto Seguro-Brasil');
+  expect(msg).toContain('📅 *Disponibilidade: * Datas em Setembro (7 noites, sob consulta)');
+  expect(msg).toContain('👫 *Para: * 2 pessoas');
+  expect(msg).toContain('🏨 *Hospedagem: * Rede Andrade Terra Brasil (3 estrelas, Muito bom 8.1, Porto Seguro, com Café da Manhã)');
+  expect(msg).toContain('✈️ *Voo: * Direto (GOL - Incluso bagagem de mão)');
+  expect(msg).toContain('💳 *Pagamento: * 10x de R$ 241,10 (sem juros)');
+  // Valor total sem separador de milhar: R$ 2411 (e não R$ 2.411)
+  expect(msg).toContain('💰 *Valor total para 2 pessoas: * R$ 2411 (taxas inclusas)');
+  expect(msg).toContain('✨ *Personalize: * Precisa de outras datas ou roteiro? Fale conosco!');
+  expect(msg).toContain('📲 *Garanta já sua viagem inesquecível! *');
+  // Disclaimer fixo no final
+  expect(msg).toContain('⚠️ Os valores anunciados estão sujeitos a alterações sem aviso prévio.');
 });
 
 test('never leaks the agency commission', () => {
@@ -41,7 +44,7 @@ test('international destination uses the destination country flag', () => {
     hotel_rating_text: 'Muito bom', installments: 10, installment_amount: 1331.30, total_price: 13313
   });
   const msg = buildMessage(intl);
-  expect(msg).toContain('✈️🇦🇼 Aruba:');           // bandeira de Aruba, não do Brasil
-  expect(msg).toContain('📍 Destino: Aruba-Aruba');
-  expect(msg).toContain('✈️ Voo: Com paradas (GOL - Incluso bagagem de mão e bagagem despachada)');
+  expect(msg).toContain('✈️🇦🇼 *Aruba:');           // bandeira de Aruba, não do Brasil
+  expect(msg).toContain('📍 *Destino: * Aruba-Aruba');
+  expect(msg).toContain('✈️ *Voo: * Com paradas (GOL - Incluso bagagem de mão e bagagem despachada)');
 });
