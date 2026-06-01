@@ -1,6 +1,14 @@
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
+const path = require('path');
+const fs = require('fs');
 const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName, firstNameOf, lastNameOf } = require('../helpers/voucherCarrier');
+
+// Caminho absoluto do PNG da logo da agência — anexado via CID no e-mail.
+// CID é universalmente suportado por clientes de e-mail (Gmail, Outlook, Apple Mail, etc.)
+// e não depende de URL externa que pode ser bloqueada/inacessível pelo proxy de imagens.
+const AGENCY_LOGO_PATH = path.join(__dirname, '..', 'static', 'agency-logo.png');
+const AGENCY_LOGO_CID = 'clube-do-voo-logo';
 
 // Single SMTP transporter instance — reused across calls
 const transporter = nodemailer.createTransport({
@@ -297,7 +305,9 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
     const safeItinerarioUrl = itinerarioUrl && /^https?:\/\//i.test(itinerarioUrl) ? itinerarioUrl : '';
 
     const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
-    const logoUrl = `${publicBaseUrl}/voucher-assets/agency-logo.png`;
+    // Logo embutida como CID — sendVoucherEmail anexa o arquivo com o mesmo Content-ID.
+    // Cliente NUNCA precisa baixar de URL externa: Gmail/Outlook/Apple Mail abrem inline.
+    const logoUrl = `cid:${AGENCY_LOGO_CID}`;
 
     const contactPhone = s.contact_phone || '';
     const contactEmail = s.contact_email || '';
@@ -887,13 +897,26 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
         // Assunto fixo conforme padrão da agência.
         const subject = 'Eba! Sua viagem está confirmada';
 
+        const attachments = [
+            { filename: `Voucher-${locator}.pdf`, path: attachmentPath }
+        ];
+        // Anexa a logo como CID (Content-ID) — referenciada inline via `cid:clube-do-voo-logo`.
+        // Só anexa se o arquivo existir (caso não exista, o <img> degrada com `alt` em vez de quebrar).
+        if (fs.existsSync(AGENCY_LOGO_PATH)) {
+            attachments.push({
+                filename: 'logo.png',
+                path: AGENCY_LOGO_PATH,
+                cid: AGENCY_LOGO_CID,
+                contentDisposition: 'inline'
+            });
+        }
         const mailOptions = {
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
             to: to.join(', '),
             bcc: bcc || undefined,
             subject,
             html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl, secondaryBookingUrl, itinerarioUrl }),
-            attachments: [{ filename: `Voucher-${locator}.pdf`, path: attachmentPath }]
+            attachments
         };
 
         const info = await transporter.sendMail(mailOptions);
