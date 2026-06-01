@@ -257,6 +257,13 @@ const SVG_PLANE_BLUE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#0
 const SVG_IG_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.2c3.2 0 3.6 0 4.85.07 1.17.05 1.8.25 2.22.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.05.41 2.22.06 1.25.07 1.62.07 4.82 0 3.2 0 3.6-.07 4.85-.05 1.17-.25 1.8-.41 2.22-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.05.36-2.22.41-1.25.06-1.62.07-4.85.07-3.2 0-3.6 0-4.85-.07-1.17-.05-1.8-.25-2.22-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.05-.41-2.22C2.21 15.6 2.2 15.2 2.2 12s0-3.6.07-4.85c.05-1.17.25-1.8.41-2.22.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.05-.36 2.22-.41C8.4 2.21 8.8 2.2 12 2.2zm0 1.8c-3.15 0-3.52 0-4.76.07-1.07.05-1.65.23-2.04.38-.51.2-.88.44-1.27.83-.39.39-.63.76-.83 1.27-.15.39-.33.97-.38 2.04C2.65 9.83 2.64 10.2 2.64 12s0 2.17.08 3.41c.05 1.07.23 1.65.38 2.04.2.51.44.88.83 1.27.39.39.76.63 1.27.83.39.15.97.33 2.04.38 1.24.08 1.61.08 4.76.08 3.15 0 3.52 0 4.76-.08 1.07-.05 1.65-.23 2.04-.38.51-.2.88-.44 1.27-.83.39-.39.63-.76.83-1.27.15-.39.33-.97.38-2.04.08-1.24.08-1.61.08-3.41 0-1.8 0-2.17-.08-3.41-.05-1.07-.23-1.65-.38-2.04-.2-.51-.44-.88-.83-1.27a3.45 3.45 0 0 0-1.27-.83c-.39-.15-.97-.33-2.04-.38C15.52 4 15.15 4 12 4zm0 3.06a4.94 4.94 0 1 1 0 9.88 4.94 4.94 0 0 1 0-9.88zm0 1.8a3.14 3.14 0 1 0 0 6.28 3.14 3.14 0 0 0 0-6.28zm5.15-2.06a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z"/></svg>';
 const SVG_FB_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M22 12a10 10 0 1 0-11.56 9.88V14.9H7.9V12h2.54V9.8c0-2.51 1.49-3.9 3.78-3.9 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.9h-2.33v6.98A10 10 0 0 0 22 12z"/></svg>';
 const SVG_WA_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 14.4c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.42-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.21-.24-.58-.49-.5-.67-.51-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.47 1.07 2.88 1.22 3.08.15.2 2.1 3.21 5.08 4.5.71.3 1.26.49 1.7.62.71.22 1.36.19 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35zM12 2a10 10 0 0 0-8.49 15.31L2 22l4.81-1.5A10 10 0 1 0 12 2zm0 18.18a8.18 8.18 0 0 1-4.16-1.13l-.3-.18-2.86.89.91-2.78-.2-.32A8.18 8.18 0 1 1 12 20.18z"/></svg>';
+const SVG_MAIL_WHITE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
+
+// URLs públicas das redes sociais da agência (hardcoded por enquanto;
+// mover pra voucher_settings se quiser editar via UI no futuro).
+const SOCIAL_INSTAGRAM_URL = 'https://www.instagram.com/clubedovooviagens';
+const SOCIAL_EMAIL_ADDRESS = 'contato@clubedovooviagens.com.br';
+const SOCIAL_WHATSAPP_URL  = 'https://wa.me/5575992020012';
 
 // E-mail no formato do MODELO COMPACTADO do usuário (header azul, route overview,
 // cards de voo, CTA, próximos passos numerados, support card com QR, footer escuro).
@@ -297,18 +304,19 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         ? `https://wa.me/${phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits}`
         : contactSiteHref;
 
-    // QR Code SVG (apoio/suporte) — aponta para o itinerário hospedado se houver, senão site
-    let qrSvg = '';
+    // QR Code PNG embutido como data URL — mais compatível com clientes de e-mail (Gmail/Outlook
+    // bloqueiam ou renderizam SVG inline inconsistentemente). Aponta pro itinerário hospedado
+    // se houver; senão pro site da agência.
+    let qrDataUrl = '';
     try {
         const qrTarget = safeItinerarioUrl || contactSiteHref;
-        qrSvg = await QRCode.toString(qrTarget, {
-            type: 'svg',
-            width: 96,
+        qrDataUrl = await QRCode.toDataURL(qrTarget, {
+            width: 192,           // 96px exibido em retina = 2x
             margin: 1,
-            color: { dark: '#1A202C', light: '#ffffff' }
+            color: { dark: '#1A202C', light: '#ffffff' },
+            errorCorrectionLevel: 'M'
         });
-        qrSvg = qrSvg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="96"').replace(/height="\d+"/, 'height="96"');
-    } catch { qrSvg = ''; }
+    } catch { qrDataUrl = ''; }
 
     // Custom message (acima do route overview)
     const trimmedMsg = (customMessage || '').trim();
@@ -323,14 +331,9 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
           <td style="padding:24px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td valign="middle" style="padding-right:16px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:9999px;">
-                    <tr>
-                      <td align="center" valign="middle" width="64" height="64" style="width:64px;height:64px;padding:8px;">
-                        <img src="${escapeHtml(logoUrl)}" alt="Clube do Voo" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:9999px;">
-                      </td>
-                    </tr>
-                  </table>
+                <td valign="middle" width="64" style="padding-right:16px;">
+                  <!-- Logo já é circular com fundo branco — sem wrapper extra. -->
+                  <img src="${escapeHtml(logoUrl)}" alt="Clube do Voo" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:9999px;border:0;outline:none;">
                 </td>
                 <td valign="middle" style="font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
                   <div style="font-size:20px;font-weight:700;line-height:1.2;letter-spacing:0.025em;">Clube do Voo Viagens</div>
@@ -529,7 +532,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:4px;">
                     <tr>
                       <td align="center" valign="middle" style="padding:8px;line-height:0;">
-                        ${qrSvg || '<div style="width:96px;height:96px;background:#E5E7EB;"></div>'}
+                        ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code" width="96" height="96" style="display:block;width:96px;height:96px;border:0;outline:none;">` : '<div style="width:96px;height:96px;background:#E5E7EB;"></div>'}
                       </td>
                     </tr>
                   </table>
@@ -555,7 +558,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         <tr>
           <td align="center" style="padding:32px;font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
             <div style="margin-bottom:16px;">
-              ${socialBtn(contactSiteHref, SVG_IG_WHITE)}${socialBtn(contactSiteHref, SVG_FB_WHITE)}${socialBtn(whatsappHref, SVG_WA_WHITE)}
+              ${socialBtn(SOCIAL_INSTAGRAM_URL, SVG_IG_WHITE)}${socialBtn(`mailto:${SOCIAL_EMAIL_ADDRESS}`, SVG_MAIL_WHITE)}${socialBtn(SOCIAL_WHATSAPP_URL, SVG_WA_WHITE)}
             </div>
             <div style="font-size:14px;font-weight:600;margin-bottom:8px;">
               <a href="${escapeHtml(contactSiteHref)}" style="color:#ffffff;text-decoration:none;">${escapeHtml(contactSite)}</a>
