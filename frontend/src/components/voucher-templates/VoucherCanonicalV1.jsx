@@ -268,7 +268,7 @@ export default function VoucherCanonicalV1({ data }) {
       <footer style={{ padding: '12px 32px 12px', borderTop: `3px solid ${theme.accent}`, background: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
           <div style={{ flex: 1 }}>
-            <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 44, maxWidth: 200, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
+            <img src="/voucher-assets/agency-logo.png" alt="Clube do Voo Viagens" style={{ maxHeight: 80, maxWidth: 240, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
             <div style={{ fontSize: 10, color: '#555', lineHeight: 1.7, marginTop: 8 }}>
               {settings.contact_phone && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -290,23 +290,20 @@ export default function VoucherCanonicalV1({ data }) {
           </div>
           {qrUrl && (
             <div style={{ display: 'flex', gap: 10 }}>
-              <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
-                <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
-                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>
+              <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
+                <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}>
                   {isMultiCarrier ? `Check-in Ida` : 'Gerenciar reserva'}
                 </div>
               </a>
               {isMultiCarrier && qrUrlSecondary && secondaryBookingUrl && (
-                <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit', display: 'inline-block' }}>
-                  <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block' }} />
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700 }}>Check-in Volta</div>
+                <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
+                  <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}>Check-in Volta</div>
                 </a>
               )}
             </div>
           )}
-        </div>
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #eef1f6', textAlign: 'center', fontSize: 9, color: '#9aa5b8' }}>
-          Documento gerado pela Clube do Voo Viagens. Não substitui o voucher oficial da companhia aérea.
         </div>
       </footer>
     </div>
