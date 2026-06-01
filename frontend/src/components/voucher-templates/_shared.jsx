@@ -18,10 +18,28 @@ export function detectCarrierKey(data) {
   return ['azul', 'latam', 'gol'].includes(c) ? c : 'azul';
 }
 
+// IMPORTANTE: fixar timeZone em America/Sao_Paulo — caso contrário, o preview no navegador (BR)
+// usa o fuso local mas a exportação do PDF (Playwright headless) roda em UTC e os horários ficam
+// 3h adiantados (ex.: 21:00 BR vira 00:00 do dia seguinte). Sempre formatar em fuso fixo.
+const BR_TZ = 'America/Sao_Paulo';
+
 export function fmtTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: BR_TZ });
+}
+
+// Retorna o dia da semana (0=DOM..6=SAB) do ISO datetime no fuso de Brasília.
+// Necessário pra que 'volta domingo 21:00 BR' não vire 'segunda 00:00 UTC' no PDF.
+function getDayBR(iso) {
+  if (!iso) return NaN;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return NaN;
+  // Usa o formato curto pra extrair o dia em Brasília sem ambiguidade de Date.toLocaleDateString
+  const parts = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: BR_TZ }).format(d);
+  const MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return MAP[parts] ?? NaN;
 }
 
 // SVG icons (no emojis — Playwright Chromium safe).
@@ -262,7 +280,9 @@ export function dateLabelWithDow(t) {
   if (!t.departure?.datetime) return base;
   const upper = base.toUpperCase();
   if (WEEKDAYS_PTBR.some(d => upper.startsWith(d))) return base;
-  const dow = WEEKDAYS_PTBR[new Date(t.departure.datetime).getDay()];
+  // Usa fuso BR pra dia da semana — evita "DOM 21:00 BR" → "SEG 00:00 UTC" no PDF.
+  const dowIdx = getDayBR(t.departure.datetime);
+  const dow = WEEKDAYS_PTBR[dowIdx];
   if (!dow) return base;
   return `${dow}, ${base}`;
 }
