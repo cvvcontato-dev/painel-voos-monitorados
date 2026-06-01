@@ -138,19 +138,21 @@ async function runCheckCycle() {
 }
 
 /**
- * Start the scheduler with the configured interval.
+ * Start the scheduler — runs price checks at 08:00 and 20:00 Brasília time
+ * (America/Sao_Paulo). node-cron handles DST automatically via the timezone
+ * option, so the times stay locked to local clock regardless of where the
+ * container runs (Coolify hosts default to UTC).
  */
 function startScheduler() {
-    // Stop any existing job
     if (currentJob) {
         currentJob.stop();
         currentJob = null;
     }
 
-    const hours = parseInt(process.env.CHECK_INTERVAL_HOURS || '6', 10);
-    const cronExpression = `0 */${hours} * * *`;
+    const cronExpression = '0 8,20 * * *';
+    const timezone = 'America/Sao_Paulo';
 
-    console.log(`[SCHEDULER] Agendador iniciado: a cada ${hours}h (cron: ${cronExpression})`);
+    console.log(`[SCHEDULER] Agendador iniciado: 08:00 e 20:00 (${timezone}) — cron: ${cronExpression}`);
 
     currentJob = cron.schedule(cronExpression, async () => {
         try {
@@ -158,7 +160,7 @@ function startScheduler() {
         } catch (error) {
             console.error('[SCHEDULER] Erro fatal no ciclo:', error);
         }
-    });
+    }, { timezone });
 
     return currentJob;
 }
