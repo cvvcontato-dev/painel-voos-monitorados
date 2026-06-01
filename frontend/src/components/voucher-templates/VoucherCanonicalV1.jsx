@@ -292,14 +292,14 @@ export default function VoucherCanonicalV1({ data }) {
             <div style={{ display: 'flex', gap: 10 }}>
               <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
                 <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
-                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: theme.accent, marginTop: 6, textAlign: 'center', fontWeight: 700, lineHeight: 1.3, width: 98 }}>
                   {isMultiCarrier ? `Check-in Ida` : 'Gerenciar reserva'}
                 </div>
               </a>
               {isMultiCarrier && qrUrlSecondary && secondaryBookingUrl && (
                 <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
                   <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: theme.accent, marginTop: 4, textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}>Check-in Volta</div>
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: theme.accent, marginTop: 6, textAlign: 'center', fontWeight: 700, lineHeight: 1.3, width: 98 }}>Check-in Volta</div>
                 </a>
               )}
             </div>
