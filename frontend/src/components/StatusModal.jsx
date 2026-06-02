@@ -83,12 +83,12 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative w-full max-w-lg bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
-        <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700/50">
+      <div className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700/50 shrink-0">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{editing ? 'Editar Voo' : 'Monitorar Novo Voo'}</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit(wrappedSubmit)} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(wrappedSubmit)} className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><User className="w-4 h-4" /> Cliente</label>
             <input {...register('cliente', { required: true })} className={inputCls} placeholder="Nome do passageiro" />
