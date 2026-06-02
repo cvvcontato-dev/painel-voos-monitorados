@@ -108,8 +108,15 @@ export default function StatusTab({ showToast }) {
     setCheckingId(id);
     try {
       const { data } = await api.post(`${API_URL}/${id}/check-now`);
-      if (data.sucesso) showToast(`Status: ${data.status_atual}`, 'success');
-      else showToast(data.erro || 'Falha ao consultar', 'error');
+      if (data.sucesso) {
+        const fmtH = iso => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '—';
+        const prog = fmtH(data.partida_programada);
+        const est  = fmtH(data.partida_estimada);
+        const horario = est !== prog ? `${prog} → ${est}` : prog;
+        showToast(`API retornou: ${data.status_atual} | Partida: ${horario}`, 'success');
+      } else {
+        showToast(`Erro API: ${data.erro || 'Falha ao consultar'}`, 'error');
+      }
       fetchFlights();
     } catch (e) { showToast('Erro ao consultar', 'error'); }
     finally { setCheckingId(null); }

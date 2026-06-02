@@ -150,8 +150,8 @@ async function processOne(flight) {
   const apiResult = await aviationApi.fetchFlightStatus(flight.numero_voo, flight.data_voo);
 
   if (!apiResult.ok) {
+    console.warn(`[STATUS-MON] Voo #${flight.id} (${flight.numero_voo} ${flight.data_voo}) — erro da API: ${apiResult.error}`);
     await insertHistory(flight.id, 'erro_api', { error: apiResult.error }, false);
-    // Reschedule normally
     const now = nowUtcIso();
     await dbRun(
       `UPDATE monitored_flights_status SET ultima_verificacao = ?, proxima_verificacao = ?, atualizado_em = ? WHERE id = ?`,
@@ -161,6 +161,16 @@ async function processOne(flight) {
   }
 
   const normalized = apiResult.data;
+
+  // Diagnostic log: mostra o que a API devolveu vs o que estava no banco
+  console.log(
+    `[STATUS-MON] Voo #${flight.id} (${flight.numero_voo} ${flight.data_voo})` +
+    ` | status: ${normalized.status}` +
+    ` | partida_prog API: ${normalized.partida_programada}` +
+    ` | partida_prog DB:  ${flight.partida_programada}` +
+    ` | partida_est API:  ${normalized.partida_estimada}`
+  );
+
   const events = detectEvents(flight, normalized);
 
   // Auto-archive
@@ -199,7 +209,13 @@ async function processOne(flight) {
     await insertHistory(flight.id, 'check_ok', null, false);
   }
 
-  return { ok: true, status_atual: normalized.status, events: events.map(e => e.evento) };
+  return {
+    ok: true,
+    status_atual: normalized.status,
+    events: events.map(e => e.evento),
+    partida_programada: normalized.partida_programada,
+    partida_estimada: normalized.partida_estimada
+  };
 }
 
 // ---------- Public entry points ----------
