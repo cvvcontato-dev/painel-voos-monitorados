@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../hooks/useApi';
-import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2, Hand } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2, Hand, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
 
@@ -65,6 +65,37 @@ export default function StatusTab({ showToast }) {
     });
   };
 
+  // Grupos colapsados — armazena os nomes de clientes recolhidos (persistido).
+  const [collapsedGroups, setCollapsedGroups] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('status_collapsed_groups') || '[]')); }
+    catch { return new Set(); }
+  });
+
+  const persistCollapsed = (set) => {
+    try { localStorage.setItem('status_collapsed_groups', JSON.stringify([...set])); } catch {/* ignore */}
+  };
+
+  const toggleGroup = (cliente) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(cliente)) next.delete(cliente); else next.add(cliente);
+      persistCollapsed(next);
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    const next = new Set();
+    setCollapsedGroups(next);
+    persistCollapsed(next);
+  };
+
+  const collapseAll = (allClients) => {
+    const next = new Set(allClients);
+    setCollapsedGroups(next);
+    persistCollapsed(next);
+  };
+
   const fetchFlights = useCallback(async () => {
     try { setFlights((await api.get(API_URL)).data); }
     catch (e) { console.error(e); }
@@ -125,6 +156,24 @@ export default function StatusTab({ showToast }) {
   const concluidosCount = flights.filter(isConcluded).length;
   const visibleFlights = hideConcluded ? flights.filter(f => !isConcluded(f)) : flights;
 
+  // Agrupar por cliente — ordenado alfabético por cliente, depois cronológico por data
+  const groupedByClient = (() => {
+    const map = new Map();
+    for (const f of visibleFlights) {
+      const key = f.cliente || '(sem cliente)';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(f);
+    }
+    const sortedClients = [...map.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return sortedClients.map(cliente => ({
+      cliente,
+      flights: map.get(cliente).sort((a, b) => (a.data_voo || '').localeCompare(b.data_voo || ''))
+    }));
+  })();
+
+  const allClientNames = groupedByClient.map(g => g.cliente);
+  const allCollapsed = allClientNames.length > 0 && allClientNames.every(c => collapsedGroups.has(c));
+
   const stats = {
     total: flights.length,
     ativos: flights.filter(f => f.monitoramento_ativo && !isConcluded(f)).length,
@@ -137,7 +186,20 @@ export default function StatusTab({ showToast }) {
 
   return (
     <>
-      <div className="flex justify-end items-center gap-3 mb-4">
+      <div className="flex justify-end items-center gap-3 mb-4 flex-wrap">
+        {groupedByClient.length > 1 && (
+          <button
+            onClick={() => allCollapsed ? expandAll() : collapseAll(allClientNames)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
+                       bg-white border-slate-200 text-slate-700 hover:bg-slate-50
+                       dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            title={allCollapsed ? 'Expandir todos os clientes' : 'Recolher todos os clientes'}
+          >
+            {allCollapsed
+              ? <><ChevronDown className="w-4 h-4" /> Expandir todos</>
+              : <><ChevronRight className="w-4 h-4" /> Recolher todos</>}
+          </button>
+        )}
         {concluidosCount > 0 && (
           <button
             onClick={toggleHideConcluded}
@@ -189,14 +251,36 @@ export default function StatusTab({ showToast }) {
                     ? `Nenhum voo ativo — ${concluidosCount} voo(s) concluído(s) ocultos.`
                     : 'Nenhum voo sendo monitorado.'}
                 </td></tr>
-              ) : visibleFlights.map(f => {
-                const concluded = isConcluded(f);
-                const style = concluded
-                  ? STATUS_STYLES.concluded
-                  : (STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' });
-                return (
+              ) : groupedByClient.flatMap(group => {
+                const collapsed = collapsedGroups.has(group.cliente);
+                const headerRow = (
+                  <tr
+                    key={`group-${group.cliente}`}
+                    className="bg-slate-100/70 dark:bg-slate-800/50 hover:bg-slate-200/70 dark:hover:bg-slate-800 border-t-2 border-slate-200 dark:border-slate-700/70 cursor-pointer transition-colors"
+                    onClick={() => toggleGroup(group.cliente)}
+                  >
+                    <td colSpan={8} className="px-6 py-3">
+                      <div className="flex items-center gap-3">
+                        {collapsed
+                          ? <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
+                          : <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />}
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{group.cliente}</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                          <Plane className="w-3 h-3" /> {group.flights.length} {group.flights.length === 1 ? 'voo' : 'voos'}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+                if (collapsed) return [headerRow];
+                const flightRows = group.flights.map(f => {
+                  const concluded = isConcluded(f);
+                  const style = concluded
+                    ? STATUS_STYLES.concluded
+                    : (STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' });
+                  return (
                   <tr key={f.id} className="hover:bg-slate-100/60 dark:hover:bg-slate-800/30 group">
-                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-slate-200">{f.cliente}</td>
+                    <td className="pl-12 pr-6 py-4 text-slate-600 dark:text-slate-300 text-sm" />
                     <td className="px-4 py-4 font-mono text-slate-700 dark:text-slate-300">{f.numero_voo}</td>
                     <td className="px-4 py-4 text-slate-700 dark:text-slate-300">{f.data_voo}</td>
                     <td className="px-4 py-4 text-slate-700 dark:text-slate-300">{f.origem || '?'}→{f.destino || '?'}</td>
@@ -248,7 +332,9 @@ export default function StatusTab({ showToast }) {
                       </div>
                     </td>
                   </tr>
-                );
+                  );
+                });
+                return [headerRow, ...flightRows];
               })}
             </tbody>
           </table>
