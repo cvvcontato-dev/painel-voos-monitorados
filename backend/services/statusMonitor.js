@@ -171,6 +171,13 @@ async function processOne(flight) {
     ` | partida_est API:  ${normalized.partida_estimada}`
   );
 
+  // Quando horários vêm nulos, dumpa o payload bruto para entender o que a API mandou
+  if (!normalized.partida_programada && normalized.raw) {
+    const rawDump = JSON.stringify(normalized.raw).substring(0, 1500);
+    console.warn(`[STATUS-MON] HORÁRIO NULO — payload bruto da API (1500 chars):`);
+    console.warn(rawDump);
+  }
+
   const events = detectEvents(flight, normalized);
 
   // Auto-archive
