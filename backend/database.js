@@ -117,7 +117,10 @@ function runMigrations() {
         "ALTER TABLE flights ADD COLUMN alerta_enviado INTEGER DEFAULT 0",
         "ALTER TABLE flights ADD COLUMN status TEXT DEFAULT 'ativo'",
         // Link de gerenciamento da reserva (companhia aérea) no monitoramento de status
-        "ALTER TABLE monitored_flights_status ADD COLUMN link_gerenciamento TEXT"
+        "ALTER TABLE monitored_flights_status ADD COLUMN link_gerenciamento TEXT",
+        // Override manual de horário — quando 1, updateSnapshot não sobrescreve
+        // partida_programada/partida_estimada com dados da API.
+        "ALTER TABLE monitored_flights_status ADD COLUMN override_ativo INTEGER NOT NULL DEFAULT 0"
     ];
 
     migrations.forEach(sql => {

@@ -1,6 +1,24 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, User, Plane, Calendar, Mail, MessageSquare, Clock, Link as LinkIcon } from 'lucide-react';
+import { X, User, Plane, Calendar, Mail, MessageSquare, Clock, Link as LinkIcon, Hand, AlertCircle } from 'lucide-react';
+
+/** Converte "HH:MM" em horário Brasília para ISO UTC dado um data_voo YYYY-MM-DD.
+ *  Brasília é UTC-3 (Brasil aboliu DST em 2019). */
+function brtTimeToIso(dataVoo, hhmm) {
+  if (!dataVoo || !hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (h > 23 || m > 59) return null;
+  // BRT → UTC: soma 3 horas
+  const d = new Date(`${dataVoo}T${hhmm}:00.000-03:00`);
+  if (isNaN(d)) return null;
+  return d.toISOString();
+}
+
+/** Converte ISO UTC para "HH:MM" no fuso de Brasília. */
+function isoToBrtTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+}
 
 const CADENCIA_OPTIONS = [
   { value: 15, label: 'A cada 15 minutos' },
@@ -18,7 +36,9 @@ const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-non
                  "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 
 export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
+  const [overrideOn, setOverrideOn] = useState(false);
+  const dataVoo = watch('data_voo');
 
   useEffect(() => {
     if (editing) {
@@ -29,12 +49,34 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
         email_cliente: editing.email_cliente || '',
         telegram_chat_id: editing.telegram_chat_id || '',
         cadencia_minutos: editing.cadencia_minutos,
-        link_gerenciamento: editing.link_gerenciamento || ''
+        link_gerenciamento: editing.link_gerenciamento || '',
+        override_hora_brt: editing.override_ativo ? isoToBrtTime(editing.partida_programada) : ''
       });
+      setOverrideOn(editing.override_ativo === 1);
     } else {
-      reset({ cliente:'', numero_voo:'', data_voo:'', email_cliente:'', telegram_chat_id:'', cadencia_minutos:60, link_gerenciamento:'' });
+      reset({ cliente:'', numero_voo:'', data_voo:'', email_cliente:'', telegram_chat_id:'', cadencia_minutos:60, link_gerenciamento:'', override_hora_brt:'' });
+      setOverrideOn(false);
     }
   }, [editing, reset, isOpen]);
+
+  // Wrapper que traduz override_hora_brt → ISO UTC antes de chamar onSubmit
+  const wrappedSubmit = (data) => {
+    const { override_hora_brt, ...rest } = data;
+    let payload = { ...rest };
+    if (editing) {
+      if (overrideOn) {
+        const iso = brtTimeToIso(rest.data_voo, override_hora_brt);
+        if (!iso) { alert('Horário inválido. Use formato HH:MM (ex: 10:00).'); return; }
+        payload.override_ativo = 1;
+        payload.override_partida_programada = iso;
+        payload.override_partida_estimada = iso;
+      } else if (editing.override_ativo === 1) {
+        // Estava ativo e o usuário desligou
+        payload.override_ativo = 0;
+      }
+    }
+    onSubmit(payload);
+  };
 
   if (!isOpen) return null;
 
@@ -46,7 +88,7 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{editing ? 'Editar Voo' : 'Monitorar Novo Voo'}</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(wrappedSubmit)} className="p-6 space-y-4">
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><User className="w-4 h-4" /> Cliente</label>
             <input {...register('cliente', { required: true })} className={inputCls} placeholder="Nome do passageiro" />
@@ -98,6 +140,54 @@ export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
             </p>
             {errors.link_gerenciamento && <span className="text-xs text-red-700 dark:text-red-400">{errors.link_gerenciamento.message}</span>}
           </div>
+
+          {/* Override manual de horário — só ao editar */}
+          {editing && (
+            <div className="border border-amber-200 dark:border-amber-500/20 bg-amber-50/40 dark:bg-amber-500/5 rounded-lg p-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={overrideOn}
+                  onChange={e => setOverrideOn(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <Hand className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                  Sobrescrever horário manualmente
+                </span>
+              </label>
+
+              {overrideOn ? (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5" /> Horário de partida (Brasília)
+                    </label>
+                    <input
+                      type="time"
+                      {...register('override_hora_brt', { required: overrideOn })}
+                      className={inputCls}
+                      placeholder="10:00"
+                    />
+                    {errors.override_hora_brt && <span className="text-xs text-red-700 dark:text-red-400">Horário obrigatório</span>}
+                  </div>
+                  <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>
+                      Quando ativo, o sistema preserva esse horário e ignora atualizações da API.
+                      Cancelamento, desvio e mudança de portão/terminal continuam sendo monitorados normalmente.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                editing.override_ativo === 1 && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Override será desativado ao salvar. O próximo ciclo da API vai atualizar o horário com dados reais.
+                  </div>
+                )
+              )}
+            </div>
+          )}
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700/50">
             <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg cursor-pointer">Cancelar</button>
             <button type="submit" className="px-5 py-2.5 text-sm text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">

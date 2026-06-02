@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../hooks/useApi';
-import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2, Hand } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
 
@@ -206,7 +206,15 @@ export default function StatusTab({ showToast }) {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-slate-700 dark:text-slate-300 text-sm">
-                      <div>{formatTimeShort(f.partida_programada)} {f.partida_estimada && f.partida_estimada !== f.partida_programada && <span className="text-amber-700 dark:text-amber-400">→ {formatTimeShort(f.partida_estimada)}</span>}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span>{formatTimeShort(f.partida_programada)}</span>
+                        {f.partida_estimada && f.partida_estimada !== f.partida_programada && <span className="text-amber-700 dark:text-amber-400">→ {formatTimeShort(f.partida_estimada)}</span>}
+                        {f.override_ativo === 1 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30 px-1.5 py-0.5 rounded" title="Horário definido manualmente — não é atualizado pela API">
+                            <Hand className="w-2.5 h-2.5" /> Manual
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-slate-600 dark:text-slate-400 text-xs">{f.monitoramento_ativo ? untilNow(f.proxima_verificacao) : <span className="text-slate-400 dark:text-slate-600">pausado</span>}</td>
                     <td className="px-6 py-4">

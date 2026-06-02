@@ -39,7 +39,10 @@ function detectEvents(prev, next) {
   }
 
   // Reschedule (scheduled time changed). Skip if also cancelled (already covered).
-  if (prev.partida_programada && next.partida_programada
+  // Skip também quando override manual está ativo — o usuário definiu o horário
+  // manualmente, então não queremos notificar sobre divergência com a API.
+  if (!prev.override_ativo
+      && prev.partida_programada && next.partida_programada
       && prev.partida_programada !== next.partida_programada
       && next.status !== 'cancelled') {
     events.push({
@@ -94,6 +97,13 @@ async function isDuplicateEvent(flightId, evento, payload) {
 async function updateSnapshot(flight, normalized, archive) {
   const now = nowUtcIso();
   const nextCheck = archive ? null : addMinutesUtc(now, flight.cadencia_minutos);
+
+  // Quando override manual está ativo, preserva os horários definidos pelo usuário.
+  // Status, portão, terminal e chegada continuam sendo atualizados normalmente.
+  const isOverride = flight.override_ativo === 1;
+  const partidaProg = isOverride ? flight.partida_programada : normalized.partida_programada;
+  const partidaEst  = isOverride ? flight.partida_estimada   : normalized.partida_estimada;
+
   await dbRun(
     `UPDATE monitored_flights_status SET
        companhia = COALESCE(?, companhia),
@@ -114,7 +124,7 @@ async function updateSnapshot(flight, normalized, archive) {
     [
       normalized.companhia, normalized.origem, normalized.destino,
       normalized.status,
-      normalized.partida_programada, normalized.partida_estimada,
+      partidaProg, partidaEst,
       normalized.chegada_programada, normalized.chegada_estimada,
       normalized.portao, normalized.terminal,
       archive ? 0 : 1,
