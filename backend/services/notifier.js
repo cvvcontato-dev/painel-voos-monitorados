@@ -3,7 +3,7 @@ const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
 const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName, firstNameOf, lastNameOf, manageBookingUrl } = require('../helpers/voucherCarrier');
-const { buildReservationGroups } = require('../helpers/reservationGroups');
+const { buildReservationGroups, dedupeReservationGroups } = require('../helpers/reservationGroups');
 
 // Caminho absoluto do PNG da logo da agência — anexado via CID no e-mail.
 // CID é universalmente suportado por clientes de e-mail (Gmail, Outlook, Apple Mail, etc.)
@@ -297,15 +297,10 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, iti
     // Para QRs/check-in, deduplicamos por (cia, PNR): uma reserva round-trip com
     // mesmo localizador na ida e volta gera UM QR só (o check-in cobre o PNR inteiro).
     const paxLastName = lastNameOf(passengers[0]?.name);
-    const sectionGroups = buildReservationGroups(vd);
-    const groups = [];
-    const seenPnr = new Set();
-    sectionGroups.forEach(g => {
-        const key = `${g.carrierKey}|${g.locator}`;
-        if (seenPnr.has(key)) return;
-        seenPnr.add(key);
-        groups.push({ ...g, bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport) });
-    });
+    const groups = dedupeReservationGroups(buildReservationGroups(vd)).map(g => ({
+        ...g,
+        bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport)
+    }));
     const hasMultiGroups = groups.length > 1;
     const fallbackCarrier = (groups[0]?.carrierKey) || (vd.carrier && vd.carrier !== 'multi' ? vd.carrier : 'azul').toLowerCase();
     const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
@@ -453,8 +448,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, iti
         const depCity = airportCity(depIata) || depIata;
         const arrCity = airportCity(arrIata) || arrIata;
         const tripLocator = t.locator || locator;
-        const dir = (t.direction || '').toLowerCase();
-        const title = dir === 'ida' ? 'Voo de Ida' : (dir === 'volta' ? 'Voo de Volta' : `Trecho ${idx + 1}`);
+        const title = directionLabel(t.direction, idx);
 
         return `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #E5E7EB;border-top:4px solid #00539C;border-radius:4px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.05);">

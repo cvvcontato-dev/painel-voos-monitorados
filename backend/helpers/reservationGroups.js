@@ -83,4 +83,19 @@ function buildReservationGroups(data) {
   return groups;
 }
 
-module.exports = { buildReservationGroups };
+// Deduplica grupos de seção por (cia, PNR) para QRs/CTAs — round-trip de mesmo
+// localizador vira 1 QR; multidestinos com PNRs distintos vira N. Espelhado no
+// frontend (_shared.jsx#dedupeReservationGroups).
+function dedupeReservationGroups(groups) {
+  const out = [];
+  const seen = new Set();
+  (groups || []).forEach(g => {
+    const key = `${g.carrierKey}|${g.locator}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(g);
+  });
+  return out;
+}
+
+module.exports = { buildReservationGroups, dedupeReservationGroups };

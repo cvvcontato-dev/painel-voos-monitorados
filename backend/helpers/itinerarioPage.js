@@ -10,7 +10,7 @@ const {
   lastNameOf,
   manageBookingUrl
 } = require('./voucherCarrier');
-const { buildReservationGroups } = require('./reservationGroups');
+const { buildReservationGroups, dedupeReservationGroups } = require('./reservationGroups');
 
 // Rótulo curto de um grupo de reserva pra CTAs/QRs (ex.: "Interno").
 function groupShortLabel(label) {
@@ -79,15 +79,10 @@ async function renderItinerarioPage({ voucherData, settings }) {
   // Grupos de reserva; QRs/CTAs deduplicam por (cia, PNR) — round-trip de mesmo
   // localizador gera 1 QR; multidestinos com PNRs distintos gera N.
   const paxLastName = lastNameOf(passengers[0]?.name);
-  const sectionGroups = buildReservationGroups(vd);
-  const groups = [];
-  const seenPnr = new Set();
-  sectionGroups.forEach(g => {
-    const key = `${g.carrierKey}|${g.locator}`;
-    if (seenPnr.has(key)) return;
-    seenPnr.add(key);
-    groups.push({ ...g, bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport) });
-  });
+  const groups = dedupeReservationGroups(buildReservationGroups(vd)).map(g => ({
+    ...g,
+    bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport)
+  }));
   const hasMultiGroups = groups.length > 1;
   const fallbackCarrier = (groups[0]?.carrierKey) || (vd.carrier && vd.carrier !== 'multi' ? vd.carrier : 'azul').toLowerCase();
   const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();

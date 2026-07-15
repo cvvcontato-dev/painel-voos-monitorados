@@ -113,7 +113,14 @@ router.post('/combine', uploadMulti, async (req, res) => {
     unified.meta.sourceFileHash = composedHash;
 
     const paths = files.map((f, i) => path.join(uploadsDir(), `${ts}-${roles[i]}-${hashes[i].slice(7, 15)}${path.extname(f.originalname) || ''}`));
-    paths.forEach((p, i) => fs.writeFileSync(p, files[i].buffer));
+    // Escrita atômica-ish: se uma escrita falhar no meio, remove as já gravadas.
+    const written = [];
+    try {
+      paths.forEach((p, i) => { fs.writeFileSync(p, files[i].buffer); written.push(p); });
+    } catch (writeErr) {
+      written.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
+      throw writeErr;
+    }
     const filePath = paths.join('|');
 
     db.run(
