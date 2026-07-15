@@ -103,3 +103,48 @@ test('PUT with invalid unified returns 422', async () => {
   expect(res.body.error).toMatch(/schema/);
   expect(Array.isArray(res.body.details)).toBe(true);
 });
+
+// --- Multidestinos: POST /combine ---
+const pdf = () => Buffer.from('%PDF-1.4 fake'); // extractor em STUB (EXTRACTION_MODE=stub) gera 2 trips por arquivo
+
+test('POST /combine com 3 arquivos (ida+interno+volta) cria voucher', async () => {
+  const { agent, csrf } = await authed();
+  const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename: 'ida.pdf', contentType: 'application/pdf' }).field('roles', 'ida')
+    .attach('files', pdf(), { filename: 'interno.pdf', contentType: 'application/pdf' }).field('roles', 'interno')
+    .attach('files', pdf(), { filename: 'volta.pdf', contentType: 'application/pdf' }).field('roles', 'volta');
+  expect(res.status).toBe(201);
+  expect(res.body.id).toEqual(expect.any(Number));
+  expect(res.body.unified.trips.length).toBeGreaterThanOrEqual(3);
+  expect(res.body.unified.meta.combined).toBe(true);
+});
+
+test('POST /combine sem ida retorna 400', async () => {
+  const { agent, csrf } = await authed();
+  const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename: 'a.pdf', contentType: 'application/pdf' }).field('roles', 'interno')
+    .attach('files', pdf(), { filename: 'b.pdf', contentType: 'application/pdf' }).field('roles', 'volta');
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/ida/i);
+});
+
+test('POST /combine com 2 voltas retorna 400', async () => {
+  const { agent, csrf } = await authed();
+  const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename: 'a.pdf', contentType: 'application/pdf' }).field('roles', 'ida')
+    .attach('files', pdf(), { filename: 'b.pdf', contentType: 'application/pdf' }).field('roles', 'volta')
+    .attach('files', pdf(), { filename: 'c.pdf', contentType: 'application/pdf' }).field('roles', 'volta');
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/volta/i);
+});
+
+test('POST /combine com 1 arquivo retorna 400', async () => {
+  const { agent, csrf } = await authed();
+  const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename: 'a.pdf', contentType: 'application/pdf' }).field('roles', 'ida');
+  expect(res.status).toBe(400);
+});

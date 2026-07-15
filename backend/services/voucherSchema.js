@@ -7,7 +7,7 @@ const CARRIERS = ['azul', 'gol', 'latam', 'multi'];
 //   reservation.secondaryCarrier: string | null   — carrier da volta quando difere do principal
 //   reservation.primaryCarrier:   string | null   — carrier da ida (set quando carrier === 'multi')
 //   trips[].locator:              string | null   — localizador específico daquele trip (merge)
-//   meta.merged:                  boolean         — true se veio de mergeVouchers
+//   meta.merged:                  boolean         — true se veio de combineVouchers (espelho legado de meta.combined)
 //   meta.outboundSourceHash:      string | null
 //   meta.returnSourceHash:        string | null
 //   reservation.reservations[]:   Array<{ code, carrier, appliesTo }> — localizadores por trecho (multidestinos)
