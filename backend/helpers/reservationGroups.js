@@ -25,7 +25,7 @@ function resolveReservationFor(role, data, tripLocator) {
   return { carrierKey: normCarrier(data.carrier) || 'azul', locator: tripLocator || r.locator || '' };
 }
 
-function labelForInternoGroups(count) {
+function hasMultipleInternoGroups(count) {
   return count > 1;
 }
 
@@ -47,7 +47,12 @@ function buildReservationGroups(data) {
     if (!roleTrips.length) return;
 
     if (role === 'interno') {
-      // Subdivide por (carrierKey, locator)
+      // Subdivide por (carrierKey, locator). A separação por PNR depende de cada
+      // interno trip carregar seu próprio `locator`: o combineVouchers (Task 3)
+      // garante isso carimbando `trip.locator` a partir do `reservation.locator`
+      // do voucher de origem, o que faz `trip.locator === reservation.code`.
+      // Quando `trip.locator` estiver ausente, todos os internos colapsam no
+      // primeiro `reservations[]` com appliesTo:'interno' — comportamento aceito.
       const buckets = [];
       roleTrips.forEach(t => {
         const { carrierKey, locator } = resolveReservationFor('interno', data, t.locator);
@@ -56,7 +61,7 @@ function buildReservationGroups(data) {
         if (!b) { b = { key, carrierKey, locator, trips: [] }; buckets.push(b); }
         b.trips.push(t);
       });
-      const multi = labelForInternoGroups(buckets.length);
+      const multi = hasMultipleInternoGroups(buckets.length);
       buckets.forEach(b => {
         const dest = b.trips[b.trips.length - 1].arrival && b.trips[b.trips.length - 1].arrival.airport;
         groups.push({

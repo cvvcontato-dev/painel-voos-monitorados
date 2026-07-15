@@ -75,6 +75,41 @@ describe('buildReservationGroups', () => {
     expect(g[1].locator).toBe('VLT333');
   });
 
+  test('interno sem arrival.airport em cenário >1 grupo → não lança, label INTERNO — vazio', () => {
+    const noArrival = trip('interno', 'FCO', 'ATH', 'INTB');
+    delete noArrival.arrival;
+    const data = {
+      carrier: 'multi',
+      reservation: { locator: 'IDA111', reservations: [
+        { code: 'IDA111', carrier: 'azul', appliesTo: 'ida' },
+        { code: 'INTA',   carrier: 'gol',  appliesTo: 'interno' },
+        { code: 'INTB',   carrier: 'gol',  appliesTo: 'interno' }
+      ] },
+      trips: [ trip('ida','GRU','LIS','IDA111'), trip('interno','LIS','FCO','INTA'), noArrival ]
+    };
+    let g;
+    expect(() => { g = buildReservationGroups(data); }).not.toThrow();
+    const internos = g.filter(x => x.role === 'interno');
+    expect(internos).toHaveLength(2);
+    expect(internos[1].label).toBe('INTERNO — ');
+  });
+
+  test('2 internos com MESMO (carrier, locator) → colapsam num único grupo', () => {
+    const data = {
+      carrier: 'multi',
+      reservation: { locator: 'IDA111', reservations: [
+        { code: 'IDA111', carrier: 'azul', appliesTo: 'ida' },
+        { code: 'INT222', carrier: 'gol',  appliesTo: 'interno' }
+      ] },
+      trips: [ trip('ida','GRU','LIS','IDA111'), trip('interno','LIS','FCO','INT222'), trip('interno','FCO','ATH','INT222') ]
+    };
+    const g = buildReservationGroups(data);
+    const internos = g.filter(x => x.role === 'interno');
+    expect(internos).toHaveLength(1);
+    expect(internos[0].label).toBe('DESTINOS INTERNOS');
+    expect(internos[0].trips).toHaveLength(2);
+  });
+
   test('trips vazio → []', () => {
     expect(buildReservationGroups({ trips: [] })).toEqual([]);
     expect(buildReservationGroups({})).toEqual([]);
