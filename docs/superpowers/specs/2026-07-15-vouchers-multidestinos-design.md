@@ -145,7 +145,7 @@ Retorna: [ { role, label, trips[], carrierKey, locator, bookingUrl }, ... ]
 
 - `tripSubtitle('interno')` → `'VOO INTERNO'`. Itinerário passa a agrupar por `buildReservationGroups`, com subtítulo de seção por grupo (IDA / DESTINOS INTERNOS / VOLTA) em vez de `trips.map` flat.
 - **QR:** substitui o par fixo `qrUrl`/`qrUrlSecondary` (e a flag `isMultiCarrier`) por `qrUrls: []` — um QR por grupo. `useEffect` gera N data-URLs via `Promise.all`. Rótulo do QR = "Gerenciar reserva" (grupo único) ou o `label` do grupo (N>1).
-- **Layout do rodapé:** flex-wrap de QRs. Cap visual de **4** QRs a 88px; com >4 grupos, reduz para 64px; excedentes viram faixa textual "Demais reservas" (PNR + link, sem QR). Caso real típico = 3-4 grupos.
+- **Layout do rodapé:** flex-wrap de QRs. Regra concreta de overflow: `≤4` grupos → todos a 88px; `5–6` grupos → todos a 64px (cabem na largura 794); `>6` grupos → os 6 primeiros como QR a 64px e o restante numa faixa textual "Demais reservas" (PNR + link, sem QR). Caso real típico = 3-4 grupos.
 - Header: `hasDualLocator` vira `groups.length > 1` → lista compacta "Ida: XXX · Interno: YYY · Volta: ZZZ".
 
 ### 4.3 `VoucherCompactoV1.jsx` (Compacto)
@@ -185,6 +185,7 @@ Cópia pt-BR:
 
 - `helpers/itinerarioPage.js` e `notifier.js#buildVoucherEmailHtml`: usam o `reservationGroups.js` server-side para render em seções + N QRs.
 - E-mail: bloco "Suas reservas" com N QR-PNGs. Mantém regras do handoff §6.4: QR como **PNG data-URL** (não SVG), **envolto em `<a>`**, apontando pro check-in (não pro itinerário). Logo via CID (inalterado).
+- **`routes/vouchers.js#POST /:id/send-email`:** hoje o handler calcula duas URLs (`bookingUrl` + `secondaryBookingUrl` a partir de `primaryCarrier`/`secondaryCarrier`) e as passa para `sendVoucherEmail`. Essa lógica de duas URLs é **removida**: `buildVoucherEmailHtml`/`sendVoucherEmail` passam a derivar os grupos (e suas URLs de check-in) do próprio `voucherData` via `reservationGroups.js`. O handler não computa mais URLs. Ajustar a assinatura de `sendVoucherEmail` para dropar os params de URL redundantes.
 
 ---
 
