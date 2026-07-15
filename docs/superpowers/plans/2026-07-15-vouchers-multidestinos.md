@@ -488,11 +488,13 @@ describe('combineVouchers', () => {
     expect(c.carrier).toBe('azul');
   });
 
-  test('validações: 0 idas, 2 idas, 2 voltas, N=1 lançam', () => {
+  test('validações: 0 idas, 2 idas, 2 voltas, N=1, N=9 lançam', () => {
     expect(() => combineVouchers([{ voucher: clone(base), role: 'interno' }, { voucher: clone(base), role: 'volta' }])).toThrow(/ida/i);
     expect(() => combineVouchers([{ voucher: clone(base), role: 'ida' }, { voucher: clone(base), role: 'ida' }])).toThrow(/ida/i);
     expect(() => combineVouchers([{ voucher: clone(base), role: 'ida' }, { voucher: clone(base), role: 'volta' }, { voucher: clone(base), role: 'volta' }])).toThrow(/volta/i);
     expect(() => combineVouchers([{ voucher: clone(base), role: 'ida' }])).toThrow(/2/);
+    const nine = [{ voucher: clone(base), role: 'ida' }, ...Array.from({ length: 8 }, () => ({ voucher: clone(base), role: 'interno' }))];
+    expect(() => combineVouchers(nine)).toThrow(/8/);
   });
 });
 ```
@@ -626,26 +628,26 @@ git commit -m "feat(vouchers): combineVouchers (N vouchers rotulados) com teste 
 
 Em `backend/__tests__/routes-vouchers.test.js`, localizar os testes de `/merge` e substituí-los por `/combine`. Padrão de envio multipart com N campos `files` + N `roles` (usar `supertest` com `.attach('files', buf, name)` repetido e `.field('roles', role)` repetido — a ordem de `.attach`/`.field` preserva o pareamento por índice). Exemplo de caso de sucesso e de validação:
 
+**IMPORTANTE — CSRF:** o arquivo NÃO tem `loginAgent`. Ele tem `async function authed()` que retorna `{ agent, csrf }`, e **toda** request mutante seta `.set('X-CSRF-Token', csrf)` (ver os testes existentes de `POST /api/vouchers` e `/send-email`). Sem isso, o POST leva 403. Confirmar o nome exato do helper relendo o topo do arquivo antes de escrever.
+
 ```js
-// (adaptar imports/login helper ao padrão já usado no arquivo)
-const pdf = Buffer.from('%PDF-1.4 fake'); // extractor em STUB sem GEMINI_API_KEY
+const pdf = Buffer.from('%PDF-1.4 fake'); // extractor em STUB sem GEMINI_API_KEY (gera 2 trips por arquivo)
 
 test('POST /combine com 3 arquivos (ida+interno+volta) cria voucher', async () => {
-  const agent = await loginAgent(); // helper existente no arquivo
+  const { agent, csrf } = await authed();
   const res = await agent.post('/api/vouchers/combine')
-    .attach('files', pdf, 'ida.pdf')
-    .field('roles', 'ida')
-    .attach('files', pdf, 'interno.pdf')
-    .field('roles', 'interno')
-    .attach('files', pdf, 'volta.pdf')
-    .field('roles', 'volta');
+    .set('X-CSRF-Token', csrf)
+    .attach('files', pdf, 'ida.pdf').field('roles', 'ida')
+    .attach('files', pdf, 'interno.pdf').field('roles', 'interno')
+    .attach('files', pdf, 'volta.pdf').field('roles', 'volta');
   expect(res.status).toBe(201);
   expect(res.body.unified.trips.length).toBeGreaterThanOrEqual(3);
 });
 
 test('POST /combine sem ida → 400', async () => {
-  const agent = await loginAgent();
+  const { agent, csrf } = await authed();
   const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
     .attach('files', pdf, 'a.pdf').field('roles', 'interno')
     .attach('files', pdf, 'b.pdf').field('roles', 'volta');
   expect(res.status).toBe(400);
@@ -653,14 +655,15 @@ test('POST /combine sem ida → 400', async () => {
 });
 
 test('POST /combine com 1 arquivo → 400', async () => {
-  const agent = await loginAgent();
+  const { agent, csrf } = await authed();
   const res = await agent.post('/api/vouchers/combine')
+    .set('X-CSRF-Token', csrf)
     .attach('files', pdf, 'a.pdf').field('roles', 'ida');
   expect(res.status).toBe(400);
 });
 ```
 
-> NOTA: verificar como o STUB do extractor gera trips no arquivo `voucherExtractor.js` — se o stub sempre gera 1 trip 'ida', o combiner re-taga por role, então o teste de `trips.length >= 3` vale. Se o stub gerar contagem diferente, ajustar a asserção para `>= items enviados`.
+> NOTA STUB: o extractor em STUB emite **2 trips por arquivo**, e o combiner re-taga por role. Logo 3 arquivos → 6 trips, e `trips.length >= 3` vale.
 
 - [ ] **Step 2: Rodar teste — deve falhar**
 
@@ -960,16 +963,16 @@ git commit -m "feat(vouchers): Compacto renderiza N secoes e N QRs (multidestino
 
 - [ ] **Step 1: API client**
 
-Em `voucherClient.js`: remover `uploadMerge`; adicionar:
+Em `voucherClient.js`: remover `uploadMerge`; adicionar. **Usar o singleton `api`** (importado de `../hooks/useApi`), que injeta `X-CSRF-Token` — o arquivo NÃO importa `axios` cru, e o `uploadMerge` que estamos substituindo já usa `api.post`:
 ```js
 export async function uploadCombine(items) {
   const fd = new FormData();
   items.forEach(({ file, role }) => { fd.append('files', file); fd.append('roles', role); });
-  const r = await axios.post('/api/vouchers/combine', fd, { withCredentials: true });
+  const r = await api.post('/api/vouchers/combine', fd);
   return r.data;
 }
 ```
-(Seguir o estilo de export/axios já usado no arquivo — verificar se usa `api.post` ou `axios` cru.)
+Resposta: `{ id, unified }` (mesmo shape das rotas `/` e ex-`/merge`; o frontend lê `.id`/`.unified`). Nota: a spec §3.1 descreve como `{ voucher }`, mas o shape `{ id, unified }` é o correto por consistência com as rotas existentes — divergência intencional.
 
 - [ ] **Step 2: Estado da UI**
 
