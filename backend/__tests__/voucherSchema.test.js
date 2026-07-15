@@ -89,4 +89,12 @@ describe('multidestinos', () => {
     const r = validate(bad);
     expect(r.ok).toBe(false);
   });
+
+  test('não lança quando reservations[] contém item não-objeto (null)', () => {
+    const bad = JSON.parse(JSON.stringify(okBase));
+    bad.reservation.reservations[0] = null;
+    let r;
+    expect(() => { r = validate(bad); }).not.toThrow();
+    expect(r.ok).toBe(false);
+  });
 });
