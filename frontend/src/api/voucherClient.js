@@ -13,11 +13,12 @@ export const upload = (file) => {
   return api.post('/api/vouchers/', fd).then(r => r.data);
 };
 
-export const uploadMerge = (outboundFile, returnFile) => {
+// Combina 2 a 8 vouchers rotulados (ida / interno / volta) num único itinerário.
+// items: [{ file, role }], pareados por índice nos campos files[]/roles[].
+export const uploadCombine = (items) => {
   const fd = new FormData();
-  fd.append('outbound', outboundFile);
-  fd.append('return', returnFile);
-  return api.post('/api/vouchers/merge', fd).then(r => r.data);
+  items.forEach(({ file, role }) => { fd.append('files', file); fd.append('roles', role); });
+  return api.post('/api/vouchers/combine', fd).then(r => r.data);
 };
 
 export const update = (id, unified) =>

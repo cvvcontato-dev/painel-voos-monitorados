@@ -7,12 +7,15 @@ const CARRIERS = ['azul', 'gol', 'latam', 'multi'];
 //   reservation.secondaryCarrier: string | null   — carrier da volta quando difere do principal
 //   reservation.primaryCarrier:   string | null   — carrier da ida (set quando carrier === 'multi')
 //   trips[].locator:              string | null   — localizador específico daquele trip (merge)
-//   meta.merged:                  boolean         — true se veio de mergeVouchers
+//   meta.merged:                  boolean         — true se veio de combineVouchers (espelho legado de meta.combined)
 //   meta.outboundSourceHash:      string | null
 //   meta.returnSourceHash:        string | null
+//   reservation.reservations[]:   Array<{ code, carrier, appliesTo }> — localizadores por trecho (multidestinos)
 const LAYOUT_VERSIONS = ['azul.confirmacao.v1'];
 const PASSENGER_TYPES = ['adulto', 'crianca', 'bebe'];
-const DIRECTIONS = ['ida', 'volta', 'multi'];
+const DIRECTIONS = ['ida', 'interno', 'volta', 'multi'];
+// appliesTo de reservation.reservations[] — direções reais, sem o sintético 'multi'.
+const APPLIES = DIRECTIONS.filter(d => d !== 'multi');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/;
 
@@ -45,6 +48,20 @@ function validate(v) {
   });
 
   req(v.meta && typeof v.meta.parsedAt === 'string', 'meta.parsedAt obrigatório');
+
+  if (v.reservation && v.reservation.reservations !== undefined) {
+    const list = v.reservation.reservations;
+    req(Array.isArray(list), 'reservation.reservations deve ser array');
+    if (Array.isArray(list)) {
+      list.forEach((r, i) => {
+        if (!r || typeof r !== 'object') { errors.push(`reservations[${i}] deve ser objeto`); return; }
+        req(typeof r.code === 'string' && r.code.length > 0, `reservations[${i}].code obrigatório`);
+        req(CARRIERS.includes(r.carrier), `reservations[${i}].carrier inválido: ${r && r.carrier}`);
+        req(APPLIES.includes(r.appliesTo), `reservations[${i}].appliesTo inválido: ${r && r.appliesTo}`);
+      });
+    }
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

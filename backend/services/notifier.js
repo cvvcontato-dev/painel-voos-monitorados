@@ -2,7 +2,8 @@ const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
-const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName, firstNameOf, lastNameOf } = require('../helpers/voucherCarrier');
+const { airportCity, tripCarrier, normalizeFlightNumber, carrierDisplayName, carrierShortName, firstNameOf, lastNameOf, manageBookingUrl } = require('../helpers/voucherCarrier');
+const { buildReservationGroups, dedupeReservationGroups } = require('../helpers/reservationGroups');
 
 // Caminho absoluto do PNG da logo da agência — anexado via CID no e-mail.
 // CID é universalmente suportado por clientes de e-mail (Gmail, Outlook, Apple Mail, etc.)
@@ -252,7 +253,18 @@ function directionLabel(direction, idx, total) {
     const d = (direction || '').toLowerCase();
     if (d === 'ida') return 'Voo de Ida';
     if (d === 'volta') return 'Voo de Volta';
+    if (d === 'interno') return 'Voo Interno';
     return `Trecho ${idx + 1}`;
+}
+
+// Rótulo curto de um grupo de reserva pra listas compactas (ex.: header de localizadores).
+function groupShortLabel(label) {
+    const l = (label || '').toUpperCase();
+    if (l === 'IDA') return 'Ida';
+    if (l === 'VOLTA') return 'Volta';
+    if (l === 'DESTINOS INTERNOS') return 'Interno';
+    if (l.startsWith('INTERNO')) return 'Interno'; // "INTERNO — FCO"
+    return label;
 }
 
 // SVG icons (inline — email-safe)
@@ -272,7 +284,7 @@ const SOCIAL_WHATSAPP_URL  = 'https://wa.me/5575992020012';
 // E-mail no formato do MODELO COMPACTADO do usuário (header azul, route overview,
 // cards de voo, CTA, próximos passos numerados, support card com QR, footer escuro).
 // 100% inline styles + tables — email-safe (Gmail/Outlook/Apple Mail).
-async function buildVoucherEmailHtml({ voucherData, settings, customMessage, bookingUrl, secondaryBookingUrl, itinerarioUrl }) {
+async function buildVoucherEmailHtml({ voucherData, settings, customMessage, itinerarioUrl }) {
     const vd = voucherData || {};
     const s = settings || {};
     const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -280,14 +292,17 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
 
     const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
     const locator = (vd.reservation?.locator || 'N/A').toString();
-    const secondaryLocator = vd.reservation?.secondaryLocator || '';
-    const hasDualLocator = !!secondaryLocator && secondaryLocator !== locator;
-    const isMultiCarrier = (vd.carrier || '').toLowerCase() === 'multi'
-        && !!vd.reservation?.primaryCarrier
-        && !!vd.reservation?.secondaryCarrier;
-    const primaryCarrierKey = (vd.reservation?.primaryCarrier || vd.carrier || 'azul').toLowerCase();
-    const secondaryCarrierKey = (vd.reservation?.secondaryCarrier || '').toLowerCase();
-    const fallbackCarrier = isMultiCarrier ? primaryCarrierKey : (vd.carrier || 'azul').toLowerCase();
+
+    // Grupos de reserva (IDA / DESTINOS INTERNOS / VOLTA) para o itinerário.
+    // Para QRs/check-in, deduplicamos por (cia, PNR): uma reserva round-trip com
+    // mesmo localizador na ida e volta gera UM QR só (o check-in cobre o PNR inteiro).
+    const paxLastName = lastNameOf(passengers[0]?.name);
+    const groups = dedupeReservationGroups(buildReservationGroups(vd)).map(g => ({
+        ...g,
+        bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport)
+    }));
+    const hasMultiGroups = groups.length > 1;
+    const fallbackCarrier = (groups[0]?.carrierKey) || (vd.carrier && vd.carrier !== 'multi' ? vd.carrier : 'azul').toLowerCase();
     const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
     const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
     const originCity = airportCity(origin) || origin;
@@ -300,8 +315,6 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
     const periodRight = fmtDate(lastArr);
     const isOneWay = !periodRight || periodLeft === periodRight;
 
-    const safeBookingUrl = bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '#';
-    const safeSecondaryBookingUrl = secondaryBookingUrl && /^https?:\/\//i.test(secondaryBookingUrl) ? secondaryBookingUrl : '';
     const safeItinerarioUrl = itinerarioUrl && /^https?:\/\//i.test(itinerarioUrl) ? itinerarioUrl : '';
 
     const publicBaseUrl = (process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
@@ -320,19 +333,23 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
 
     // QR Code PNG embutido como data URL — mais compatível com clientes de e-mail (Gmail/Outlook
     // bloqueiam ou renderizam SVG inline inconsistentemente).
-    // PRIORIDADE: aponta pro check-in da cia (bookingUrl). Se não houver, cai pro itinerário hospedado.
-    // É o mesmo destino do botão "FAZER CHECK-IN" — escaneando OU clicando, o passageiro vai pro check-in.
-    let qrDataUrl = '';
-    const qrTarget = (safeBookingUrl && safeBookingUrl !== '#') ? safeBookingUrl
-                   : (safeItinerarioUrl || contactSiteHref);
-    try {
-        qrDataUrl = await QRCode.toDataURL(qrTarget, {
-            width: 192,           // 96px exibido em retina = 2x
-            margin: 1,
-            color: { dark: '#1A202C', light: '#ffffff' },
-            errorCorrectionLevel: 'M'
-        });
-    } catch { qrDataUrl = ''; }
+    // Um QR por grupo de reserva, apontando pro check-in daquela cia/PNR. Escaneando OU
+    // clicando (o QR é envolto em <a>), o passageiro vai pro check-in correspondente.
+    const safeGroupUrl = (u) => (u && /^https?:\/\//i.test(u)) ? u : (safeItinerarioUrl || contactSiteHref);
+    const qrByGroup = await Promise.all(groups.map(async g => {
+        const target = safeGroupUrl(g.bookingUrl);
+        let dataUrl = '';
+        try {
+            dataUrl = await QRCode.toDataURL(target, {
+                width: 192, margin: 1, color: { dark: '#1A202C', light: '#ffffff' }, errorCorrectionLevel: 'M'
+            });
+        } catch { dataUrl = ''; }
+        return { label: g.label, locator: g.locator, carrierKey: g.carrierKey, target, dataUrl };
+    }));
+    // QR "principal" (ida) para o support card — fallback pro itinerário se não houver grupos.
+    const primaryQr = qrByGroup[0] || { target: (safeItinerarioUrl || contactSiteHref), dataUrl: '' };
+    let qrDataUrl = primaryQr.dataUrl;
+    const qrTarget = primaryQr.target;
 
     // Custom message (acima do route overview)
     const trimmedMsg = (customMessage || '').trim();
@@ -374,9 +391,9 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E5E7EB;border-radius:4px;">
               <tr>
                 <td align="center" style="padding:16px;font-family:Inter,Arial,Helvetica,sans-serif;min-width:120px;">
-                  <div style="font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Localizador</div>
-                  ${hasDualLocator
-                    ? `<div style="color:#00539C;font-weight:700;font-size:13px;letter-spacing:0.05em;line-height:1.4;">Ida: ${escapeHtml(locator)}<br>Volta: ${escapeHtml(secondaryLocator)}</div>`
+                  <div style="font-size:12px;color:#718096;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Localizador${hasMultiGroups ? 'es' : ''}</div>
+                  ${hasMultiGroups
+                    ? `<div style="color:#00539C;font-weight:700;font-size:13px;letter-spacing:0.05em;line-height:1.5;">${groups.map(g => `${escapeHtml(groupShortLabel(g.label))}: ${escapeHtml(g.locator || '—')}`).join('<br>')}</div>`
                     : `<div style="color:#00539C;font-weight:700;font-size:20px;letter-spacing:0.1em;">${escapeHtml(locator)}</div>`}
                 </td>
               </tr>
@@ -431,8 +448,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         const depCity = airportCity(depIata) || depIata;
         const arrCity = airportCity(arrIata) || arrIata;
         const tripLocator = t.locator || locator;
-        const dir = (t.direction || '').toLowerCase();
-        const title = dir === 'ida' ? 'Voo de Ida' : (dir === 'volta' ? 'Voo de Volta' : `Trecho ${idx + 1}`);
+        const title = directionLabel(t.direction, idx);
 
         return `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #E5E7EB;border-top:4px solid #00539C;border-radius:4px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
@@ -477,11 +493,10 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         ? `<div style="margin-bottom:32px;">${trips.map(flightCard).join('')}</div>`
         : '';
 
-    // ===== CTA "Fazer Check-in" =====
-    const dualCtaButtons = (isMultiCarrier && safeSecondaryBookingUrl)
-        ? `<a href="${escapeHtml(safeBookingUrl)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;padding:12px 22px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);margin:6px 6px;">Check-in Ida (${escapeHtml(carrierShortName(primaryCarrierKey))}) &rarr;</a>
-           <a href="${escapeHtml(safeSecondaryBookingUrl)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;padding:12px 22px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);margin:6px 6px;">Check-in Volta (${escapeHtml(carrierShortName(secondaryCarrierKey))}) &rarr;</a>`
-        : `<a href="${escapeHtml(safeBookingUrl)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;padding:12px 32px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);">Fazer Check-in &rarr;</a>`;
+    // ===== CTA "Fazer Check-in" — um botão por grupo de reserva =====
+    const dualCtaButtons = hasMultiGroups
+        ? qrByGroup.map(g => `<a href="${escapeHtml(g.target)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;padding:12px 22px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);margin:6px 6px;">Check-in ${escapeHtml(groupShortLabel(g.label))} (${escapeHtml(carrierShortName(g.carrierKey))}) &rarr;</a>`).join('')
+        : `<a href="${escapeHtml(qrTarget)}" style="display:inline-block;background:#ffffff;color:#00539C;font-weight:700;font-size:14px;letter-spacing:0.1em;text-transform:uppercase;padding:12px 32px;border-radius:4px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.05);">Fazer Check-in &rarr;</a>`;
     const ctaHtml = `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#004A8F" style="background-color:#004A8F;border-radius:8px;margin-bottom:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
         <tr>
@@ -529,6 +544,30 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
         ${stepItem(2, 'Documentos em mãos', 'Tenha um documento oficial com foto e o localizador da reserva acessíveis. Estes dados serão solicitados no check-in.')}
         ${stepItem(3, 'Check-in assistido', 'Nossa equipe pode realizar o check-in para você e enviar o cartão de embarque diretamente. Basta nos avisar.')}
       </div>`;
+
+    // ===== Suas reservas (N QRs, só quando há mais de 1 grupo) =====
+    const reservasQrHtml = hasMultiGroups
+        ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:24px;">
+        <tr>
+          <td style="font-family:Inter,Arial,Helvetica,sans-serif;">
+            <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px;">Suas reservas</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                ${qrByGroup.map(g => `
+                <td valign="top" align="center" style="padding:8px;font-family:Inter,Arial,Helvetica,sans-serif;">
+                  <a href="${escapeHtml(g.target)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;border:0;outline:none;">
+                    ${g.dataUrl ? `<img src="${g.dataUrl}" alt="Check-in ${escapeHtml(groupShortLabel(g.label))}" width="88" height="88" style="display:block;width:88px;height:88px;border:1px solid #E5E7EB;border-radius:4px;">` : '<div style="width:88px;height:88px;background:#E5E7EB;border-radius:4px;"></div>'}
+                    <div style="font-size:11px;font-weight:700;color:#00539C;text-transform:uppercase;letter-spacing:0.05em;margin-top:6px;">${escapeHtml(groupShortLabel(g.label))}</div>
+                    <div style="font-size:11px;color:#718096;">${escapeHtml(carrierShortName(g.carrierKey))} &middot; ${escapeHtml(g.locator || '—')}</div>
+                  </a>
+                </td>`).join('')}
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>`
+        : '';
 
     // ===== Support Card =====
     const supportContactLines = [];
@@ -601,6 +640,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, boo
             ${tripsHtml}
             ${ctaHtml}
             ${itinerarioLinkHtml}
+            ${reservasQrHtml}
             ${stepsHtml}
             ${supportHtml}
             ${signoffHtml}
@@ -886,7 +926,7 @@ function _legacy({ voucherData, settings, customMessage, bookingUrl }) {
 }
 */
 
-async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, bookingUrl, secondaryBookingUrl, itinerarioUrl }) {
+async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, itinerarioUrl }) {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
@@ -915,7 +955,7 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
             to: to.join(', '),
             bcc: bcc || undefined,
             subject,
-            html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, bookingUrl, secondaryBookingUrl, itinerarioUrl }),
+            html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, itinerarioUrl }),
             attachments
         };
 

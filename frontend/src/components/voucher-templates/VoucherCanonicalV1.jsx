@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
   THEMES, detectCarrierKey, fmtTime, dateLabelWithDow, resolveBaggageWeight, buildBaggageBlocks,
   manageBookingUrl, firstPassengerLastName, normalizeFlightNumber,
+  buildReservationGroups, groupShortLabel, dedupeReservationGroups,
   CarrierLogo, IconPhone, IconMail, IconGlobe, IconBag, IconArrow
 } from './_shared';
 
@@ -42,7 +43,17 @@ function tripSubtitle(direction) {
   const d = (direction || '').toLowerCase();
   if (d === 'ida' || d === 'outbound') return 'VOO DE IDA';
   if (d === 'volta' || d === 'return' || d === 'inbound') return 'VOO DE VOLTA';
+  if (d === 'interno') return 'VOO INTERNO';
   return 'VOO';
+}
+
+// Título de seção do itinerário a partir do label do grupo de reserva.
+function sectionTitleForGroup(label) {
+  const l = (label || '').toUpperCase();
+  if (l === 'IDA') return 'IDA';
+  if (l === 'VOLTA') return 'VOLTA';
+  if (l === 'DESTINOS INTERNOS') return 'DESTINOS INTERNOS';
+  return l; // "INTERNO — FCO"
 }
 
 function baggageSubtitle(direction) {
@@ -53,30 +64,31 @@ function baggageSubtitle(direction) {
 }
 
 export default function VoucherCanonicalV1({ data }) {
-  const [qrUrl, setQrUrl] = useState('');
-  const [qrUrlSecondary, setQrUrlSecondary] = useState('');
+  const [qrMap, setQrMap] = useState({});
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
 
-  useEffect(() => {
-    if (!data) return;
-    const isMulti = (data.carrier || '').toLowerCase() === 'multi'
-      && !!data.reservation?.primaryCarrier
-      && !!data.reservation?.secondaryCarrier;
-    const primaryCk = isMulti
-      ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
-      : detectCarrierKey(data);
-    const url = manageBookingUrl(primaryCk, data?.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
-    QRCode.toDataURL(url, { width: 200, margin: 2 }).then(setQrUrl).catch(() => {});
+  // Grupos de reserva do itinerário (IDA / DESTINOS INTERNOS / VOLTA).
+  const sectionGroups = useMemo(() => (data ? buildReservationGroups(data) : []), [data]);
+  // Grupos deduplicados por (cia, PNR) para QRs/CTAs, com a URL de check-in.
+  const resGroups = useMemo(() => {
+    if (!data) return [];
+    return dedupeReservationGroups(sectionGroups).map(g => ({
+      ...g,
+      bookingUrl: manageBookingUrl(g.carrierKey, g.locator, firstPassengerLastName(data), g.trips?.[0]?.departure?.airport)
+    }));
+  }, [data, sectionGroups]);
 
-    if (isMulti && data.reservation?.secondaryCarrier) {
-      const secCk = data.reservation.secondaryCarrier.toLowerCase();
-      const secLoc = data.reservation?.secondaryLocator || data.reservation?.locator;
-      const url2 = manageBookingUrl(secCk, secLoc, firstPassengerLastName(data), data?.route?.destination);
-      QRCode.toDataURL(url2, { width: 200, margin: 2 }).then(setQrUrlSecondary).catch(() => {});
-    } else {
-      setQrUrlSecondary('');
-    }
-  }, [data]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(resGroups.map(g => QRCode.toDataURL(g.bookingUrl, { width: 200, margin: 2 }).catch(() => '')))
+      .then(urls => {
+        if (cancelled) return;
+        const m = {};
+        resGroups.forEach((g, i) => { m[g.bookingUrl] = urls[i]; });
+        setQrMap(m);
+      });
+    return () => { cancelled = true; };
+  }, [resGroups]);
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => {});
@@ -85,35 +97,21 @@ export default function VoucherCanonicalV1({ data }) {
   if (!data) return null;
   const carrierKey = detectCarrierKey(data);
   const theme = THEMES[carrierKey];
-  const trips = data.trips || [];
   const baggage = data.baggage || [];
   const passengers = data.passengers || [];
 
-  // Usa SEMPRE o nome canônico do tema (com "Linhas Aéreas" / "Airlines"),
-  // ignorando o que o Gemini retornou em branding.airlineName para garantir consistência.
-  // Em voucher multi-cia (merge), mostra "Azul + Gol" em vez de "Voo combinado".
-  const _multiCia = (data.carrier || '').toLowerCase() === 'multi'
-    && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
-    && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
-  const _primaryCk = _multiCia ? data.reservation.primaryCarrier.toLowerCase() : null;
-  const _secondaryCk = _multiCia ? data.reservation.secondaryCarrier.toLowerCase() : null;
+  // Nome no header: cia única (nome canônico do tema) ou soma das cias distintas
+  // ("Azul + Gol + Latam") quando multi.
   const _shortNameOf = (ck) => ({ azul: 'Azul', gol: 'Gol', latam: 'Latam' }[ck] || ck);
-  const airlineName = _multiCia
-    ? `${_shortNameOf(_primaryCk)} + ${_shortNameOf(_secondaryCk)}`
-    : theme.name;
-  const secondaryLocator = data.reservation?.secondaryLocator || '';
-  const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
-  const isMultiCarrier = (data.carrier || '').toLowerCase() === 'multi'
-    && !!data.reservation?.primaryCarrier
-    && !!data.reservation?.secondaryCarrier;
-  const primaryCarrierKey = isMultiCarrier
-    ? (data.reservation?.primaryCarrier || 'azul').toLowerCase()
-    : carrierKey;
-  const secondaryCarrierKey = (data.reservation?.secondaryCarrier || '').toLowerCase();
-  const bookingUrl = manageBookingUrl(primaryCarrierKey, data.reservation?.locator, firstPassengerLastName(data), data?.route?.origin);
-  const secondaryBookingUrl = isMultiCarrier && secondaryCarrierKey
-    ? manageBookingUrl(secondaryCarrierKey, secondaryLocator || data.reservation?.locator, firstPassengerLastName(data), data?.route?.destination)
-    : null;
+  const distinctCarriers = [...new Set(resGroups.map(g => g.carrierKey))];
+  const _multiCia = (data.carrier || '').toLowerCase() === 'multi' && distinctCarriers.length > 1;
+  const _primaryCk = _multiCia ? distinctCarriers[0] : null;
+  const _secondaryCk = _multiCia ? distinctCarriers[1] : null;
+  const airlineName = _multiCia ? distinctCarriers.map(_shortNameOf).join(' + ') : theme.name;
+
+  const hasMultiGroups = resGroups.length > 1;
+  // Tamanho dos QRs no rodapé: ≤4 → 88px; 5–6 → 64px (>6 idem, com scroll natural).
+  const qrSize = resGroups.length <= 4 ? 88 : 64;
 
   return (
     <div data-voucher-ready={data.layoutVersion} style={{ width: 794, minHeight: 1123, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1a2a48', background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -133,11 +131,12 @@ export default function VoucherCanonicalV1({ data }) {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)' }}>Localizador</div>
-            {hasDualLocator ? (
-              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 2, color: 'white', lineHeight: 1.25, marginTop: 2 }}>
-                <div>Ida: {data.reservation?.locator}</div>
-                <div>Volta: {secondaryLocator}</div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: 'rgba(255,255,255,0.75)' }}>{hasMultiGroups ? 'Localizadores' : 'Localizador'}</div>
+            {hasMultiGroups ? (
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, color: 'white', lineHeight: 1.4, marginTop: 2 }}>
+                {resGroups.map((g, i) => (
+                  <div key={i}>{groupShortLabel(g.label)}: {g.locator || '—'}</div>
+                ))}
               </div>
             ) : (
               <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 4, color: 'white', lineHeight: 1.1, marginTop: 2 }}>{data.reservation?.locator}</div>
@@ -189,32 +188,37 @@ export default function VoucherCanonicalV1({ data }) {
       <section style={{ padding: '8px 32px' }}>
         <SectionTitle accent={theme.accent}>Itinerário</SectionTitle>
         <div style={{ marginTop: 12 }}>
-          {trips.map((t, i) => (
-            <div key={i} style={{ padding: '10px 0', borderBottom: i < trips.length - 1 ? '1px solid #e5eaf0' : 'none' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, color: '#9aa5b8', marginBottom: 8 }}>
-                {tripSubtitle(t.direction)}
-                {t.locator && t.locator !== data.reservation?.locator && (
-                  <span style={{ marginLeft: 8, color: theme.accent, letterSpacing: 1 }}>· LOC {t.locator}</span>
+          {sectionGroups.map((g, gi) => (
+            <div key={gi} style={{ marginBottom: gi < sectionGroups.length - 1 ? 10 : 0 }}>
+              {/* Cabeçalho da seção (IDA / DESTINOS INTERNOS / VOLTA) */}
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: theme.accent, fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {sectionTitleForGroup(g.label)}
+                {g.locator && (
+                  <span style={{ color: '#9aa5b8', letterSpacing: 1, fontWeight: 600 }}>· LOC {g.locator}</span>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Date column */}
-                <div style={{ minWidth: 120 }}>
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#9aa5b8', letterSpacing: 1 }}>{dateLabelWithDow(t)}</div>
+              {g.trips.map((t, i) => (
+                <div key={i} style={{ padding: '8px 0', borderBottom: i < g.trips.length - 1 ? '1px solid #eef1f5' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Date column */}
+                    <div style={{ minWidth: 120 }}>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#9aa5b8', letterSpacing: 1 }}>{dateLabelWithDow(t)}</div>
+                    </div>
+                    {/* Departure */}
+                    <div style={{ minWidth: 110 }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.departure?.datetime)}</div>
+                      <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>{t.departure?.airport} ·</div>
+                    </div>
+                    {/* Center separator */}
+                    <Separator flightNumber={normalizeFlightNumber(t.flightNumber)} durationText={t.durationText} accent={theme.accent} />
+                    {/* Arrival */}
+                    <div style={{ minWidth: 110, textAlign: 'right' }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.arrival?.datetime)}</div>
+                      <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>· {t.arrival?.airport}</div>
+                    </div>
+                  </div>
                 </div>
-                {/* Departure */}
-                <div style={{ minWidth: 110 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.departure?.datetime)}</div>
-                  <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>{t.departure?.airport} ·</div>
-                </div>
-                {/* Center separator */}
-                <Separator flightNumber={normalizeFlightNumber(t.flightNumber)} durationText={t.durationText} accent={theme.accent} />
-                {/* Arrival */}
-                <div style={{ minWidth: 110, textAlign: 'right' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2a48', lineHeight: 1 }}>{fmtTime(t.arrival?.datetime)}</div>
-                  <div style={{ fontSize: 12, color: '#6b7a90', marginTop: 4 }}>· {t.arrival?.airport}</div>
-                </div>
-              </div>
+              ))}
             </div>
           ))}
         </div>
@@ -288,20 +292,23 @@ export default function VoucherCanonicalV1({ data }) {
               {settings.contact_extra && <div style={{ color: '#777', marginTop: 2 }}>{settings.contact_extra}</div>}
             </div>
           </div>
-          {qrUrl && (
-            <div style={{ display: 'flex', gap: 10 }}>
-              <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
-                <img src={qrUrl} alt="Check-in ida" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
-                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: theme.accent, marginTop: 6, textAlign: 'center', fontWeight: 700, lineHeight: 1.3, width: 98 }}>
-                  {isMultiCarrier ? `Check-in Ida` : 'Gerenciar reserva'}
-                </div>
-              </a>
-              {isMultiCarrier && qrUrlSecondary && secondaryBookingUrl && (
-                <a href={secondaryBookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: 100 }}>
-                  <img src={qrUrlSecondary} alt="Check-in volta" style={{ width: 88, height: 88, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: theme.accent, marginTop: 6, textAlign: 'center', fontWeight: 700, lineHeight: 1.3, width: 98 }}>Check-in Volta</div>
-                </a>
-              )}
+          {resGroups.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: qrSize <= 64 ? 360 : 320 }}>
+              {resGroups.map((g, i) => {
+                const qr = qrMap[g.bookingUrl];
+                const label = hasMultiGroups ? `Check-in ${groupShortLabel(g.label)}` : 'Gerenciar reserva';
+                const boxW = qrSize + 12;
+                return (
+                  <a key={i} href={g.bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', width: boxW }}>
+                    {qr
+                      ? <img src={qr} alt={label} style={{ width: qrSize, height: qrSize, background: 'white', padding: 5, border: '1px solid #e5eaf0', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+                      : <div style={{ width: qrSize, height: qrSize, background: '#f4f6f9', border: '1px solid #e5eaf0', marginLeft: 'auto', marginRight: 'auto' }} />}
+                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: theme.accent, marginTop: 6, textAlign: 'center', fontWeight: 700, lineHeight: 1.3, width: boxW - 2 }}>
+                      {label}
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>

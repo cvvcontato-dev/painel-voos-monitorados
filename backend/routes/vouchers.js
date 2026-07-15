@@ -10,9 +10,8 @@ const { normalize } = require('../services/voucherNormalizer');
 const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
 const { sendVoucherEmail } = require('../services/notifier');
-const { manageBookingUrl } = require('../helpers/voucherCarrier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
-const { mergeVouchers } = require('../services/voucherMerger');
+const { combineVouchers } = require('../services/voucherCombiner');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -71,48 +70,58 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 });
 
-// Para merge: 2 arquivos (campos 'outbound' e 'return')
-const uploadDual = upload.fields([
-  { name: 'outbound', maxCount: 1 },
-  { name: 'return',   maxCount: 1 }
-]);
+// Combine: 2 a 8 arquivos no campo 'files', 2 a 8 roles no campo 'roles' (pareados por índice)
+const uploadMulti = upload.array('files', 8);
 
-router.post('/merge', uploadDual, async (req, res) => {
-  const outFile = req.files?.outbound?.[0];
-  const retFile = req.files?.return?.[0];
-  if (!outFile || !retFile) {
-    return res.status(400).json({ error: 'arquivos obrigatórios: outbound + return' });
-  }
+router.post('/combine', uploadMulti, async (req, res) => {
+  const files = req.files || [];
+  let roles = req.body?.roles;
+  if (typeof roles === 'string') roles = [roles];
+  roles = Array.isArray(roles) ? roles : [];
+
+  if (files.length !== roles.length) return res.status(400).json({ error: 'files e roles precisam ter o mesmo tamanho' });
+  if (files.length < 2 || files.length > 8) return res.status(400).json({ error: 'Envie entre 2 e 8 vouchers' });
+  const VALID = ['ida', 'interno', 'volta'];
+  if (roles.some(r => !VALID.includes(r))) return res.status(400).json({ error: 'tipo de voucher inválido' });
+  if (roles.filter(r => r === 'ida').length !== 1) return res.status(400).json({ error: 'Envie exatamente 1 voucher de ida' });
+  if (roles.filter(r => r === 'volta').length > 1) return res.status(400).json({ error: 'No máximo 1 voucher de volta' });
+
   try {
-    const [outUnified, retUnified] = await Promise.all([
-      extractVoucher(outFile.buffer, outFile.mimetype),
-      extractVoucher(retFile.buffer, retFile.mimetype)
-    ]);
+    // Extrai todos em paralelo. Se qualquer um falhar, nada é persistido.
+    const unifiedList = await Promise.all(files.map(async (f, i) => {
+      try {
+        return await extractVoucher(f.buffer, f.mimetype);
+      } catch (e) {
+        e._voucherIndex = i; e._voucherRole = roles[i];
+        throw e;
+      }
+    }));
 
-    // Cada extração já é normalizada + validada parcialmente. Mescla:
-    const unified = mergeVouchers(outUnified, retUnified);
+    const items = unifiedList.map((voucher, i) => ({ voucher, role: roles[i] }));
+    const unified = combineVouchers(items);
 
-    // Validação final
     const v = validate(unified);
     if (!v.ok) {
-      console.error('[VOUCHERS] merge falhou na validação', v.errors);
-      return res.status(422).json({ error: 'schema inválido após merge', details: v.errors });
+      console.error('[VOUCHERS] combine falhou na validação', v.errors);
+      return res.status(422).json({ error: 'schema inválido após combinar', details: v.errors });
     }
 
-    // Hash composto (concatena os 2 SHAs)
-    const outHash = 'sha256:' + crypto.createHash('sha256').update(outFile.buffer).digest('hex');
-    const retHash = 'sha256:' + crypto.createHash('sha256').update(retFile.buffer).digest('hex');
-    const composedHash = `merge:${outHash.slice(7, 19)}+${retHash.slice(7, 19)}`;
+    // Salva todos os arquivos originais + hash composto
+    const ts = Date.now();
+    const hashes = files.map(f => 'sha256:' + crypto.createHash('sha256').update(f.buffer).digest('hex'));
+    const composedHash = `combine:${hashes.map(h => h.slice(7, 15)).join('+')}`.slice(0, 120);
     unified.meta.sourceFileHash = composedHash;
 
-    // Salva os DOIS arquivos originais (auditoria/LGPD)
-    const ts = Date.now();
-    const outPath = path.join(uploadsDir(), `${ts}-outbound-${outHash.slice(7, 15)}${path.extname(outFile.originalname) || ''}`);
-    const retPath = path.join(uploadsDir(), `${ts}-return-${retHash.slice(7, 15)}${path.extname(retFile.originalname) || ''}`);
-    fs.writeFileSync(outPath, outFile.buffer);
-    fs.writeFileSync(retPath, retFile.buffer);
-    // No source_file_path da row guardamos os 2 caminhos separados por '|'
-    const filePath = `${outPath}|${retPath}`;
+    const paths = files.map((f, i) => path.join(uploadsDir(), `${ts}-${roles[i]}-${hashes[i].slice(7, 15)}${path.extname(f.originalname) || ''}`));
+    // Escrita atômica-ish: se uma escrita falhar no meio, remove as já gravadas.
+    const written = [];
+    try {
+      paths.forEach((p, i) => { fs.writeFileSync(p, files[i].buffer); written.push(p); });
+    } catch (writeErr) {
+      written.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
+      throw writeErr;
+    }
+    const filePath = paths.join('|');
 
     db.run(
       `INSERT INTO vouchers (user_id, carrier, layout_version, source_file_path, source_file_hash, unified_json)
@@ -120,24 +129,30 @@ router.post('/merge', uploadDual, async (req, res) => {
       [req.session.userId, unified.carrier, unified.layoutVersion, filePath, composedHash, JSON.stringify(unified)],
       function (err) {
         if (err) {
-          try { fs.unlink(outPath, () => {}); fs.unlink(retPath, () => {}); } catch (_) {}
-          console.error('[VOUCHERS] erro ao salvar voucher merged', err.message);
+          paths.forEach(p => fs.unlink(p, () => {}));
+          console.error('[VOUCHERS] erro ao salvar voucher combinado', err.message);
           return res.status(500).json({ error: 'falha ao salvar voucher' });
         }
         audit(this.lastID, req.session.userId, 'create', {
-          merged: true,
-          outboundFile: outFile.originalname,
-          returnFile: retFile.originalname
+          combined: true, roles, files: files.map(f => f.originalname)
         }, composedHash);
         res.status(201).json({ id: this.lastID, unified });
       }
     );
   } catch (err) {
-    console.error('[VOUCHERS] erro ao processar merge', err.message);
+    const idxInfo = err._voucherRole ? ` #${(err._voucherIndex ?? 0) + 1} (${err._voucherRole})` : '';
+    console.error('[VOUCHERS] erro ao processar combine', err.message);
     if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
-      return res.status(503).json({ error: 'Serviço de extração (Gemini) com alta demanda. Tente em instantes.', retryable: true });
+      return res.status(503).json({ error: `Serviço de extração (Gemini) com alta demanda ao ler o voucher${idxInfo}. Tente em instantes.`, retryable: true });
     }
-    res.status(500).json({ error: 'erro ao processar merge', details: err.message });
+    if (/quota|exceeded/i.test(err.message)) {
+      return res.status(429).json({ error: `Cota da API Gemini esgotada ao ler o voucher${idxInfo}.`, retryable: true });
+    }
+    // Erros de validação do combiner (ex: "Envie exatamente 1 voucher de ida") → 400
+    if (/ida|volta|2 e 8|combinar/i.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
+    res.status(502).json({ error: `Não consegui ler o voucher${idxInfo}. ${err.message}` });
   }
 });
 
@@ -281,31 +296,8 @@ router.post('/:id/send-email', async (req, res) => {
           cookieHeader: req.headers.cookie,
           baseUrl
         });
-        // Usa o helper compartilhado que entende "SILVA, MAYARA" → "SILVA"
-        // (em vez de "MAYARA" que era o bug anterior).
-        const firstPassengerLastName = require('../helpers/voucherCarrier')
-          .lastNameOf((unified.passengers || [])[0]?.name);
-        const rawCarrier = (unified.carrier || 'azul').toLowerCase();
-        const isMulti = rawCarrier === 'multi';
-        const primaryCarrier = isMulti
-          ? (unified.reservation?.primaryCarrier || 'azul').toLowerCase()
-          : rawCarrier;
-        const bookingUrl = manageBookingUrl(
-          primaryCarrier,
-          unified.reservation?.locator,
-          firstPassengerLastName,
-          unified.route?.origin
-        );
-        // Quando multi-cia, calcula também a URL de check-in da volta.
-        let secondaryBookingUrl = null;
-        if (isMulti && unified.reservation?.secondaryCarrier) {
-          secondaryBookingUrl = manageBookingUrl(
-            unified.reservation.secondaryCarrier.toLowerCase(),
-            unified.reservation.secondaryLocator || unified.reservation.locator,
-            firstPassengerLastName,
-            unified.route?.destination
-          );
-        }
+        // As URLs de check-in por grupo de reserva são derivadas dentro de
+        // buildVoucherEmailHtml (via buildReservationGroups + manageBookingUrl).
         const itinerarioUrl = `${baseUrl}/itinerario/${signVoucherToken(req.params.id)}`;
         const result = await sendVoucherEmail({
           to: emails,
@@ -314,8 +306,6 @@ router.post('/:id/send-email', async (req, res) => {
           settings,
           attachmentPath: pdfPath,
           customMessage,
-          bookingUrl,
-          secondaryBookingUrl,
           itinerarioUrl
         });
         if (result.sucesso) {

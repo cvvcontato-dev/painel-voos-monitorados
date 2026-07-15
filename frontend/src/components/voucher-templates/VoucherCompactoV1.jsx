@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import QRCode from 'qrcode';
 import * as api from '../../api/voucherClient';
 import {
   THEMES, detectCarrierKey, fmtTime, baggagePolicy, normalizeFlightNumber,
+  manageBookingUrl, firstPassengerLastName,
+  buildReservationGroups, groupShortLabel, dedupeReservationGroups,
   CarrierLogo, IconPlane, IconBag, IconUser, IconPhone, IconMail, IconGlobe
 } from './_shared';
 import { airportName } from './_airports';
@@ -56,7 +59,15 @@ function directionLabel(dir) {
   const d = (dir || '').toLowerCase();
   if (d === 'ida' || d === 'outbound') return 'IDA';
   if (d === 'volta' || d === 'return' || d === 'inbound') return 'VOLTA';
+  if (d === 'interno') return 'INTERNO';
   return (dir || '').toUpperCase();
+}
+
+// Título de seção a partir do label do grupo de reserva.
+function sectionTitleForGroup(label) {
+  const l = (label || '').toUpperCase();
+  if (l === 'DESTINOS INTERNOS') return 'DESTINOS INTERNOS';
+  return l; // "IDA" / "VOLTA" / "INTERNO — FCO"
 }
 
 // Suitcase icon (despachada) — distinct from IconBag (handbag)
@@ -88,7 +99,31 @@ function splitBaggage(allBags, direction, carrierKey) {
 
 export default function VoucherCompactoV1({ data }) {
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
+  const [qrMap, setQrMap] = useState({});
   useEffect(() => { api.getSettings().then(setSettings).catch(() => {}); }, []);
+
+  // Grupos de reserva (itinerário) e a versão deduplicada (cia+PNR) p/ QRs.
+  const sectionGroups = useMemo(() => (data ? buildReservationGroups(data) : []), [data]);
+  const resGroups = useMemo(() => {
+    if (!data) return [];
+    return dedupeReservationGroups(sectionGroups).map(g => ({
+      ...g,
+      bookingUrl: manageBookingUrl(g.carrierKey, g.locator, firstPassengerLastName(data), g.trips?.[0]?.departure?.airport)
+    }));
+  }, [data, sectionGroups]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(resGroups.map(g => QRCode.toDataURL(g.bookingUrl, { width: 200, margin: 2 }).catch(() => '')))
+      .then(urls => {
+        if (cancelled) return;
+        const m = {};
+        resGroups.forEach((g, i) => { m[g.bookingUrl] = urls[i]; });
+        setQrMap(m);
+      });
+    return () => { cancelled = true; };
+  }, [resGroups]);
+
   if (!data) return null;
 
   const carrierKey = detectCarrierKey(data);
@@ -96,8 +131,10 @@ export default function VoucherCompactoV1({ data }) {
   const trips = data.trips || [];
   const passengers = data.passengers || [];
   const baggage = data.baggage || [];
+  const hasMultiGroups = resGroups.length > 1;
+  const qrSize = resGroups.length <= 4 ? 88 : 64;
 
-  // Direction order (preserve first-seen)
+  // Direction order (preserve first-seen) — usado nas caixas de bagagem por passageiro.
   const directions = [];
   const seen = new Set();
   for (const t of trips) {
@@ -120,11 +157,10 @@ export default function VoucherCompactoV1({ data }) {
           {/* Bare large carrier logo — no white card around.
               Em multi-cia (merge), mostra as 2 logos lado a lado. */}
           {(() => {
-            const isMulti = (data.carrier || '').toLowerCase() === 'multi'
-              && data.reservation?.primaryCarrier && data.reservation?.secondaryCarrier
-              && data.reservation.primaryCarrier !== data.reservation.secondaryCarrier;
-            const primaryCk = isMulti ? data.reservation.primaryCarrier.toLowerCase() : carrierKey;
-            const secondaryCk = isMulti ? data.reservation.secondaryCarrier.toLowerCase() : null;
+            const distinctCarriers = [...new Set(resGroups.map(g => g.carrierKey))];
+            const isMulti = (data.carrier || '').toLowerCase() === 'multi' && distinctCarriers.length > 1;
+            const primaryCk = isMulti ? distinctCarriers[0] : carrierKey;
+            const secondaryCk = isMulti ? distinctCarriers[1] : null;
             return (
               <CarrierLogo
                 carrierKey={primaryCk}
@@ -136,19 +172,16 @@ export default function VoucherCompactoV1({ data }) {
           })()}
         </div>
         <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
-          <div style={{ fontSize: 11, color: THEME.textFaint, letterSpacing: 1, textTransform: 'capitalize' }}>Localizador</div>
-          {(() => {
-            const secondaryLocator = data.reservation?.secondaryLocator || '';
-            const hasDualLocator = !!secondaryLocator && secondaryLocator !== data.reservation?.locator;
-            return hasDualLocator ? (
-              <div style={{ fontSize: 14, fontWeight: 800, color: THEME.accent, letterSpacing: 1.5, marginTop: 2, lineHeight: 1.3 }}>
-                <div>Ida: {data.reservation?.locator}</div>
-                <div>Volta: {secondaryLocator}</div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
-            );
-          })()}
+          <div style={{ fontSize: 11, color: THEME.textFaint, letterSpacing: 1, textTransform: 'capitalize' }}>{hasMultiGroups ? 'Localizadores' : 'Localizador'}</div>
+          {hasMultiGroups ? (
+            <div style={{ fontSize: 13, fontWeight: 800, color: THEME.accent, letterSpacing: 1, marginTop: 2, lineHeight: 1.4 }}>
+              {resGroups.map((g, i) => (
+                <div key={i}>{groupShortLabel(g.label)}: {g.locator || '—'}</div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 22, fontWeight: 800, color: THEME.accent, letterSpacing: 2, marginTop: 2 }}>{data.reservation?.locator}</div>
+          )}
         </div>
         <div style={{ flex: '0 0 auto' }}>
           {/* Decorative — looks like a button but is non-functional in print */}
@@ -158,20 +191,18 @@ export default function VoucherCompactoV1({ data }) {
 
       {/* ITINERARY BLOCKS */}
       <div style={{ padding: '0 24px' }}>
-        {directions.map(dir => {
-          const tripsInDir = trips.filter(t => (t.direction || '') === dir);
+        {sectionGroups.map((g, gi) => {
+          const tripsInDir = g.trips;
           const firstTrip = tripsInDir[0];
-          const tripLocator = firstTrip?.locator;
-          const showTripLocator = !!tripLocator && tripLocator !== data.reservation?.locator;
           return (
-            <div key={dir} style={{ background: THEME.cardBg, borderRadius: 12, padding: '14px 18px', marginBottom: 12 }}>
+            <div key={gi} style={{ background: THEME.cardBg, borderRadius: 12, padding: '14px 18px', marginBottom: 12 }}>
               {/* Block top bar: direction + date + trechos pill */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${THEME.cardBorder}`, paddingBottom: 10, marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <IconPlane color={THEME.accent} size={18} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: THEME.text, letterSpacing: 0.5 }}>{directionLabel(dir)}</span>
-                  {showTripLocator && (
-                    <span style={{ fontSize: 10, color: THEME.textMuted, marginLeft: 6 }}>· Localizador {tripLocator}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: THEME.text, letterSpacing: 0.5 }}>{sectionTitleForGroup(g.label)}</span>
+                  {g.locator && (
+                    <span style={{ fontSize: 10, color: THEME.textMuted, marginLeft: 6 }}>· Localizador {g.locator}</span>
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: THEME.text, fontWeight: 500 }}>{fullDateLabel(firstTrip)}</div>
@@ -326,6 +357,28 @@ export default function VoucherCompactoV1({ data }) {
           <span>Além da bagagem especificada acima, cada passageiro pode levar consigo uma bolsa, mochila ou sacola (considerado item pessoal).</span>
         </div>
       </div>
+
+      {/* GERENCIAR RESERVA(S) — um QR por reserva (dedupe cia+PNR) */}
+      {resGroups.length > 0 && (
+        <div style={{ padding: '6px 24px 14px' }}>
+          <h3 style={{ color: THEME.accent, fontSize: 17, fontWeight: 600, margin: '12px 0 10px', letterSpacing: 0 }}>{hasMultiGroups ? 'Suas reservas' : 'Gerenciar reserva'}</h3>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {resGroups.map((g, i) => {
+              const qr = qrMap[g.bookingUrl];
+              const label = hasMultiGroups ? groupShortLabel(g.label) : 'Gerenciar reserva';
+              return (
+                <a key={i} href={g.bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-block', textAlign: 'center', width: qrSize + 16 }}>
+                  {qr
+                    ? <img src={qr} alt={label} style={{ width: qrSize, height: qrSize, background: 'white', padding: 5, border: `1px solid ${THEME.cardBorder}`, borderRadius: 8, display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+                    : <div style={{ width: qrSize, height: qrSize, background: THEME.cardBg, border: `1px solid ${THEME.cardBorder}`, borderRadius: 8, marginLeft: 'auto', marginRight: 'auto' }} />}
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: THEME.accent, marginTop: 6, fontWeight: 700, lineHeight: 1.3 }}>{label}</div>
+                  {hasMultiGroups && <div style={{ fontSize: 9, color: THEME.textFaint }}>{g.locator || '—'}</div>}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* FOOTER — compliance: agency logo + contact */}
       <footer style={{ marginTop: 'auto', padding: '16px 36px 14px', borderTop: `3px solid ${THEME.accent}` }}>

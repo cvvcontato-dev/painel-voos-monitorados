@@ -15,6 +15,12 @@ const labelCls = "block text-xs font-medium text-slate-600 dark:text-slate-400 m
 const sectionCls =
   "border border-slate-200 dark:border-slate-700/60 rounded-xl p-4 bg-white/70 dark:bg-slate-900/30";
 
+let _itemSeq = 0;
+function newItemId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `item-${Date.now()}-${_itemSeq++}`;
+}
+
 export default function VouchersTab({ showToast }) {
   const [list, setList] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -28,14 +34,12 @@ export default function VouchersTab({ showToast }) {
   const [emailRecipients, setEmailRecipients] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
-  // Modo de upload: 'single' (1 voucher) ou 'merge' (ida + volta separados)
+  // Modo de upload: 'single' (1 voucher) ou 'multi' (2 a 8: ida + internos + volta)
   const [uploadMode, setUploadMode] = useState('single');
-  const [outboundFile, setOutboundFile] = useState(null);
-  const [returnFile, setReturnFile] = useState(null);
-  const [merging, setMerging] = useState(false);
+  const [multiItems, setMultiItems] = useState([{ id: newItemId(), file: null, role: 'ida' }]);
+  const [combining, setCombining] = useState(false);
+  const [errorIndex, setErrorIndex] = useState(-1);
   const fileInputRef = useRef(null);
-  const outboundInputRef = useRef(null);
-  const returnInputRef = useRef(null);
   const iframeRef = useRef(null);
 
   const { register, control, handleSubmit, reset } = useForm({
@@ -129,23 +133,52 @@ export default function VouchersTab({ showToast }) {
     }
   }
 
-  async function onMergeUpload() {
-    if (!outboundFile || !returnFile) return;
-    setMerging(true);
+  // --- Modo multi-arquivo (multidestinos) ---
+  function addMultiItem() {
+    setMultiItems(items => (items.length >= 8 ? items : [...items, { id: newItemId(), file: null, role: 'interno' }]));
+  }
+  function removeMultiItem(id) {
+    setMultiItems(items => items.filter(it => it.id !== id));
+  }
+  function setMultiItemFile(id, file) {
+    setMultiItems(items => items.map(it => (it.id === id ? { ...it, file } : it)));
+  }
+  function setMultiItemRole(id, role) {
+    setMultiItems(items => items.map(it => (it.id === id ? { ...it, role } : it)));
+  }
+  function moveMultiItem(id, dir) {
+    setMultiItems(items => {
+      const idx = items.findIndex(it => it.id === id);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= items.length) return items;
+      const copy = [...items];
+      const [it] = copy.splice(idx, 1);
+      copy.splice(to, 0, it);
+      return copy;
+    });
+  }
+
+  const multiHasVolta = multiItems.some(it => it.role === 'volta');
+  const multiValid = multiItems.length >= 2 && multiItems.every(it => it.file);
+
+  async function onCombineUpload() {
+    if (!multiValid) return;
+    setCombining(true);
+    setErrorIndex(-1);
     try {
-      const r = await api.uploadMerge(outboundFile, returnFile);
+      const r = await api.uploadCombine(multiItems.map(({ file, role }) => ({ file, role })));
       await refresh();
       if (r?.id) await select(r.id);
       showToast?.('Vouchers combinados com sucesso', 'success');
-      setOutboundFile(null);
-      setReturnFile(null);
-      if (outboundInputRef.current) outboundInputRef.current.value = '';
-      if (returnInputRef.current) returnInputRef.current.value = '';
+      setMultiItems([{ id: newItemId(), file: null, role: 'ida' }]);
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      // Se o backend indicar o índice do arquivo culpado (ex.: "voucher #2"), destaca a linha.
+      const m = /#(\d+)/.exec(serverMsg || '');
+      if (m) setErrorIndex(parseInt(m[1], 10) - 1);
       showToast?.(serverMsg || 'Falha ao combinar vouchers', 'error');
     } finally {
-      setMerging(false);
+      setCombining(false);
     }
   }
 
@@ -307,7 +340,7 @@ export default function VouchersTab({ showToast }) {
                     value="single"
                     checked={uploadMode === 'single'}
                     onChange={() => setUploadMode('single')}
-                    disabled={uploading || merging}
+                    disabled={uploading || combining}
                   />
                   Voucher único
                 </label>
@@ -315,12 +348,12 @@ export default function VouchersTab({ showToast }) {
                   <input
                     type="radio"
                     name="uploadMode"
-                    value="merge"
-                    checked={uploadMode === 'merge'}
-                    onChange={() => setUploadMode('merge')}
-                    disabled={uploading || merging}
+                    value="multi"
+                    checked={uploadMode === 'multi'}
+                    onChange={() => setUploadMode('multi')}
+                    disabled={uploading || combining}
                   />
-                  Ida + volta separados
+                  Multi-arquivo (ida + internos + volta)
                 </label>
               </div>
             </div>
@@ -345,51 +378,85 @@ export default function VouchersTab({ showToast }) {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Voucher de IDA</label>
-                    <input
-                      ref={outboundInputRef}
-                      type="file"
-                      accept="application/pdf,image/png,image/jpeg,image/webp"
-                      onChange={(e) => setOutboundFile(e.target.files?.[0] || null)}
-                      disabled={merging}
-                      className="text-xs text-slate-700 dark:text-slate-300"
-                    />
-                    {outboundFile && (
-                      <p className="text-[11px] text-slate-500 mt-1 truncate">{outboundFile.name}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className={labelCls}>Voucher de VOLTA</label>
-                    <input
-                      ref={returnInputRef}
-                      type="file"
-                      accept="application/pdf,image/png,image/jpeg,image/webp"
-                      onChange={(e) => setReturnFile(e.target.files?.[0] || null)}
-                      disabled={merging}
-                      className="text-xs text-slate-700 dark:text-slate-300"
-                    />
-                    {returnFile && (
-                      <p className="text-[11px] text-slate-500 mt-1 truncate">{returnFile.name}</p>
-                    )}
-                  </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  2 a 8 vouchers. Marque qual é ida, interno ou volta. A ordem define o itinerário. Processa em 10–30s.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {multiItems.map((it, idx) => {
+                    const isIda = idx === 0; // 1ª linha travada em 'ida'
+                    const rowErr = errorIndex === idx;
+                    return (
+                      <div
+                        key={it.id}
+                        className={`flex items-center gap-2 flex-wrap p-2 rounded-lg border ${rowErr ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-200 dark:border-slate-700/60'}`}
+                      >
+                        <span className="text-[11px] font-mono text-slate-400 w-5 text-center">{idx + 1}</span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/png,image/jpeg,image/webp"
+                          onChange={(e) => setMultiItemFile(it.id, e.target.files?.[0] || null)}
+                          disabled={combining}
+                          className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[160px]"
+                        />
+                        <select
+                          value={isIda ? 'ida' : it.role}
+                          onChange={(e) => setMultiItemRole(it.id, e.target.value)}
+                          disabled={combining || isIda}
+                          className={inputCls + ' !w-auto !py-1 text-xs'}
+                          title={isIda ? 'A primeira linha é sempre a ida' : 'Tipo do voucher'}
+                        >
+                          {isIda ? (
+                            <option value="ida">Ida</option>
+                          ) : (
+                            <>
+                              <option value="interno">Interno</option>
+                              <option value="volta" disabled={multiHasVolta && it.role !== 'volta'}>Volta</option>
+                            </>
+                          )}
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => moveMultiItem(it.id, -1)} disabled={combining || idx === 0}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir">
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => moveMultiItem(it.id, 1)} disabled={combining || idx === multiItems.length - 1}
+                            className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer">
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                          {!isIda && (
+                            <button type="button" onClick={() => removeMultiItem(it.id)} disabled={combining}
+                              className="p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Os dois vouchers serão lidos e combinados em um único itinerário. Pode levar 10–20s.
-                  </p>
                   <button
                     type="button"
-                    onClick={onMergeUpload}
-                    disabled={!outboundFile || !returnFile || merging}
+                    onClick={addMultiItem}
+                    disabled={combining || multiItems.length >= 8}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar voucher
+                  </button>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {multiItems.length} arquivo{multiItems.length !== 1 ? 's' : ''} · {multiItems.filter(i => i.role === 'interno').length} interno(s) · volta: {multiHasVolta ? 'sim' : 'não'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCombineUpload}
+                    disabled={!multiValid || combining}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
-                                ${(!outboundFile || !returnFile || merging)
+                                ${(!multiValid || combining)
                                   ? 'bg-indigo-300 cursor-not-allowed'
                                   : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
                   >
                     <UploadCloud className="w-4 h-4" />
-                    {merging ? 'Processando…' : 'Combinar e gerar voucher'}
+                    {combining ? 'Processando…' : 'Combinar e gerar voucher'}
                   </button>
                 </div>
               </div>
