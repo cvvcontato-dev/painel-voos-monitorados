@@ -47,3 +47,46 @@ describe('voucherSchema.validate', () => {
     expect(LAYOUT_VERSIONS).toContain('azul.confirmacao.v1');
   });
 });
+
+describe('multidestinos', () => {
+  const okBase = {
+    carrier: 'multi', layoutVersion: 'azul.confirmacao.v1',
+    reservation: {
+      locator: 'ABC123', status: 'Confirmada',
+      reservations: [
+        { code: 'ABC123', carrier: 'azul',  appliesTo: 'ida' },
+        { code: 'INT999', carrier: 'gol',   appliesTo: 'interno' },
+        { code: 'VLT777', carrier: 'latam', appliesTo: 'volta' }
+      ]
+    },
+    route: { origin: 'GRU', destination: 'LIS' },
+    passengers: [{ order: 1, name: 'JOAO', type: 'adulto' }],
+    trips: [
+      { direction: 'ida',    dateLabel: 'x', departure: { airport: 'GRU', datetime: '2026-09-12T08:00:00-03:00' }, arrival: { airport: 'LIS', datetime: '2026-09-12T20:00:00-03:00' }, flightNumber: 'AD1', durationText: '10h' },
+      { direction: 'interno',dateLabel: 'x', departure: { airport: 'LIS', datetime: '2026-09-14T09:00:00-03:00' }, arrival: { airport: 'FCO', datetime: '2026-09-14T11:00:00-03:00' }, flightNumber: 'G32', durationText: '2h' },
+      { direction: 'volta',  dateLabel: 'x', departure: { airport: 'FCO', datetime: '2026-09-20T12:00:00-03:00' }, arrival: { airport: 'GRU', datetime: '2026-09-21T04:00:00-03:00' }, flightNumber: 'LA3', durationText: '11h' }
+    ],
+    baggage: [{ direction: 'interno', label: 'Bagagem de mão', quantity: 1 }],
+    branding: { airlineName: 'Multi' },
+    meta: { parsedAt: '2026-05-01T00:00:00Z', parserVersion: 'x', confidence: 0.9 }
+  };
+
+  test('aceita direction interno e reservations[]', () => {
+    const r = validate(okBase);
+    expect(r.ok).toBe(true);
+  });
+
+  test('rejeita reservations[].appliesTo inválido', () => {
+    const bad = JSON.parse(JSON.stringify(okBase));
+    bad.reservation.reservations[0].appliesTo = 'lateral';
+    const r = validate(bad);
+    expect(r.ok).toBe(false);
+  });
+
+  test('rejeita reservations[].carrier fora do enum', () => {
+    const bad = JSON.parse(JSON.stringify(okBase));
+    bad.reservation.reservations[1].carrier = 'tap';
+    const r = validate(bad);
+    expect(r.ok).toBe(false);
+  });
+});

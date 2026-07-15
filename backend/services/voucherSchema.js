@@ -12,7 +12,7 @@ const CARRIERS = ['azul', 'gol', 'latam', 'multi'];
 //   meta.returnSourceHash:        string | null
 const LAYOUT_VERSIONS = ['azul.confirmacao.v1'];
 const PASSENGER_TYPES = ['adulto', 'crianca', 'bebe'];
-const DIRECTIONS = ['ida', 'volta', 'multi'];
+const DIRECTIONS = ['ida', 'interno', 'volta', 'multi'];
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/;
 
@@ -45,6 +45,20 @@ function validate(v) {
   });
 
   req(v.meta && typeof v.meta.parsedAt === 'string', 'meta.parsedAt obrigatório');
+
+  const APPLIES = ['ida', 'interno', 'volta'];
+  if (v.reservation && v.reservation.reservations !== undefined) {
+    const list = v.reservation.reservations;
+    req(Array.isArray(list), 'reservation.reservations deve ser array');
+    if (Array.isArray(list)) {
+      list.forEach((r, i) => {
+        req(r && typeof r.code === 'string' && r.code.length > 0, `reservations[${i}].code obrigatório`);
+        req(CARRIERS.includes(r.carrier), `reservations[${i}].carrier inválido: ${r && r.carrier}`);
+        req(APPLIES.includes(r.appliesTo), `reservations[${i}].appliesTo inválido: ${r && r.appliesTo}`);
+      });
+    }
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
