@@ -2,7 +2,6 @@ const express = require('express');
 const db = require('../database');
 const { verify } = require('../helpers/voucherToken');
 const { renderItinerarioPage } = require('../helpers/itinerarioPage');
-const { manageBookingUrl, lastNameOf } = require('../helpers/voucherCarrier');
 
 const router = express.Router();
 
@@ -19,30 +18,10 @@ router.get('/:token', (req, res) => {
     try { unified = JSON.parse(row.unified_json); } catch { return res.status(500).send('Erro ao ler reserva'); }
     db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
       const settings = settingsRow || {};
-      // Usa helper compartilhado que entende "SILVA, MAYARA" → "SILVA".
-      const lastName = lastNameOf((unified.passengers || [])[0]?.name);
-      const rawCarrier = (unified.carrier || 'azul').toLowerCase();
-      const isMulti = rawCarrier === 'multi';
-      const primaryCarrier = isMulti
-        ? (unified.reservation?.primaryCarrier || 'azul').toLowerCase()
-        : rawCarrier;
-      const bookingUrl = manageBookingUrl(
-        primaryCarrier,
-        unified.reservation?.locator,
-        lastName,
-        unified.route?.origin
-      );
-      let secondaryBookingUrl = null;
-      if (isMulti && unified.reservation?.secondaryCarrier) {
-        secondaryBookingUrl = manageBookingUrl(
-          unified.reservation.secondaryCarrier.toLowerCase(),
-          unified.reservation.secondaryLocator || unified.reservation.locator,
-          lastName,
-          unified.route?.destination
-        );
-      }
+      // As URLs de check-in por grupo de reserva são derivadas dentro de
+      // renderItinerarioPage (via buildReservationGroups + manageBookingUrl).
       try {
-        const html = await renderItinerarioPage({ voucherData: unified, settings, bookingUrl, secondaryBookingUrl });
+        const html = await renderItinerarioPage({ voucherData: unified, settings });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Robots-Tag', 'noindex,nofollow');

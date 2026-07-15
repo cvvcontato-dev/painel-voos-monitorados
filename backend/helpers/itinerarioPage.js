@@ -6,8 +6,20 @@ const {
   tripCarrier,
   normalizeFlightNumber,
   carrierShortName,
-  firstNameOf
+  firstNameOf,
+  lastNameOf,
+  manageBookingUrl
 } = require('./voucherCarrier');
+const { buildReservationGroups } = require('./reservationGroups');
+
+// Rótulo curto de um grupo de reserva pra CTAs/QRs (ex.: "Interno").
+function groupShortLabel(label) {
+  const l = (label || '').toUpperCase();
+  if (l === 'IDA') return 'Ida';
+  if (l === 'VOLTA') return 'Volta';
+  if (l === 'DESTINOS INTERNOS' || l.startsWith('INTERNO')) return 'Interno';
+  return label;
+}
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -43,6 +55,7 @@ function directionLabel(direction, idx) {
   const d = (direction || '').toLowerCase();
   if (d === 'ida') return 'Voo de Ida';
   if (d === 'volta') return 'Voo de Volta';
+  if (d === 'interno') return 'Voo Interno';
   return `Voo ${idx + 1}`;
 }
 
@@ -54,7 +67,7 @@ const SOCIAL_ICONS = {
 
 const CALENDAR_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#8a93a4" style="vertical-align:-2px;margin-right:6px;"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>';
 
-async function renderItinerarioPage({ voucherData, settings, bookingUrl, secondaryBookingUrl }) {
+async function renderItinerarioPage({ voucherData, settings }) {
   const vd = voucherData || {};
   const s = settings || {};
   const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -62,14 +75,21 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl, seconda
 
   const firstPaxName = firstName(passengers[0]?.name) || 'viajante';
   const locator = (vd.reservation?.locator || 'N/A').toString();
-  const secondaryLocator = vd.reservation?.secondaryLocator || '';
-  const hasDualLocator = !!secondaryLocator && secondaryLocator !== locator;
-  const isMultiCarrier = (vd.carrier || '').toLowerCase() === 'multi'
-    && !!vd.reservation?.primaryCarrier
-    && !!vd.reservation?.secondaryCarrier;
-  const primaryCarrierKey = (vd.reservation?.primaryCarrier || vd.carrier || 'azul').toLowerCase();
-  const secondaryCarrierKey = (vd.reservation?.secondaryCarrier || '').toLowerCase();
-  const fallbackCarrier = isMultiCarrier ? primaryCarrierKey : (vd.carrier || 'azul').toLowerCase();
+
+  // Grupos de reserva; QRs/CTAs deduplicam por (cia, PNR) — round-trip de mesmo
+  // localizador gera 1 QR; multidestinos com PNRs distintos gera N.
+  const paxLastName = lastNameOf(passengers[0]?.name);
+  const sectionGroups = buildReservationGroups(vd);
+  const groups = [];
+  const seenPnr = new Set();
+  sectionGroups.forEach(g => {
+    const key = `${g.carrierKey}|${g.locator}`;
+    if (seenPnr.has(key)) return;
+    seenPnr.add(key);
+    groups.push({ ...g, bookingUrl: manageBookingUrl(g.carrierKey, g.locator, paxLastName, g.trips[0]?.departure?.airport) });
+  });
+  const hasMultiGroups = groups.length > 1;
+  const fallbackCarrier = (groups[0]?.carrierKey) || (vd.carrier && vd.carrier !== 'multi' ? vd.carrier : 'azul').toLowerCase();
   const origin = (vd.route?.origin || trips[0]?.departure?.airport || '').toUpperCase();
   const destination = (vd.route?.destination || trips[trips.length - 1]?.arrival?.airport || '').toUpperCase();
   const originCity = airportCity(origin);
@@ -82,8 +102,6 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl, seconda
   const isOneWay = !periodRight || periodLeft === periodRight;
   const periodText = isOneWay ? (periodLeft || '—') : `${periodLeft} – ${periodRight}`;
 
-  const safeBookingUrl = bookingUrl && /^https?:\/\//i.test(bookingUrl) ? bookingUrl : '#';
-
   const contactPhone = s.contact_phone || '';
   const contactEmail = s.contact_email || '';
   const contactSite = s.contact_site || 'www.clubedovooviagens.com.br';
@@ -93,17 +111,37 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl, seconda
   const phoneTel = phoneDigits ? `tel:+${phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits}` : '';
   const whatsappHref = phoneDigits ? `https://wa.me/${phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits}` : '';
 
-  // QR Code SVG
-  let qrSvg = '';
-  try {
-    qrSvg = await QRCode.toString(safeBookingUrl === '#' ? contactSiteHref : safeBookingUrl, {
-      type: 'svg',
-      width: 110,
-      margin: 1,
-      color: { dark: '#0e1726', light: '#ffffff' }
-    });
-    qrSvg = qrSvg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="110"').replace(/height="\d+"/, 'height="110"');
-  } catch { qrSvg = ''; }
+  // QR Code SVG por grupo de reserva. Cada QR aponta pro check-in daquela cia/PNR
+  // (fallback pro site da agência se a URL não for válida).
+  const safeGroupUrl = (u) => (u && /^https?:\/\//i.test(u)) ? u : contactSiteHref;
+  const qrByGroup = await Promise.all(groups.map(async g => {
+    const target = safeGroupUrl(g.bookingUrl);
+    let svg = '';
+    try {
+      svg = await QRCode.toString(target, { type: 'svg', width: 110, margin: 1, color: { dark: '#0e1726', light: '#ffffff' } });
+      svg = svg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="110"').replace(/height="\d+"/, 'height="110"');
+    } catch { svg = ''; }
+    return { label: g.label, locator: g.locator, carrierKey: g.carrierKey, target, svg };
+  }));
+  const qrSvg = qrByGroup[0]?.svg || ''; // QR principal (ida) usado no bloco de assistência
+
+  // Seção "Suas reservas" com N QRs (só quando há mais de 1 reserva distinta).
+  const reservasSectionHtml = hasMultiGroups ? `
+      <section class="inner-card" style="background:#ffffff;border:1px solid #e9ecf2;border-radius:12px;padding:24px;margin:0 28px 28px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#8a93a4;font-weight:600;margin-bottom:16px;">SUAS RESERVAS</div>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+          <tr>
+            ${qrByGroup.map(g => `
+            <td valign="top" align="center" style="vertical-align:top;text-align:center;padding:6px;">
+              <a href="${escapeHtml(g.target)}" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;">
+                <div style="display:inline-block;background:#ffffff;padding:6px;border-radius:8px;border:1px solid #e9ecf2;line-height:0;">${g.svg || '<div style="width:110px;height:110px;"></div>'}</div>
+                <div style="font-size:11px;font-weight:700;color:#00569e;text-transform:uppercase;letter-spacing:0.5px;margin-top:8px;">${escapeHtml(groupShortLabel(g.label))}</div>
+                <div style="font-size:11px;color:#6c757d;">${escapeHtml(carrierShortName(g.carrierKey))} &middot; ${escapeHtml(g.locator || '—')}</div>
+              </a>
+            </td>`).join('')}
+          </tr>
+        </table>
+      </section>` : '';
 
   const carrierFallbackShort = carrierShortName(fallbackCarrier);
 
@@ -276,9 +314,9 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl, seconda
             </td>
             <td valign="middle" align="right" class="header-right" style="vertical-align:middle;text-align:right;">
               <div style="display:inline-block;background:#f4f5f7;border:1px solid #e9ecf2;border-radius:10px;padding:8px 14px;text-align:left;">
-                <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#8a93a4;font-weight:600;">LOCALIZADOR</div>
-                ${hasDualLocator
-                  ? `<div style="font-size:13px;font-weight:700;color:#00569e;letter-spacing:1px;margin-top:2px;line-height:1.3;">Ida: ${escapeHtml(locator)}<br>Volta: ${escapeHtml(secondaryLocator)}</div>`
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#8a93a4;font-weight:600;">LOCALIZADOR${hasMultiGroups ? 'ES' : ''}</div>
+                ${hasMultiGroups
+                  ? `<div style="font-size:13px;font-weight:700;color:#00569e;letter-spacing:1px;margin-top:2px;line-height:1.4;">${groups.map(g => `${escapeHtml(groupShortLabel(g.label))}: ${escapeHtml(g.locator || '—')}`).join('<br>')}</div>`
                   : `<div style="font-size:18px;font-weight:700;color:#00569e;letter-spacing:1.5px;margin-top:2px;">${escapeHtml(locator)}</div>`}
               </div>
             </td>
@@ -324,11 +362,11 @@ async function renderItinerarioPage({ voucherData, settings, bookingUrl, seconda
       <section class="cta-card" style="background:#00569e;border-radius:14px;padding:28px;margin:8px 28px 28px;text-align:center;">
         <div style="font-size:17px;font-weight:700;color:#ffffff;">Pronto para embarcar?</div>
         <div style="font-size:12.5px;color:#ffffff;opacity:0.85;margin:8px 0 20px;">Check-in disponível 48h antes da partida</div>
-        ${(isMultiCarrier && secondaryBookingUrl)
-          ? `<a href="${escapeHtml(safeBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:12px 22px;border-radius:999px;font-weight:700;font-size:12.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);margin:4px 6px;">CHECK-IN IDA (${escapeHtml(carrierShortName(primaryCarrierKey).toUpperCase())}) &rarr;</a>
-             <a href="${escapeHtml(secondaryBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:12px 22px;border-radius:999px;font-weight:700;font-size:12.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);margin:4px 6px;">CHECK-IN VOLTA (${escapeHtml(carrierShortName(secondaryCarrierKey).toUpperCase())}) &rarr;</a>`
-          : `<a href="${escapeHtml(safeBookingUrl)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:13px 32px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);">FAZER CHECK-IN &rarr;</a>`}
+        ${hasMultiGroups
+          ? qrByGroup.map(g => `<a href="${escapeHtml(g.target)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:12px 22px;border-radius:999px;font-weight:700;font-size:12.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);margin:4px 6px;">CHECK-IN ${escapeHtml(groupShortLabel(g.label).toUpperCase())} (${escapeHtml(carrierShortName(g.carrierKey).toUpperCase())}) &rarr;</a>`).join('')
+          : `<a href="${escapeHtml(qrByGroup[0]?.target || contactSiteHref)}" target="_blank" rel="noopener" style="display:inline-block;background:#ffffff;color:#00569e;padding:13px 32px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,0,0,0.12);">FAZER CHECK-IN &rarr;</a>`}
       </section>
+      ${reservasSectionHtml}
 
       <!-- Section 6: Próximos passos -->
       <section class="inner-card" style="background:#ffffff;border:1px solid #e9ecf2;border-radius:12px;padding:24px;margin:0 28px 28px;">

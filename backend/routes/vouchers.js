@@ -10,7 +10,6 @@ const { normalize } = require('../services/voucherNormalizer');
 const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
 const { sendVoucherEmail } = require('../services/notifier');
-const { manageBookingUrl } = require('../helpers/voucherCarrier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
 const { combineVouchers } = require('../services/voucherCombiner');
 
@@ -290,31 +289,8 @@ router.post('/:id/send-email', async (req, res) => {
           cookieHeader: req.headers.cookie,
           baseUrl
         });
-        // Usa o helper compartilhado que entende "SILVA, MAYARA" → "SILVA"
-        // (em vez de "MAYARA" que era o bug anterior).
-        const firstPassengerLastName = require('../helpers/voucherCarrier')
-          .lastNameOf((unified.passengers || [])[0]?.name);
-        const rawCarrier = (unified.carrier || 'azul').toLowerCase();
-        const isMulti = rawCarrier === 'multi';
-        const primaryCarrier = isMulti
-          ? (unified.reservation?.primaryCarrier || 'azul').toLowerCase()
-          : rawCarrier;
-        const bookingUrl = manageBookingUrl(
-          primaryCarrier,
-          unified.reservation?.locator,
-          firstPassengerLastName,
-          unified.route?.origin
-        );
-        // Quando multi-cia, calcula também a URL de check-in da volta.
-        let secondaryBookingUrl = null;
-        if (isMulti && unified.reservation?.secondaryCarrier) {
-          secondaryBookingUrl = manageBookingUrl(
-            unified.reservation.secondaryCarrier.toLowerCase(),
-            unified.reservation.secondaryLocator || unified.reservation.locator,
-            firstPassengerLastName,
-            unified.route?.destination
-          );
-        }
+        // As URLs de check-in por grupo de reserva são derivadas dentro de
+        // buildVoucherEmailHtml (via buildReservationGroups + manageBookingUrl).
         const itinerarioUrl = `${baseUrl}/itinerario/${signVoucherToken(req.params.id)}`;
         const result = await sendVoucherEmail({
           to: emails,
@@ -323,8 +299,6 @@ router.post('/:id/send-email', async (req, res) => {
           settings,
           attachmentPath: pdfPath,
           customMessage,
-          bookingUrl,
-          secondaryBookingUrl,
           itinerarioUrl
         });
         if (result.sucesso) {
