@@ -41,7 +41,10 @@
   }
   .dest {
     color: #013062; font-weight: 800; text-align: center; line-height: .96;
-    font-size: clamp(60px, 118px, 118px); letter-spacing: 1px; overflow-wrap: anywhere;
+    font-size: 118px; letter-spacing: 1px;
+    /* Palavras nunca quebram no meio (evita "letra que desce"); o auto-fit
+       via JS em promoRenderer reduz a fonte até caber em largura e altura. */
+    word-break: keep-all; overflow-wrap: normal; hyphens: none;
   }
   .meta {
     color: #013062; font-size: 30px; font-weight: 600; text-align: center;

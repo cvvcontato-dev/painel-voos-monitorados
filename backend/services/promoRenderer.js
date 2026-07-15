@@ -102,6 +102,25 @@ async function renderImage(promo_id, rawPromo, { backgroundUrl } = {}) {
   try {
     const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'networkidle' });
+
+    // Auto-fit do título: reduz a fonte até que nenhuma palavra ultrapasse a
+    // largura do card (evita quebra no meio da palavra) e o bloco caiba na
+    // altura reservada (evita empurrar o restante do layout). Nomes curtos
+    // como "ARUBA" continuam em 118px; compostos/longos como
+    // "FERNANDO DE NORONHA" ou "FLORIANÓPOLIS" encolhem o suficiente.
+    await page.evaluate(() => {
+      const el = document.querySelector('.dest');
+      if (!el) return;
+      const MAX = 118, MIN = 46, MAX_HEIGHT = 360, STEP = 2;
+      let size = MAX;
+      el.style.fontSize = size + 'px';
+      const fits = () => el.scrollWidth <= el.clientWidth && el.offsetHeight <= MAX_HEIGHT;
+      while (size > MIN && !fits()) {
+        size -= STEP;
+        el.style.fontSize = size + 'px';
+      }
+    });
+
     const outPath = ws.resolveFile(promo_id, 'promocao_final.png');
     await page.screenshot({ path: outPath, clip: { x: 0, y: 0, width: W, height: H } });
     return {
