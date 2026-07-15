@@ -390,3 +390,99 @@ export function CarrierLogo({ carrierKey, theme, large = false, bare = false, se
     </div>
   );
 }
+
+// ── Grupos de reserva (multidestinos) ──────────────────────────────────────
+// Espelho linha-a-linha de backend/helpers/reservationGroups.js. Mantê-los
+// idênticos em lógica. Agrupa trips em blocos IDA / DESTINOS INTERNOS / VOLTA,
+// cada um com sua cia + localizador, pra render de seções e QRs.
+function _normCarrier(c) { return (c || '').toLowerCase(); }
+
+function _resolveReservationFor(role, data, tripLocator) {
+  const list = data.reservation && data.reservation.reservations;
+  if (Array.isArray(list) && list.length) {
+    const match = list.find(r => r.appliesTo === role && (!tripLocator || r.code === tripLocator))
+              || list.find(r => r.appliesTo === role);
+    if (match) return { carrierKey: _normCarrier(match.carrier), locator: match.code };
+  }
+  const r = data.reservation || {};
+  if (role === 'ida') {
+    return { carrierKey: _normCarrier(r.primaryCarrier) || _normCarrier(data.carrier) || 'azul', locator: r.locator || tripLocator || '' };
+  }
+  if (role === 'volta') {
+    return { carrierKey: _normCarrier(r.secondaryCarrier) || _normCarrier(r.primaryCarrier) || _normCarrier(data.carrier) || 'azul', locator: r.secondaryLocator || tripLocator || r.locator || '' };
+  }
+  return { carrierKey: _normCarrier(data.carrier) || 'azul', locator: tripLocator || r.locator || '' };
+}
+
+export function buildReservationGroups(data) {
+  const trips = Array.isArray(data && data.trips) ? data.trips : [];
+  if (!trips.length) return [];
+
+  const order = ['ida', 'interno', 'volta'];
+  const byRole = { ida: [], interno: [], volta: [] };
+  trips.forEach(t => {
+    const d = (t.direction || '').toLowerCase();
+    if (byRole[d]) byRole[d].push(t);
+    else byRole.ida.push(t);
+  });
+
+  const groups = [];
+  order.forEach(role => {
+    const roleTrips = byRole[role];
+    if (!roleTrips.length) return;
+
+    if (role === 'interno') {
+      // Subdivide por (carrierKey, locator). A separação por PNR depende de cada
+      // interno trip carregar seu próprio `locator` (o combineVouchers garante isso).
+      const buckets = [];
+      roleTrips.forEach(t => {
+        const { carrierKey, locator } = _resolveReservationFor('interno', data, t.locator);
+        const key = `${carrierKey}|${locator}`;
+        let b = buckets.find(x => x.key === key);
+        if (!b) { b = { key, carrierKey, locator, trips: [] }; buckets.push(b); }
+        b.trips.push(t);
+      });
+      const multi = buckets.length > 1;
+      buckets.forEach(b => {
+        const dest = b.trips[b.trips.length - 1].arrival && b.trips[b.trips.length - 1].arrival.airport;
+        groups.push({
+          role: 'interno',
+          label: multi ? `INTERNO — ${(dest || '').toUpperCase()}` : 'DESTINOS INTERNOS',
+          trips: b.trips, carrierKey: b.carrierKey, locator: b.locator
+        });
+      });
+    } else {
+      const { carrierKey, locator } = _resolveReservationFor(role, data, roleTrips[0].locator);
+      groups.push({
+        role,
+        label: role === 'ida' ? 'IDA' : 'VOLTA',
+        trips: roleTrips, carrierKey, locator
+      });
+    }
+  });
+
+  return groups;
+}
+
+// Rótulo curto de um grupo pra listas compactas / CTAs.
+export function groupShortLabel(label) {
+  const l = (label || '').toUpperCase();
+  if (l === 'IDA') return 'Ida';
+  if (l === 'VOLTA') return 'Volta';
+  if (l === 'DESTINOS INTERNOS' || l.startsWith('INTERNO')) return 'Interno';
+  return label;
+}
+
+// Deduplica grupos de seção por (cia, PNR) para QRs/CTAs — round-trip de mesmo
+// localizador vira 1 QR; multidestinos com PNRs distintos vira N.
+export function dedupeReservationGroups(groups) {
+  const out = [];
+  const seen = new Set();
+  (groups || []).forEach(g => {
+    const key = `${g.carrierKey}|${g.locator}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(g);
+  });
+  return out;
+}
