@@ -8,6 +8,9 @@ const { extractPackageItem } = require('../services/packageExtractor');
 const { assemblePackage } = require('../services/packageAssembler');
 const { validatePackage, KINDS } = require('../services/packageSchema');
 const { packageUploadsDir } = require('../helpers/voucherWorkspace');
+const { renderPackageFlightPdf } = require('../services/voucherRenderer');
+const { sendPackageEmail } = require('../services/notifier');
+const { sign: signVoucherToken } = require('../helpers/voucherToken');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -101,6 +104,75 @@ router.get('/:id', (req, res) => {
     if (!row) return res.status(404).json({ error: 'não encontrado' });
     let pkg; try { pkg = JSON.parse(row.package_json); } catch { return res.status(500).json({ error: 'pacote corrompido' }); }
     res.json({ id: row.id, title: row.title, package: pkg, created_at: row.created_at });
+  });
+});
+
+router.post('/:id/send-email', async (req, res) => {
+  let raw = req.body?.emails;
+  if (Array.isArray(raw)) raw = raw.join(',');
+  if (typeof raw !== 'string' || !raw.trim()) return res.status(400).json({ error: 'destinatários obrigatórios' });
+  const emails = Array.from(new Set(raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)));
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emails.length || emails.some(e => !EMAIL_RE.test(e))) return res.status(400).json({ error: 'e-mail inválido' });
+  const customMessage = typeof req.body?.message === 'string' ? req.body.message : '';
+
+  db.get(`SELECT * FROM packages WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], async (err, row) => {
+    if (err) return res.status(500).json({ error: 'erro ao buscar pacote' });
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    let pkg; try { pkg = JSON.parse(row.package_json); } catch { return res.status(500).json({ error: 'pacote corrompido' }); }
+
+    db.get(`SELECT contact_phone, contact_email, contact_site, contact_extra FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
+      const settings = settingsRow || {};
+      const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const attachmentPaths = (row.source_file_paths || '').split('|').filter(Boolean);
+      // PDF do voucher de voo do pacote — best-effort (não bloqueia o envio se falhar).
+      try {
+        const flightPdf = await renderPackageFlightPdf({ packageId: req.params.id, cookieHeader: req.headers.cookie, baseUrl });
+        if (flightPdf) attachmentPaths.push(flightPdf);
+      } catch (e) { console.error('[PACKAGES] PDF de voo falhou (segue sem):', e.message); }
+      const pageUrl = `${baseUrl}/pacote/${signVoucherToken(req.params.id)}`;
+      try {
+        const result = await sendPackageEmail({ to: emails, bcc: process.env.EMAIL_USER || null, packageData: pkg, settings, attachmentPaths, customMessage, pageUrl });
+        if (result.sucesso) {
+          audit(req.params.id, req.session.userId, 'email_sent', { to: emails, subject: result.subject, messageId: result.messageId }, null);
+          res.json({ sent: emails.length, messageId: result.messageId, subject: result.subject });
+        } else {
+          audit(req.params.id, req.session.userId, 'email_failed', { to: emails, erro: result.erro }, null);
+          res.status(500).json({ error: 'falha ao enviar e-mail', details: result.erro });
+        }
+      } catch (e) {
+        audit(req.params.id, req.session.userId, 'email_failed', { to: emails, erro: e.message }, null);
+        res.status(500).json({ error: 'falha ao processar envio' });
+      }
+    });
+  });
+});
+
+router.put('/:id', (req, res) => {
+  const pkg = req.body?.package;
+  if (!pkg || typeof pkg !== 'object') return res.status(400).json({ error: 'package obrigatório' });
+  const v = validatePackage(pkg);
+  if (!v.ok) return res.status(422).json({ error: 'pacote inválido', details: v.errors });
+  db.run(`UPDATE packages SET package_json = ?, title = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`,
+    [JSON.stringify(pkg), pkg.title || null, req.params.id, req.session.userId],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'erro ao salvar' });
+      if (this.changes === 0) return res.status(404).json({ error: 'não encontrado' });
+      audit(req.params.id, req.session.userId, 'update', { title: pkg.title }, null);
+      res.json({ id: Number(req.params.id), package: pkg });
+    });
+});
+
+router.delete('/:id', (req, res) => {
+  db.get(`SELECT source_file_paths FROM packages WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], (err, row) => {
+    if (err) return res.status(500).json({ error: 'erro ao buscar' });
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    db.run(`DELETE FROM packages WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], function (dErr) {
+      if (dErr) return res.status(500).json({ error: 'erro ao excluir' });
+      (row.source_file_paths || '').split('|').filter(Boolean).forEach(p => { try { fs.unlink(p, () => {}); } catch (_) {} });
+      audit(req.params.id, req.session.userId, 'delete', null, null);
+      res.json({ deleted: true });
+    });
   });
 });
 

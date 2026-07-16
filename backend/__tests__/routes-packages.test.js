@@ -63,3 +63,43 @@ test('POST /api/packages com voo+hotel+car+tour+transfer (5 serviços) → addon
   expect(res.body.package.addons.map(a => a.kind)).toEqual(['car','tour','transfer']);
   expect(res.body.package.hotels).toHaveLength(1);
 });
+
+test('POST /:id/send-email sem emails → 400', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/packages').set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename:'v.pdf', contentType:'application/pdf' }).field('kinds','flight')
+    .attach('files', pdf(), { filename:'h.pdf', contentType:'application/pdf' }).field('kinds','hotel');
+  const r = await agent.post(`/api/packages/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({});
+  expect(r.status).toBe(400);
+});
+
+test('POST /:id/send-email com email inválido → 400', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/packages').set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename:'v.pdf', contentType:'application/pdf' }).field('kinds','flight')
+    .attach('files', pdf(), { filename:'h.pdf', contentType:'application/pdf' }).field('kinds','hotel');
+  const r = await agent.post(`/api/packages/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({ emails: 'naoehemail' });
+  expect(r.status).toBe(400);
+});
+
+test('PUT /:id atualiza o pacote', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/packages').set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename:'v.pdf', contentType:'application/pdf' }).field('kinds','flight')
+    .attach('files', pdf(), { filename:'h.pdf', contentType:'application/pdf' }).field('kinds','hotel');
+  const pkg = { ...created.body.package, title: 'Pacote Editado' };
+  const r = await agent.put(`/api/packages/${created.body.id}`).set('X-CSRF-Token', csrf).send({ package: pkg });
+  expect(r.status).toBe(200);
+  expect(r.body.package.title).toBe('Pacote Editado');
+});
+
+test('DELETE /:id remove o pacote', async () => {
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/packages').set('X-CSRF-Token', csrf)
+    .attach('files', pdf(), { filename:'v.pdf', contentType:'application/pdf' }).field('kinds','flight')
+    .attach('files', pdf(), { filename:'h.pdf', contentType:'application/pdf' }).field('kinds','hotel');
+  const r = await agent.delete(`/api/packages/${created.body.id}`).set('X-CSRF-Token', csrf);
+  expect(r.status).toBe(200);
+  const g = await agent.get(`/api/packages/${created.body.id}`);
+  expect(g.status).toBe(404);
+});
