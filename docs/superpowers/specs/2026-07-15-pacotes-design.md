@@ -104,10 +104,20 @@ POST   /api/packages/:id/send-email   { emails, message }
 
 **Geração de anexos** (`/send-email`):
 1. PDFs originais (N arquivos de `package-uploads/`).
-2. **PDF do voucher de voo** — via `renderVoucherFromData(unified)` (refactor de `voucherRenderer.js`, ver §7): o renderer passa a aceitar dados diretos, não só um id da tabela `vouchers`; gera o PDF do voo do pacote sem criar linha em `vouchers`. Se falhar (Playwright), o e-mail segue **sem** esse anexo (com originais + página) e loga.
-3. `sendPackageEmail` monta o e-mail (§4 render) + attachments.
+2. **PDF do voucher de voo** — ver §4.1 (mecanismo de render). Se falhar (Playwright), o e-mail segue **sem** esse anexo (com originais + página) e loga.
+3. `sendPackageEmail` monta o e-mail (§5 render) + attachments.
 
-**Reuso deliberado:** `voucherToken.js`, `voucherRetention.js` (estende p/ `package-uploads/`), `voucherWorkspace.js` (novo `packageUploadsDir()`), `notifier.js` (SMTP + logo CID). Único toque em código de voo: `renderVoucherFromData` (melhora sem quebrar — path por-id delega pro por-dados).
+### 4.1 Render do PDF do voucher de voo do pacote (mecanismo)
+
+**Contexto:** o `voucherRenderer.js` atual **não** renderiza de dados em memória. Ele funciona por URL: `renderVoucher({ voucherId, format, cookieHeader, baseUrl })` sobe o Playwright, autentica via cookie de sessão, e **navega o browser** para `GET {baseUrl}/voucher-preview/:voucherId?export=1`; essa rota React (`VoucherPreviewPage.jsx`) chama `GET /api/vouchers/:id`, lê `unified_json` do banco por id, e renderiza o template (Institucional/Compacto). Playwright então captura o PDF. Não há caminho hoje que renderize a partir de um objeto unified solto.
+
+**Decisão:** os dados de voo do pacote **já estão persistidos** em `packages.package_json.flights`. Logo, renderizamos o PDF do voo do pacote a partir do próprio pacote, via uma **rota de preview escopada por pacote** — sem linha temporária em `vouchers`, sem cache em memória:
+
+1. **Frontend:** nova rota `/voucher-preview/pacote/:id` → componente que faz `GET /api/packages/:id`, extrai `.flights`, e **reusa o `VoucherPreviewPage`/dispatch de template de voo existente** passando esse unified. (O template de voo não sabe de onde vieram os dados — só recebe `data`.)
+2. **Backend:** refactor pequeno e bem-definido em `voucherRenderer.js` — **extrair o núcleo do Playwright** (subir browser, autenticar por cookie, navegar, capturar PDF/PNG) numa função que aceita um **path de preview parametrizável**. `renderVoucher` (por id) passa a delegar pra esse núcleo com o path `/voucher-preview/:id`; adiciona-se `renderPackageFlightPdf({ packageId, cookieHeader, baseUrl })` que delega com o path `/voucher-preview/pacote/:packageId`. Zero mudança de comportamento no path de voucher de voo existente (só extração de função).
+3. Sem criação/limpeza de linha temporária: o dado de voo vive no pacote; a rota de preview lê dele. Não há órfão a limpar (diferente do `/:id/export` de voucher, que já opera sobre linha existente).
+
+**Reuso deliberado:** `voucherToken.js` (tokens), `voucherRetention.js` (estende p/ `package-uploads/`), `voucherWorkspace.js` (novo `packageUploadsDir()`), `notifier.js` (SMTP + logo CID). Único toque em código de voo: a **extração do núcleo do Playwright** em `voucherRenderer.js` (§4.1) — melhora sem quebrar (path por-id preservado, só delega).
 
 ---
 
@@ -160,7 +170,7 @@ Nova aba **"Pacotes"** (separada de "Vouchers"), reusando estilo/componentes.
 - `packageBlocks.test.js` — ordenação cronológica (voo→transfer→hotel→passeio→voo), item sem data no fim.
 - `packageExtractor.test.js` — despacho por tipo + STUB por tipo.
 - `routes-packages.test.js` — POST sucesso (voo+hotel+addon via STUB), 400s (sem voo, sem hotel, N inválido), GET/PUT/DELETE, send-email (SMTP mockado). CSRF via `authed()`.
-- `voucherRenderer` — teste de `renderVoucherFromData` garantindo paridade com o path por-id.
+- `voucherRenderer` — após extrair o núcleo do Playwright (§4.1), teste garantindo que o path por-id (`renderVoucher`) mantém comportamento; `renderPackageFlightPdf` cobre o novo path (pode ser smoke, dado que depende de Chromium/Playwright).
 - Smoke manual (doc `docs/superpowers/plans/pacotes-smoke-test.md`): voo+hotel+carro+passeio+transfer reais → preview → e-mail → página → conferir timeline e anexos.
 
 ---
@@ -177,7 +187,7 @@ Nova aba **"Pacotes"** (separada de "Vouchers"), reusando estilo/componentes.
 ## 10. Arquivos
 
 **Backend novos:** `services/{packageExtractor,packagePrompts,packageNormalizer,packageSchema}.js`, `helpers/{packageBlocks,packagePage}.js`, `routes/{packages,pacote}.js`.
-**Backend modificados:** `services/notifier.js` (+`buildPackageEmailHtml`,`sendPackageEmail`), `services/voucherRenderer.js` (+`renderVoucherFromData`), `helpers/{voucherRetention,voucherWorkspace}.js` (path de package), `database.js` (tabelas), `server.js` (montar rotas).
-**Frontend novos:** `components/PackagesTab.jsx`, `components/PackagePreviewPage.jsx`, `components/package-items/*.jsx`, `api/packageClient.js`; registro da aba + rotas no app.
+**Backend modificados:** `services/notifier.js` (+`buildPackageEmailHtml`,`sendPackageEmail`), `services/voucherRenderer.js` (extrai núcleo Playwright + `renderPackageFlightPdf`, ver §4.1), `services/voucherRetention.js` (cobre `package-uploads/`), `helpers/voucherWorkspace.js` (+`packageUploadsDir()`), `database.js` (tabelas `packages`+`package_audit_log`), `server.js` (montar `/api/packages` e `/pacote`).
+**Frontend novos:** `components/PackagesTab.jsx`, `components/PackagePreviewPage.jsx`, `components/package-items/*.jsx`, `api/packageClient.js`; registro da aba + rotas no app (incl. `/voucher-preview/pacote/:id` que reusa o dispatch de template de voo, §4.1).
 **Testes:** conforme §8.
 **Docs:** `docs/superpowers/plans/pacotes-smoke-test.md`.
