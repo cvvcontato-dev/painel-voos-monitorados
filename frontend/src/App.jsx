@@ -9,6 +9,7 @@ import StatusTab from './components/StatusTab';
 import PromocoesTab from './components/PromocoesTab';
 import VouchersTab from './components/VouchersTab';
 import VoucherPreviewPage from './components/VoucherPreviewPage';
+import PackageFlightPreviewPage from './components/PackageFlightPreviewPage';
 import LoginPage from './components/LoginPage';
 import SessionExpiredModal from './components/SessionExpiredModal';
 import UserMenu from './components/UserMenu';
@@ -27,6 +28,12 @@ const TABS = [
 function AppShell() {
   // Standalone preview route — bypassa todo o shell autenticado para que
   // Playwright/Puppeteer possa renderizar o template do voucher isoladamente.
+  // Pacote (voo do pacote) — checar ANTES do preview numérico de voucher.
+  const pkgFlightMatch = window.location.pathname.match(/^\/voucher-preview\/pacote\/(\d+)/);
+  if (pkgFlightMatch) {
+    const isExport = new URLSearchParams(window.location.search).get('export') === '1';
+    return <PackageFlightPreviewPage id={pkgFlightMatch[1]} isExport={isExport} />;
+  }
   const previewMatch = window.location.pathname.match(/^\/voucher-preview\/(\d+)/);
   if (previewMatch) {
     const isExport = new URLSearchParams(window.location.search).get('export') === '1';
