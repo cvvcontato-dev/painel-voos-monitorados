@@ -12,7 +12,9 @@ const labelCls = "block text-xs font-medium text-slate-600 dark:text-slate-400 m
 const sectionCls = "border border-slate-200 dark:border-slate-700/60 rounded-xl p-4 bg-white/70 dark:bg-slate-900/30";
 
 const KIND_LABEL = { flight: 'Voo', hotel: 'Hotel', car: 'Carro', tour: 'Passeio', transfer: 'Transfer' };
-const ADDON_OPTS = ['car', 'tour', 'transfer'];
+// Linhas adicionais podem ser de qualquer tipo — inclusive voo extra (ida+volta
+// em vouchers separados) ou hotel extra (viagem multi-cidade).
+const ALL_OPTS = ['flight', 'hotel', 'car', 'tour', 'transfer'];
 
 let _seq = 0;
 function newId() {
@@ -132,7 +134,8 @@ export default function PackagesTab({ showToast }) {
             <PackageIcon className="w-4 h-4" /> Montar pacote
           </h3>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-            Voo e hotel são obrigatórios. Adicione carro, passeio ou transfer. 2 a 12 serviços. Processa em 15–40s.
+            Voo e hotel são obrigatórios. Use "+ Adicionar serviço" para incluir mais voos (ida/volta separados),
+            mais hotéis, ou adicionais (carro, passeio, transfer). 2 a 12 serviços. Processa em 15–40s.
           </p>
           <div className="flex flex-col gap-2">
             {items.map((it, idx) => {
@@ -154,7 +157,7 @@ export default function PackagesTab({ showToast }) {
                   >
                     {it.fixed
                       ? <option value={it.kind}>{KIND_LABEL[it.kind]}</option>
-                      : ADDON_OPTS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                      : ALL_OPTS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
                   </select>
                   <div className="flex items-center gap-1">
                     <button type="button" onClick={() => move(it.id, -1)} disabled={combining || idx === 0} className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir"><ChevronUp className="w-4 h-4" /></button>
