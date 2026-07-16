@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get('/:token', (req, res) => {
   const v = verify(req.params.token);
-  if (!v.ok) {
+  if (!v.ok || v.type !== 'pkg') {
     return res.status(403).send(`<!doctype html><meta charset="utf-8"><body style="font-family:Arial;text-align:center;padding:60px 20px;color:#5b6878"><h1 style="color:#00539C">Link inválido ou expirado</h1><p>Entre em contato com a Clube do Voo Viagens.</p></body>`);
   }
   db.get(`SELECT package_json FROM packages WHERE id = ?`, [v.voucherId], (err, row) => {

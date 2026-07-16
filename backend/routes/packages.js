@@ -151,7 +151,7 @@ router.post('/:id/send-email', async (req, res) => {
         const flightPdf = await renderPackageFlightPdf({ packageId: req.params.id, cookieHeader: req.headers.cookie, baseUrl });
         if (flightPdf) attachmentPaths.push(flightPdf);
       } catch (e) { console.error('[PACKAGES] PDF de voo falhou (segue sem):', e.message); }
-      const pageUrl = `${baseUrl}/pacote/${signVoucherToken(req.params.id)}`;
+      const pageUrl = `${baseUrl}/pacote/${signVoucherToken(req.params.id, undefined, 'pkg')}`;
       try {
         const result = await sendPackageEmail({ to: emails, bcc: process.env.EMAIL_USER || null, packageData: pkg, settings, attachmentPaths, customMessage, pageUrl });
         if (result.sucesso) {

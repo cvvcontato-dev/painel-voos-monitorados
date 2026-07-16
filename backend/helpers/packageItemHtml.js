@@ -97,7 +97,7 @@ function hotelHtml(item) {
     + `<div style="margin-top:8px;">`
     + kv('Endereço', item.address)
     + kv('Check-in', `${fmtDate(item.sortDate) || (item.checkIn && item.checkIn.date) || ''} ${item.checkIn ? (item.checkIn.time || '') : ''}`.trim())
-    + kv('Check-out', item.checkOut ? `${item.checkOut.date || ''} ${item.checkOut.time || ''}`.trim() : '')
+    + kv('Check-out', item.checkOut ? `${fmtDate(`${item.checkOut.date || ''}T${item.checkOut.time || '00:00'}:00`) || item.checkOut.date || ''} ${item.checkOut.time || ''}`.trim() : '')
     + kv('Noites', item.nights ? String(item.nights) : '')
     + kv('Quarto', [room.type, room.beds, room.regime].filter(Boolean).join(' · '))
     + kv('Hóspedes', item.guestCount ? String(item.guestCount) : (item.guests && item.guests.length ? String(item.guests.length) : ''))
