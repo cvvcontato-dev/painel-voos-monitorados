@@ -16,3 +16,11 @@ describe('extractPackageItem (STUB)', () => {
     await expect(extractPackageItem(Buffer.from('x'), 'application/pdf', 'foo')).rejects.toThrow();
   });
 });
+
+describe('extractPackageItem addons (STUB)', () => {
+  test.each(['car','tour','transfer'])('%s retorna item normalizado válido', async (kind) => {
+    const item = await extractPackageItem(Buffer.from('x'), 'application/pdf', kind);
+    expect(item.kind).toBe(kind);
+    expect(item.sortDate).toBeTruthy();
+  });
+});

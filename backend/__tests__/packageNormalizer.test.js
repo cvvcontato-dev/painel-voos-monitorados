@@ -23,3 +23,25 @@ describe('normalizeItem', () => {
     expect(normalizeItem({ name: 'H' }, 'hotel').sortDate).toBeNull();
   });
 });
+
+const { STUBS } = require('../services/packagePrompts');
+
+describe('normalizeItem addons', () => {
+  test('car normaliza (sortDate = pickup, sem arrays extra)', () => {
+    const n = normalizeItem(STUBS.car, 'car');
+    expect(n.kind).toBe('car');
+    expect(n.sortDate).toBe(STUBS.car.pickup.datetime);
+  });
+  test('tour normaliza (sortDate = datetime, includes/excludes array)', () => {
+    const n = normalizeItem(STUBS.tour, 'tour');
+    expect(n.sortDate).toBe(STUBS.tour.datetime);
+    expect(Array.isArray(n.includes)).toBe(true);
+    expect(Array.isArray(n.excludes)).toBe(true);
+  });
+  test('transfer normaliza (sortDate = legs[0].datetime, legs array)', () => {
+    const n = normalizeItem(STUBS.transfer, 'transfer');
+    expect(n.sortDate).toBe(STUBS.transfer.legs[0].datetime);
+    expect(Array.isArray(n.legs)).toBe(true);
+    expect(n.legs.length).toBeGreaterThanOrEqual(1);
+  });
+});
