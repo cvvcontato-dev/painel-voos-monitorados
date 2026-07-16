@@ -60,11 +60,56 @@ async function runOnce() {
   return { cleaned, failed };
 }
 
-function startJob() {
-  // NOTE: chamado APENAS por server.js dentro do app.listen — não invocar de testes.
-  cron.schedule('30 3 * * *', () => runOnce().then(({ cleaned, failed }) => {
-    if (cleaned || failed) console.log(`[voucherRetention] limpou ${cleaned}, falhou ${failed}`);
-  }));
+async function processPackageRow(r) {
+  const paths = (r.source_file_paths || '').split('|').filter(Boolean);
+  let unlinkError = null;
+  for (const p of paths) {
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); }
+    catch (e) { if (e.code !== 'ENOENT') { unlinkError = e.message; console.error('[packageRetention] erro ao remover', p, e.message); } }
+  }
+  try {
+    await dbRun(`UPDATE packages SET source_file_paths = NULL WHERE id = ?`, [r.id]);
+    await dbRun(
+      `INSERT INTO package_audit_log (package_id, user_id, action, details) VALUES (?, ?, 'retention_cleanup', ?)`,
+      [r.id, r.user_id, JSON.stringify({ retentionDays: RETENTION_DAYS, count: paths.length, unlinkError })]
+    );
+    return { ok: true };
+  } catch (e) {
+    console.error('[packageRetention] erro ao registrar limpeza', r.id, e.message);
+    return { ok: false, error: e.message };
+  }
 }
 
-module.exports = { runOnce, startJob };
+async function runOncePackages() {
+  let rows;
+  try {
+    rows = await dbAll(
+      `SELECT id, source_file_paths, user_id FROM packages
+       WHERE source_file_paths IS NOT NULL AND created_at <= datetime('now', ?)`,
+      [`-${RETENTION_DAYS} days`]
+    );
+  } catch (err) {
+    console.error('[packageRetention] erro ao listar', err.message);
+    return { cleaned: 0, failed: 0 };
+  }
+  if (!rows.length) return { cleaned: 0, failed: 0 };
+  const results = await Promise.all(rows.map(processPackageRow));
+  const cleaned = results.filter(r => r.ok).length;
+  const failed = results.length - cleaned;
+  if (failed) console.error(`[packageRetention] ${failed} falha(s) — verificar logs`);
+  return { cleaned, failed };
+}
+
+function startJob() {
+  // NOTE: chamado APENAS por server.js dentro do app.listen — não invocar de testes.
+  cron.schedule('30 3 * * *', () => {
+    runOnce().then(({ cleaned, failed }) => {
+      if (cleaned || failed) console.log(`[voucherRetention] limpou ${cleaned}, falhou ${failed}`);
+    });
+    runOncePackages().then(({ cleaned, failed }) => {
+      if (cleaned || failed) console.log(`[packageRetention] limpou ${cleaned}, falhou ${failed}`);
+    });
+  });
+}
+
+module.exports = { runOnce, runOncePackages, startJob };
