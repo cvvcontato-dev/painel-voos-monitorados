@@ -11,6 +11,7 @@ const { packageUploadsDir } = require('../helpers/voucherWorkspace');
 const { renderPackageFlightPdf } = require('../services/voucherRenderer');
 const { sendPackageEmail } = require('../services/notifier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
+const { renderPackagePage } = require('../helpers/packagePage');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -104,6 +105,26 @@ router.get('/:id', (req, res) => {
     if (!row) return res.status(404).json({ error: 'não encontrado' });
     let pkg; try { pkg = JSON.parse(row.package_json); } catch { return res.status(500).json({ error: 'pacote corrompido' }); }
     res.json({ id: row.id, title: row.title, package: pkg, created_at: row.created_at });
+  });
+});
+
+// Preview autenticado (HTML da página do pacote) — consumido pelo iframe do editor.
+router.get('/:id/preview', (req, res) => {
+  db.get(`SELECT package_json FROM packages WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], (err, row) => {
+    if (err) return res.status(500).send('erro ao buscar pacote');
+    if (!row) return res.status(404).send('não encontrado');
+    let pkg; try { pkg = JSON.parse(row.package_json); } catch { return res.status(500).send('pacote corrompido'); }
+    db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
+      try {
+        const html = await renderPackagePage({ packageData: pkg, settings: settingsRow || {} });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(html);
+      } catch (e) {
+        console.error('[PACKAGES] preview render error', e.message);
+        res.status(500).send('erro ao renderizar preview');
+      }
+    });
   });
 });
 
