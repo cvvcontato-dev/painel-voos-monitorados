@@ -7,7 +7,8 @@ const router = express.Router();
 
 router.get('/:token', (req, res) => {
   const v = verify(req.params.token);
-  if (!v.ok) {
+  // Rejeita tokens tipados (ex.: 'pkg') — o itinerário só aceita o token legado de voucher.
+  if (!v.ok || v.type) {
     return res.status(403).send(`<!doctype html><meta charset="utf-8"><body style="font-family:Arial;text-align:center;padding:60px 20px;color:#5b6878"><h1 style="color:#00569e">Link inválido ou expirado</h1><p>Entre em contato com a Clube do Voo Viagens.</p></body>`);
   }
   db.get(`SELECT unified_json FROM vouchers WHERE id = ?`, [v.voucherId], (err, row) => {

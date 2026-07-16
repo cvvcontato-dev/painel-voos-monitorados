@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Settings, Activity, Megaphone, Ticket } from 'lucide-react';
+import { DollarSign, Settings, Activity, Megaphone, Ticket, Package } from 'lucide-react';
 import logo from './assets/logo.png';
 import Tabs from './components/Tabs';
 import Toast from './components/Toast';
@@ -8,7 +8,9 @@ import PrecosTab from './components/PrecosTab';
 import StatusTab from './components/StatusTab';
 import PromocoesTab from './components/PromocoesTab';
 import VouchersTab from './components/VouchersTab';
+import PackagesTab from './components/PackagesTab';
 import VoucherPreviewPage from './components/VoucherPreviewPage';
+import PackageFlightPreviewPage from './components/PackageFlightPreviewPage';
 import LoginPage from './components/LoginPage';
 import SessionExpiredModal from './components/SessionExpiredModal';
 import UserMenu from './components/UserMenu';
@@ -21,12 +23,19 @@ const TABS = [
   { value: 'precos', label: 'Preços', icon: <DollarSign className="w-4 h-4" /> },
   { value: 'status', label: 'Status', icon: <Activity className="w-4 h-4" /> },
   { value: 'promocoes', label: 'Promoções', icon: <Megaphone className="w-4 h-4" /> },
-  { value: 'vouchers', label: 'Vouchers', icon: <Ticket className="w-4 h-4" /> }
+  { value: 'vouchers', label: 'Vouchers', icon: <Ticket className="w-4 h-4" /> },
+  { value: 'pacotes', label: 'Pacotes', icon: <Package className="w-4 h-4" /> }
 ];
 
 function AppShell() {
   // Standalone preview route — bypassa todo o shell autenticado para que
   // Playwright/Puppeteer possa renderizar o template do voucher isoladamente.
+  // Pacote (voo do pacote) — checar ANTES do preview numérico de voucher.
+  const pkgFlightMatch = window.location.pathname.match(/^\/voucher-preview\/pacote\/(\d+)/);
+  if (pkgFlightMatch) {
+    const isExport = new URLSearchParams(window.location.search).get('export') === '1';
+    return <PackageFlightPreviewPage id={pkgFlightMatch[1]} isExport={isExport} />;
+  }
   const previewMatch = window.location.pathname.match(/^\/voucher-preview\/(\d+)/);
   if (previewMatch) {
     const isExport = new URLSearchParams(window.location.search).get('export') === '1';
@@ -85,6 +94,7 @@ function AppShell() {
       {activeTab === 'status' && <StatusTab showToast={showToast} />}
       {activeTab === 'promocoes' && <PromocoesTab showToast={showToast} />}
       {activeTab === 'vouchers' && <VouchersTab showToast={showToast} />}
+      {activeTab === 'pacotes' && <PackagesTab showToast={showToast} />}
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onToast={showToast} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
