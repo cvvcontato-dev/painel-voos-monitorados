@@ -69,33 +69,24 @@ function isTransientGeminiError(err) {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function extractVoucher(buffer, mimetype) {
+async function callGemini(buffer, mimetype, promptText) {
   if (!SUPPORTED.includes(mimetype)) {
     throw new Error(`mimetype não suportado: ${mimetype}`);
-  }
-  if (!process.env.GEMINI_API_KEY) {
-    return normalize(STUB);
   }
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
   const part = { inlineData: { data: buffer.toString('base64'), mimeType: mimetype } };
-
-  // Retry com backoff exponencial: 0s, 2s, 5s. Total até 3 tentativas.
-  // Cobre 503 "high demand" e flakes de rede que são comuns no Gemini.
   const delays = [0, 2000, 5000];
   let lastErr;
   for (let attempt = 0; attempt < delays.length; attempt++) {
     if (delays[attempt] > 0) await sleep(delays[attempt]);
     try {
-      const result = await model.generateContent([PROMPT, part]);
+      const result = await model.generateContent([promptText, part]);
       const text = result.response.text().trim().replace(/^```json\s*|\s*```$/g, '');
-      const parsed = JSON.parse(text);
-      delete parsed.meta; // garante que o normalizer ponha parsedAt fresco
-      return normalize(parsed);
+      return JSON.parse(text);
     } catch (err) {
       lastErr = err;
       if (!isTransientGeminiError(err) || attempt === delays.length - 1) {
-        // Erro permanente OU última tentativa esgotada: lança imediatamente.
         if (isTransientGeminiError(err)) {
           const wrap = new Error('Gemini indisponível no momento (alta demanda). Tente novamente em alguns instantes.');
           wrap.code = 'gemini_unavailable';
@@ -104,10 +95,22 @@ async function extractVoucher(buffer, mimetype) {
         }
         throw err;
       }
-      console.warn(`[VOUCHER-EXTRACT] tentativa ${attempt + 1}/${delays.length} falhou (transitório): ${err.message}. Retentando…`);
+      console.warn(`[GEMINI-EXTRACT] tentativa ${attempt + 1}/${delays.length} falhou (transitório): ${err.message}. Retentando…`);
     }
   }
   throw lastErr;
 }
 
-module.exports = { extractVoucher, STUB };
+async function extractVoucher(buffer, mimetype) {
+  if (!SUPPORTED.includes(mimetype)) {
+    throw new Error(`mimetype não suportado: ${mimetype}`);
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    return normalize(STUB);
+  }
+  const parsed = await callGemini(buffer, mimetype, PROMPT);
+  delete parsed.meta; // garante que o normalizer ponha parsedAt fresco
+  return normalize(parsed);
+}
+
+module.exports = { extractVoucher, STUB, callGemini };

@@ -968,4 +968,100 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
     }
 }
 
-module.exports = { sendTelegram, sendEmail, sendVoucherEmail, buildVoucherEmailHtml };
+// ── E-mail do PACOTE (voos + hotel + adicionais) ────────────────────────────
+const { buildTimeline } = require('../helpers/packageBlocks');
+const pkgHtml = require('../helpers/packageItemHtml');
+
+async function buildPackageEmailHtml({ packageData, settings, customMessage, pageUrl }) {
+    const pkg = packageData || {};
+    const s = settings || {};
+    const blocks = buildTimeline(pkg);
+    const holder = pkg.holder || '';
+    const firstName = (holder || '').trim().split(/\s+/)[0] || 'viajante';
+    const title = pkg.title || 'Seu pacote de viagem';
+    const summary = pkgHtml.packageSummaryText(pkg);
+    const period = pkgHtml.packagePeriod(blocks);
+    const logoUrl = `cid:${AGENCY_LOGO_CID}`;
+    const safePageUrl = pageUrl && /^https?:\/\//i.test(pageUrl) ? pageUrl : '';
+    const contactSite = s.contact_site || 'www.clubedovooviagens.com.br';
+    const contactSiteHref = /^https?:\/\//i.test(contactSite) ? contactSite : `https://${contactSite}`;
+
+    const trimmedMsg = (customMessage || '').trim();
+    const customBox = trimmedMsg
+        ? `<div style="background:#F0F6FC;border-left:4px solid #00539C;border-radius:6px;padding:14px 16px;margin:0 0 20px;font-size:14px;color:#2D3748;line-height:1.55;">${pkgHtml.escapeHtml(trimmedMsg).replace(/\n/g, '<br>')}</div>`
+        : '';
+
+    const timelineHtml = blocks.map(b => pkgHtml.blockHtml(b)).join('');
+
+    const ctaHtml = safePageUrl
+        ? `<div style="text-align:center;margin:24px 0 8px;">
+             <a href="${pkgHtml.escapeHtml(safePageUrl)}" style="display:inline-block;background:#00539C;color:#fff;font-weight:700;font-size:14px;letter-spacing:0.05em;padding:13px 30px;border-radius:8px;text-decoration:none;">Ver pacote completo &rarr;</a>
+           </div>`
+        : '';
+
+    return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${pkgHtml.escapeHtml(title)}</title></head>
+<body style="margin:0;padding:0;background:#E2E8F0;font-family:Inter,Arial,Helvetica,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#E2E8F0" style="background:#E2E8F0;">
+    <tr><td align="center" style="padding:28px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" style="width:600px;max-width:600px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
+        <tr><td bgcolor="#00539C" style="background:#00539C;padding:22px 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td valign="middle" width="56" style="padding-right:14px;"><img src="${pkgHtml.escapeHtml(logoUrl)}" alt="Clube do Voo" width="56" height="56" style="display:block;width:56px;height:56px;border-radius:9999px;border:0;"></td>
+            <td valign="middle" style="color:#fff;"><div style="font-size:19px;font-weight:700;">Clube do Voo Viagens</div><div style="font-size:13px;opacity:0.9;margin-top:3px;">Seu pacote de viagem</div></td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:28px 24px;">
+          <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">Olá, ${pkgHtml.escapeHtml(firstName)}</div>
+          <h2 style="font-size:24px;font-weight:700;color:#2D3748;margin:6px 0 4px;">${pkgHtml.escapeHtml(title)}</h2>
+          <div style="font-size:13px;color:#718096;margin-bottom:18px;">${pkgHtml.escapeHtml([period, summary].filter(Boolean).join(' · '))}</div>
+          ${customBox}
+          ${timelineHtml}
+          ${ctaHtml}
+          <div style="border-top:1px solid #E5E7EB;padding-top:18px;margin-top:24px;">
+            <p style="color:#718096;font-size:13px;margin:0;">Boa viagem! Os comprovantes originais de cada serviço seguem em anexo.</p>
+            <p style="color:#718096;font-size:13px;margin:2px 0 0;">— Clube do Voo Viagens</p>
+          </div>
+        </td></tr>
+        <tr><td align="center" bgcolor="#1A202C" style="background:#1A202C;padding:20px;color:#fff;">
+          <a href="${pkgHtml.escapeHtml(contactSiteHref)}" style="color:#fff;text-decoration:none;font-size:13px;font-weight:600;">${pkgHtml.escapeHtml(contactSite)}</a>
+          <div style="font-size:11px;color:#9ca3af;font-style:italic;margin-top:6px;">E-mail automático — não responda diretamente.</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+async function sendPackageEmail({ to, bcc, packageData, settings, attachmentPaths, customMessage, pageUrl }) {
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
+        }
+        const pkg = packageData || {};
+        const subject = 'Eba! Seu pacote de viagem está confirmado';
+        const attachments = [];
+        (attachmentPaths || []).forEach((p, i) => {
+            if (p && fs.existsSync(p)) attachments.push({ filename: path.basename(p) || `anexo-${i + 1}`, path: p });
+        });
+        if (fs.existsSync(AGENCY_LOGO_PATH)) {
+            attachments.push({ filename: 'logo.png', path: AGENCY_LOGO_PATH, cid: AGENCY_LOGO_CID, contentDisposition: 'inline' });
+        }
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+            to: to.join(', '),
+            bcc: bcc || undefined,
+            subject,
+            html: await buildPackageEmailHtml({ packageData: pkg, settings, customMessage, pageUrl }),
+            attachments
+        };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`[NOTIFIER] ✓ Pacote e-mail enviado para ${to.join(', ')} | MessageId: ${info.messageId}`);
+        return { sucesso: true, messageId: info.messageId, subject };
+    } catch (error) {
+        console.error('[NOTIFIER] Erro ao enviar pacote por e-mail:', error.message);
+        return { sucesso: false, erro: error.message };
+    }
+}
+
+module.exports = { sendTelegram, sendEmail, sendVoucherEmail, buildVoucherEmailHtml, buildPackageEmailHtml, sendPackageEmail };

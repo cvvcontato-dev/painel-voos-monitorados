@@ -330,6 +330,45 @@ function runMigrations() {
             db.run(`INSERT OR IGNORE INTO voucher_settings (id, contact_phone, contact_email, contact_site) VALUES (1, '', '', '')`);
         }
     });
+
+    // --- Packages tables ---
+    db.run(`CREATE TABLE IF NOT EXISTS packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT,
+        package_json TEXT NOT NULL,
+        source_file_paths TEXT,
+        source_file_hash TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`, (err) => {
+        if (err) console.error('Error creating packages table:', err.message);
+        else {
+            console.log('packages table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_packages_user_id ON packages(user_id)`, (e) => {
+                if (e) console.error('Error creating idx_packages_user_id:', e.message);
+            });
+        }
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS package_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        package_id INTEGER,
+        user_id INTEGER NOT NULL,
+        action TEXT NOT NULL CHECK(action IN ('create','update','export','delete','retention_cleanup','email_sent','email_failed')),
+        source_file_hash TEXT,
+        details TEXT,
+        ts TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating package_audit_log table:', err.message);
+        else {
+            console.log('package_audit_log table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_package_audit_package ON package_audit_log(package_id, ts DESC)`, (e) => {
+                if (e) console.error('Error creating idx_package_audit_package:', e.message);
+            });
+        }
+    });
 }
 
 module.exports = db;
