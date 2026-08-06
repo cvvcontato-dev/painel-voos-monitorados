@@ -296,13 +296,17 @@ router.post('/:id/test-notification', async (req, res) => {
     }
 });
 
-// Price History
+// Price History — janela em dias (default 60), ordem cronológica (ASC) para o gráfico.
 router.get('/:id/history', (req, res) => {
     const { id } = req.params;
+    const parsed = parseInt(req.query.days, 10);
+    const days = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 365) : 60;
+
     db.all(
         `SELECT preco, verificado_em FROM flight_price_history
-         WHERE flight_id = ? ORDER BY verificado_em DESC LIMIT 30`,
-        [id],
+         WHERE flight_id = ? AND verificado_em >= datetime('now', ?)
+         ORDER BY verificado_em ASC`,
+        [id, `-${days} days`],
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows || []);
