@@ -367,7 +367,7 @@ export default function PrecosTab({ showToast }) {
 
                 {/* Cliente */}
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">{flight.cliente}</div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-100 truncate pii">{flight.cliente}</div>
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <Users className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
                     <span className="text-xs text-slate-500 dark:text-slate-400">{flight.quantidade_pax || 1} pax</span>
