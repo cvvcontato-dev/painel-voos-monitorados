@@ -195,8 +195,8 @@ export default function PackagesTab({ showToast }) {
                 className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedId === p.id ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{p.title || `Pacote #${p.id}`}</div>
-                    <div className="text-[11px] text-slate-500">{p.holder} · {p.summary?.hotels || 0} hotel(s) · {p.summary?.addons || 0} adicional(is)</div>
+                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate pii">{p.title || `Pacote #${p.id}`}</div>
+                    <div className="text-[11px] text-slate-500"><span className="pii">{p.holder}</span> · {p.summary?.hotels || 0} hotel(s) · {p.summary?.addons || 0} adicional(is)</div>
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} className="p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                 </div>
