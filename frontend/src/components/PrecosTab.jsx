@@ -4,9 +4,10 @@ import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
   AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X,
   Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock, Bell,
-  ShoppingBag, XCircle
+  ShoppingBag, XCircle, LineChart as LineChartIcon
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import PriceHistoryChart from './PriceHistoryChart';
 
 const API_URL = '/api/flights';
 const fmt = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -31,6 +32,10 @@ export default function PrecosTab({ showToast }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
   const [testingNotifId, setTestingNotifId] = useState(null);
+  // Histórico de preços: quais cards estão expandidos + cache por voo
+  const [expandedCharts, setExpandedCharts] = useState(() => new Set());
+  const [historyData, setHistoryData] = useState({});
+  const [historyState, setHistoryState] = useState({});
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
 
@@ -109,6 +114,27 @@ export default function PrecosTab({ showToast }) {
     }
   };
 
+  const loadHistory = useCallback(async (flightId) => {
+    setHistoryState(s => ({ ...s, [flightId]: 'loading' }));
+    try {
+      const { data } = await api.get(`${API_URL}/${flightId}/history?days=60`);
+      setHistoryData(d => ({ ...d, [flightId]: data }));
+      setHistoryState(s => ({ ...s, [flightId]: 'ok' }));
+    } catch (e) {
+      setHistoryState(s => ({ ...s, [flightId]: 'error:' + (e.response?.data?.error || e.message) }));
+    }
+  }, []);
+
+  const toggleChart = (flightId) => {
+    const willOpen = !expandedCharts.has(flightId);
+    setExpandedCharts(prev => {
+      const next = new Set(prev);
+      if (willOpen) next.add(flightId); else next.delete(flightId);
+      return next;
+    });
+    if (willOpen && !historyData[flightId]) loadHistory(flightId);
+  };
+
   const checkNow = async (id) => {
     setCheckingId(id);
     try {
@@ -117,6 +143,9 @@ export default function PrecosTab({ showToast }) {
       else if (!data.sucesso) showToast(data.erro || 'Falha ao verificar preço', 'error');
       else { showToast(`Preço encontrado: ${fmt(data.preco_encontrado)}${data.alerta_disparado ? ' — Alerta enviado!' : ''}`, 'success'); }
       fetchFlights();
+      // O check gera um novo ponto no histórico: recarrega se aberto, senão descarta o cache.
+      if (expandedCharts.has(id)) loadHistory(id);
+      else setHistoryData(d => { const n = { ...d }; delete n[id]; return n; });
     } catch (e) { showToast('Erro ao verificar preço', 'error'); }
     finally { setCheckingId(null); }
   };
@@ -182,8 +211,8 @@ export default function PrecosTab({ showToast }) {
     gap: '1rem',
     alignItems: 'center',
     gridTemplateColumns: sortBy === 'manual'
-      ? '28px minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 196px'
-      : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 196px',
+      ? '28px minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 232px'
+      : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 232px',
   };
 
   const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border " +
@@ -294,6 +323,7 @@ export default function PrecosTab({ showToast }) {
           const statusStyle = getStatusStyle(flight.status);
           const isClosed = flight.status === 'encerrado';
           const isBought = flight.status === 'passagem comprada';
+          const chartOpen = expandedCharts.has(flight.id);
 
           return (
             <div
@@ -412,7 +442,20 @@ export default function PrecosTab({ showToast }) {
                 </div>
 
                 {/* Ações */}
-                <div className="flex justify-end items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <div className={`flex justify-end items-center gap-0.5 transition-opacity duration-150 ${
+                  chartOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}>
+                  <button
+                    onClick={() => toggleChart(flight.id)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      chartOpen
+                        ? 'text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-500/15'
+                        : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10'
+                    }`}
+                    title={chartOpen ? 'Ocultar histórico de preços' : 'Ver histórico de preços (60 dias)'}
+                  >
+                    <LineChartIcon className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => testNotification(flight.id)}
                     disabled={testingNotifId === flight.id}
@@ -483,6 +526,31 @@ export default function PrecosTab({ showToast }) {
                 </div>
 
               </div>
+
+              {/* Histórico de preços (expansível) */}
+              {chartOpen && (
+                <div
+                  className="relative border-t border-slate-200/80 dark:border-slate-700/50 bg-slate-50/60 dark:bg-slate-900/30 px-4 py-4"
+                  onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <LineChartIcon className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Histórico de preços — últimos 60 dias
+                    </span>
+                  </div>
+                  <PriceHistoryChart
+                    data={historyData[flight.id]}
+                    targetPrice={flight.preco_esperado}
+                    loading={historyState[flight.id] === 'loading'}
+                    error={
+                      typeof historyState[flight.id] === 'string' && historyState[flight.id].startsWith('error:')
+                        ? historyState[flight.id].slice(6)
+                        : null
+                    }
+                  />
+                </div>
+              )}
             </div>
           );
         })}
