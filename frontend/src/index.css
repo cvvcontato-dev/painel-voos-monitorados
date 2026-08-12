@@ -68,3 +68,11 @@
 .modal-animate {
   animation: modal-in 0.2s ease-out;
 }
+
+/* Modo privacidade — borra dados de clientes para capturas de tela.
+   Ligado pela classe .privacy-on na raiz, controlada pelo PrivacyProvider.
+   user-select impede copiar o texto real, que continua no DOM. */
+.privacy-on .pii {
+  filter: blur(6px);
+  user-select: none;
+}
