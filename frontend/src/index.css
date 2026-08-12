@@ -76,3 +76,23 @@
   filter: blur(6px);
   user-select: none;
 }
+
+/* Gráfico de histórico de preços — o recharts pinta SVG via atributos,
+   que não aceitam classes dark: do Tailwind. As cores entram por CSS vars
+   trocadas pelo tema aqui. */
+.price-history-chart {
+  --phc-accent: #6366f1;      /* indigo-500 */
+  --phc-grid: #e2e8f0;        /* slate-200 */
+  --phc-dot-grid: #94a3b8;    /* slate-400 */
+  --phc-tick: #94a3b8;
+  --phc-target: #10b981;      /* emerald-500 */
+  --phc-dot-stroke: #ffffff;
+}
+.dark .price-history-chart {
+  --phc-accent: #818cf8;      /* indigo-400 */
+  --phc-grid: rgba(51, 65, 85, 0.6);
+  --phc-dot-grid: #475569;
+  --phc-tick: #64748b;
+  --phc-target: #34d399;      /* emerald-400 */
+  --phc-dot-stroke: #1e293b;  /* slate-800 */
+}

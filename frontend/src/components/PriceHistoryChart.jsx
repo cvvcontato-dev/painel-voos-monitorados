@@ -1,5 +1,9 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useMemo } from 'react';
 import { TrendingDown, TrendingUp, Minus, LineChart as LineChartIcon } from 'lucide-react';
+import {
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, ReferenceLine,
+} from 'recharts';
 
 const fmt = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 const fmtCompact = v => 'R$ ' + new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v);
@@ -18,16 +22,27 @@ function daysAgoLabel(date) {
   return `Há ${d}d`;
 }
 
-// Geometria do SVG (viewBox fixo; o SVG escala via width:100%)
-const VW = 720, VH = 200;
-const PAD_L = 60, PAD_R = 14, PAD_T = 14, PAD_B = 26;
-const PLOT_W = VW - PAD_L - PAD_R;
-const PLOT_H = VH - PAD_T - PAD_B;
+function ChartTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-xl
+                    dark:border-slate-700 dark:bg-slate-800">
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">
+        {p.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · {p.label}
+      </div>
+      <div className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100">{fmt(p.preco)}</div>
+    </div>
+  );
+}
 
 export default function PriceHistoryChart({ data, targetPrice, loading, error }) {
-  const gradId = useId();
-  const wrapRef = useRef(null);
-  const [hoverIdx, setHoverIdx] = useState(null);
+  const uid = useId().replace(/:/g, '');
+
+  const points = useMemo(() => (data || [])
+    .map(d => ({ preco: Number(d.preco), date: parseUtc(d.verificado_em) }))
+    .filter(p => Number.isFinite(p.preco) && p.date && !isNaN(p.date))
+    .map(p => ({ ...p, label: daysAgoLabel(p.date) })), [data]);
 
   if (loading) {
     return (
@@ -45,10 +60,6 @@ export default function PriceHistoryChart({ data, targetPrice, loading, error })
       </div>
     );
   }
-
-  const points = (data || [])
-    .map(d => ({ preco: Number(d.preco), date: parseUtc(d.verificado_em) }))
-    .filter(p => Number.isFinite(p.preco) && p.date && !isNaN(p.date));
 
   if (points.length === 0) {
     return (
@@ -78,6 +89,7 @@ export default function PriceHistoryChart({ data, targetPrice, loading, error })
   const current = precos[precos.length - 1];
   const first = precos[0];
   const deltaPct = first > 0 ? ((current - first) / first) * 100 : 0;
+  const minIdx = precos.indexOf(minP);
 
   // O alvo só entra no domínio quando está perto dos preços — evita achatar a curva.
   const showTarget = targetPrice != null && targetPrice >= minP * 0.6 && targetPrice <= maxP * 1.4;
@@ -88,188 +100,145 @@ export default function PriceHistoryChart({ data, targetPrice, loading, error })
   const span = rawSpan > 0 ? rawSpan : Math.max(hi * 0.1, 1);
   lo = Math.max(0, lo - span * 0.12);
   hi = hi + span * 0.12;
-  const domain = hi - lo || 1;
-
-  const n = points.length;
-  const x = i => PAD_L + (n === 1 ? PLOT_W / 2 : (i / (n - 1)) * PLOT_W);
-  const y = v => PAD_T + (1 - (v - lo) / domain) * PLOT_H;
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.preco).toFixed(1)}`).join(' ');
-  const areaPath = `${linePath} L${x(n - 1).toFixed(1)},${(PAD_T + PLOT_H).toFixed(1)} L${x(0).toFixed(1)},${(PAD_T + PLOT_H).toFixed(1)} Z`;
-
-  // 4 marcações no eixo Y
-  const yTicks = Array.from({ length: 4 }, (_, i) => lo + (domain * i) / 3);
-
-  // Até 5 rótulos no eixo X, sempre incluindo o primeiro e o último
-  const xTickCount = Math.min(5, n);
-  const xTickIdx = Array.from({ length: xTickCount }, (_, i) =>
-    Math.round((i / (xTickCount - 1 || 1)) * (n - 1))
-  );
-
-  const minIdx = precos.indexOf(minP);
-  const hovered = hoverIdx != null ? points[hoverIdx] : null;
-
-  const handleMove = (e) => {
-    const rect = wrapRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
-    // posição do cursor → coordenada do viewBox → índice do ponto
-    const vbX = ((e.clientX - rect.left) / rect.width) * VW;
-    const frac = (vbX - PAD_L) / PLOT_W;
-    const idx = Math.round(frac * (n - 1));
-    setHoverIdx(Math.max(0, Math.min(n - 1, idx)));
-  };
 
   const belowTarget = targetPrice != null && current <= targetPrice;
+  const rising = deltaPct > 0.5;
+  const falling = deltaPct < -0.5;
+  const TrendIcon = rising ? TrendingUp : falling ? TrendingDown : Minus;
+  const trendCls = rising ? 'text-red-600 dark:text-red-400'
+    : falling ? 'text-emerald-600 dark:text-emerald-400'
+    : 'text-slate-400 dark:text-slate-500';
+
+  // Vários gráficos podem estar expandidos ao mesmo tempo — ids de defs por instância.
+  const gradId = `phc-grad-${uid}`;
+  const gridId = `phc-dots-${uid}`;
+  const glowId = `phc-glow-${uid}`;
+  const dotShadowId = `phc-dotshadow-${uid}`;
+
+  // Só o melhor preço e o ponto atual ganham marcador fixo.
+  const renderDot = ({ cx, cy, index }) => {
+    const isMin = index === minIdx;
+    const isLast = index === points.length - 1;
+    if (!isMin && !isLast) return <g key={`d-${index}`} />;
+    return (
+      <circle
+        key={`d-${index}`} cx={cx} cy={cy} r={isMin ? 5 : 4}
+        fill={isMin ? 'var(--phc-target)' : 'var(--phc-accent)'}
+        stroke="var(--phc-dot-stroke)" strokeWidth={2}
+        filter={`url(#${dotShadowId})`}
+      />
+    );
+  };
 
   return (
-    <div>
-      {/* Resumo numérico */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <Stat label="Menor" value={fmt(minP)} tone="emerald" />
-        <Stat label="Médio" value={fmt(avgP)} />
-        <Stat label="Maior" value={fmt(maxP)} />
-        <Stat
-          label="Atual"
-          value={fmt(current)}
-          tone={belowTarget ? 'emerald' : undefined}
-          badge={
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${
-              deltaPct > 0.5 ? 'text-red-600 dark:text-red-400'
-              : deltaPct < -0.5 ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-slate-400 dark:text-slate-500'}`}>
-              {deltaPct > 0.5 ? <TrendingUp className="w-2.5 h-2.5" />
-                : deltaPct < -0.5 ? <TrendingDown className="w-2.5 h-2.5" />
-                : <Minus className="w-2.5 h-2.5" />}
+    <div className="price-history-chart">
+      {/* Cabeçalho: preço atual + tendência */}
+      <div className="flex items-end justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-0.5">
+            Preço atual
+          </div>
+          <div className="flex items-baseline gap-2.5 flex-wrap">
+            <span className={`text-2xl font-bold font-mono ${
+              belowTarget ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'
+            }`}>{fmt(current)}</span>
+            <span className={`inline-flex items-center gap-1 text-xs font-semibold ${trendCls}`}>
+              <TrendIcon className="w-3.5 h-3.5" />
               {Math.abs(deltaPct).toFixed(1)}%
+              <span className="text-slate-400 dark:text-slate-500 font-normal">vs início do período</span>
             </span>
-          }
-        />
+          </div>
+        </div>
+        <div className="flex items-center gap-5 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+          <span>Menor: <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{fmt(minP)}</span></span>
+          <span>Médio: <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">{fmt(avgP)}</span></span>
+          <span>Maior: <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">{fmt(maxP)}</span></span>
+          {targetPrice != null && (
+            <span>Alvo: <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{fmt(targetPrice)}</span></span>
+          )}
+        </div>
       </div>
 
       {/* Gráfico */}
-      <div
-        ref={wrapRef}
-        className="relative"
-        onMouseMove={handleMove}
-        onMouseLeave={() => setHoverIdx(null)}
-      >
-        <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full h-auto select-none" role="img"
-             aria-label={`Histórico de preços: menor ${fmt(minP)}, maior ${fmt(maxP)}, atual ${fmt(current)}`}>
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.30" />
-              <stop offset="100%" stopColor="#6366f1" stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
+      <div className="h-64 w-full" role="img"
+           aria-label={`Histórico de preços: menor ${fmt(minP)}, maior ${fmt(maxP)}, atual ${fmt(current)}`}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={points} margin={{ top: 12, right: 12, left: 4, bottom: 4 }}>
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--phc-accent)" stopOpacity={0.14} />
+                <stop offset="100%" stopColor="var(--phc-accent)" stopOpacity={0} />
+              </linearGradient>
+              <pattern id={gridId} x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="10" cy="10" r="1" fill="var(--phc-dot-grid)" fillOpacity="0.3" />
+              </pattern>
+              <filter id={dotShadowId} x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="rgba(0,0,0,0.45)" />
+              </filter>
+              <filter id={glowId} x="-100%" y="-100%" width="300%" height="300%">
+                <feDropShadow dx="0" dy="5" stdDeviation="10" floodColor="var(--phc-accent)" floodOpacity="0.35" />
+              </filter>
+            </defs>
 
-          {/* Grade + rótulos do eixo Y */}
-          {yTicks.map((t, i) => (
-            <g key={i}>
-              <line
-                x1={PAD_L} x2={VW - PAD_R} y1={y(t)} y2={y(t)}
-                className="stroke-slate-200 dark:stroke-slate-700/60" strokeWidth="1"
+            <rect x="0" y="0" width="100%" height="100%" fill={`url(#${gridId})`} style={{ pointerEvents: 'none' }} />
+
+            <CartesianGrid strokeDasharray="4 8" stroke="var(--phc-grid)" horizontal vertical={false} />
+
+            <XAxis
+              dataKey="label"
+              axisLine={false} tickLine={false}
+              tick={{ fontSize: 11, fill: 'var(--phc-tick)' }}
+              tickMargin={10} minTickGap={48} interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={[lo, hi]}
+              axisLine={false} tickLine={false}
+              tick={{ fontSize: 11, fill: 'var(--phc-tick)' }}
+              tickFormatter={fmtCompact} tickMargin={8} width={72} tickCount={4}
+            />
+
+            <Tooltip
+              content={<ChartTooltip />}
+              cursor={{ strokeDasharray: '3 3', stroke: 'var(--phc-tick)', strokeOpacity: 0.6 }}
+            />
+
+            {showTarget && (
+              <ReferenceLine
+                y={targetPrice}
+                stroke="var(--phc-target)" strokeDasharray="6 4" strokeWidth={1.5}
+                label={{
+                  value: `alvo ${fmtCompact(targetPrice)}`,
+                  position: 'insideTopRight',
+                  fill: 'var(--phc-target)', fontSize: 11, fontWeight: 600,
+                }}
               />
-              <text
-                x={PAD_L - 8} y={y(t) + 4} textAnchor="end"
-                className="fill-slate-400 dark:fill-slate-500" fontSize="13"
-              >
-                {fmtCompact(t)}
-              </text>
-            </g>
-          ))}
+            )}
 
-          {/* Área + linha */}
-          <path d={areaPath} fill={`url(#${gradId})`} />
-          <path
-            d={linePath} fill="none" strokeWidth="2.5"
-            strokeLinejoin="round" strokeLinecap="round"
-            className="stroke-indigo-500 dark:stroke-indigo-400"
-          />
-
-          {/* Linha do preço-alvo */}
-          {showTarget && (
-            <g>
-              <line
-                x1={PAD_L} x2={VW - PAD_R} y1={y(targetPrice)} y2={y(targetPrice)}
-                className="stroke-emerald-500 dark:stroke-emerald-400"
-                strokeWidth="1.5" strokeDasharray="6 4"
-              />
-              <text
-                x={VW - PAD_R} y={y(targetPrice) - 6} textAnchor="end"
-                className="fill-emerald-600 dark:fill-emerald-400" fontSize="12" fontWeight="600"
-              >
-                alvo {fmtCompact(targetPrice)}
-              </text>
-            </g>
-          )}
-
-          {/* Melhor preço do período */}
-          <circle cx={x(minIdx)} cy={y(minP)} r="4"
-                  className="fill-emerald-500 stroke-white dark:stroke-slate-800" strokeWidth="2" />
-
-          {/* Rótulos do eixo X */}
-          {xTickIdx.map((idx, i) => (
-            <text
-              key={i} x={x(idx)} y={VH - 6}
-              textAnchor={i === 0 ? 'start' : i === xTickIdx.length - 1 ? 'end' : 'middle'}
-              className="fill-slate-400 dark:fill-slate-500" fontSize="12"
-            >
-              {daysAgoLabel(points[idx].date)}
-            </text>
-          ))}
-
-          {/* Cursor de hover */}
-          {hovered && (
-            <g>
-              <line
-                x1={x(hoverIdx)} x2={x(hoverIdx)} y1={PAD_T} y2={PAD_T + PLOT_H}
-                className="stroke-slate-400 dark:stroke-slate-500" strokeWidth="1" strokeDasharray="3 3"
-              />
-              <circle cx={x(hoverIdx)} cy={y(hovered.preco)} r="5"
-                      className="fill-indigo-500 stroke-white dark:stroke-slate-800" strokeWidth="2" />
-            </g>
-          )}
-        </svg>
-
-        {/* Tooltip */}
-        {hovered && (
-          <div
-            className="pointer-events-none absolute -translate-x-1/2 -translate-y-full
-                       bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg px-2.5 py-1.5
-                       shadow-lg whitespace-nowrap z-10"
-            style={{
-              left: `${Math.min(92, Math.max(8, (x(hoverIdx) / VW) * 100))}%`,
-              top: `${(y(hovered.preco) / VH) * 100}%`,
-              marginTop: '-8px',
-            }}
-          >
-            <div className="font-semibold font-mono">{fmt(hovered.preco)}</div>
-            <div className="text-[10px] text-slate-300 dark:text-slate-400">
-              {hovered.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · {daysAgoLabel(hovered.date)}
-            </div>
-          </div>
-        )}
+            <Area
+              type="monotone" dataKey="preco"
+              fill={`url(#${gradId})`} stroke="none"
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone" dataKey="preco"
+              stroke="var(--phc-accent)" strokeWidth={2}
+              filter={`url(#${glowId})`}
+              isAnimationActive={false}
+              dot={renderDot}
+              activeDot={{
+                r: 6, fill: 'var(--phc-accent)',
+                stroke: 'var(--phc-dot-stroke)', strokeWidth: 2,
+              }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
 
       <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 text-center">
-        {n} verificações nos últimos 60 dias
+        {points.length} verificações nos últimos 60 dias
         {showTarget ? ' · linha tracejada = preço-alvo' : ''}
         {' · ponto verde = melhor preço'}
       </p>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone, badge }) {
-  return (
-    <div className="bg-white/70 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-700/50 rounded-lg px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold">{label}</div>
-      <div className="flex items-baseline gap-1.5">
-        <span className={`font-mono text-sm font-bold ${
-          tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'
-        }`}>{value}</span>
-        {badge}
-      </div>
     </div>
   );
 }
