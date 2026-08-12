@@ -71,17 +71,25 @@ Com o modo desligado, renderiza o filho intacto, sem wrapper adicional.
 
 ## 4. Superfícies cobertas
 
+O levantamento dos pontos de exibição reduziu a superfície a **quatro**. As linhas são do estado em `f0c6c3d`.
+
 | Arquivo | Dado | Tratamento |
 |---|---|---|
-| `PrecosTab.jsx` | `flight.cliente` na linha do voo | borrão |
-| `StatusTab.jsx` | `f.cliente` — cabeçalho de grupo, célula da tabela e `title` dos botões de recolher | pseudônimo |
-| `VoucherCanonicalV1.jsx`, `VoucherCompactoV1.jsx`, `AzulConfirmacaoV1.jsx` | `p.name` | borrão |
-| `VouchersTab.jsx` | `reservation.locator` exibido fora de formulário | borrão |
+| `PrecosTab.jsx:370` | `flight.cliente` na linha do voo | borrão |
+| `StatusTab.jsx:267` | `group.cliente` no cabeçalho do grupo | pseudônimo |
+| `PackagesTab.jsx:198` | `p.title` — derivado, embute sobrenome ("Pacote Gramado — Silva") | borrão |
+| `PackagesTab.jsx:199` | `p.holder` — titular do pacote | borrão |
 | Todos os formulários | qualquer campo | nenhum — ver §2.2 |
 
-**Atenção nos templates de voucher:** eles usam estilo inline, não Tailwind. A classe `pii` precisa ser adicionada ao atributo `className` junto do `style` existente, e o seletor CSS global continua funcionando normalmente. São os mesmos componentes usados na exportação, protegidos pela fronteira de §2.1.
+### O que investigamos e ficou de fora
 
-Na `PrecosTab`, o e-mail do cliente aparece apenas como ícone indicando presença, não como endereço — não há PII a ocultar ali além do nome.
+**Templates de voucher** (`VoucherCanonicalV1`, `VoucherCompactoV1`, `AzulConfirmacaoV1`): não recebem tratamento. Eles são importados **apenas** por `VoucherPreviewPage.jsx` e `PackageFlightPreviewPage.jsx`, as duas rotas de exportação que retornam antes do provider (§2.1). Nunca renderizam dentro do shell autenticado, então uma classe `pii` ali nunca encontraria um `.privacy-on` ancestral — seria código morto nos arquivos de maior risco do projeto.
+
+**`VouchersTab.jsx`**: nada a mascarar. A lista de vouchers salvos exibe apenas `#id · companhia` (linha 495). O localizador e os nomes de passageiros aparecem só como `input` (linhas 516 e 547), cobertos pela regra §2.2.
+
+**`PrecosTab`, contatos**: o e-mail e o telegram aparecem apenas como ícones indicando presença, não como valores (linhas 374-375). Não há PII a ocultar ali além do nome.
+
+**`StatusTab`, chave de agrupamento**: `group.cliente` é usado como chave do `collapsedGroups`, no `key` do React e na ordenação `localeCompare` (linhas 163-175, 255-260). Esses usos permanecem com o **nome real**. Só o texto renderizado na linha 267 recebe o pseudônimo. Trocar a chave faria o estado de recolhimento se perder ao ligar o modo, e a ordem alfabética dançar.
 
 ---
 
@@ -105,7 +113,7 @@ O `backend` tem `jest` configurado. O `frontend` **não tem infraestrutura de te
 
 A verificação é manual no navegador, e estes são os casos:
 
-1. Modo ligado nas 5 abas: nenhum nome, contato, passageiro ou localizador legível.
+1. Modo ligado: nenhum nome legível em Preços, Status e Pacotes — as três abas com superfície (§4). Promoções e Vouchers não exibem nome; conferir que seguem intactas.
 2. Aba Status com modo ligado: os agrupamentos continuam legíveis, cada cliente com apelido próprio e estável.
 3. Abrir um formulário de edição com o modo ligado: o campo traz o **nome real**.
 4. `/voucher-preview/:id?export=1` com o modo ligado na outra aba: voucher **sem** borrão.
