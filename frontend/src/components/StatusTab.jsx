@@ -3,6 +3,7 @@ import api from '../hooks/useApi';
 import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2, Hand, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
+import { usePrivacy } from '../hooks/usePrivacy';
 
 const API_URL = '/api/monitored-flights';
 
@@ -56,6 +57,8 @@ export default function StatusTab({ showToast }) {
     try { return localStorage.getItem('status_hide_concluded') === '1'; }
     catch { return false; }
   });
+
+  const { enabled: privacyOn, pseudonym } = usePrivacy();
 
   const toggleHideConcluded = () => {
     setHideConcluded(prev => {
@@ -264,7 +267,11 @@ export default function StatusTab({ showToast }) {
                         {collapsed
                           ? <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                           : <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />}
-                        <span className="font-bold text-slate-900 dark:text-slate-100">{group.cliente}</span>
+                        {/* Só o texto exibido troca. A chave do collapsedGroups, o
+                            key do React e a ordenação seguem com o nome real. */}
+                        <span className="font-bold text-slate-900 dark:text-slate-100">
+                          {privacyOn ? pseudonym(group.cliente) : group.cliente}
+                        </span>
                         <span className="inline-flex items-center gap-1 text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 px-2 py-0.5 rounded-full">
                           <Plane className="w-3 h-3" /> {group.flights.length} {group.flights.length === 1 ? 'voo' : 'voos'}
                         </span>
