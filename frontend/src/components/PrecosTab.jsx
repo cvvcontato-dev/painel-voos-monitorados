@@ -208,7 +208,9 @@ export default function PrecosTab({ showToast }) {
   const handleDragOver = (e, i) => {
     if (!dragEnabled) return; e.preventDefault();
     if (draggedIndex === null || draggedIndex === i) return;
-    const n = [...flights]; n.splice(draggedIndex, 1); n.splice(i, 0, flights[draggedIndex]);
+    const n = [...sortedFlights];
+    const [movido] = n.splice(draggedIndex, 1);
+    n.splice(i, 0, movido);
     setFlights(n); setDraggedIndex(i);
   };
   const handleDragEnd = async () => { setDraggedIndex(null); try { await api.put(`${API_URL}/reorder`, { ids: flights.map(f => f.id) }); } catch (e) { console.error(e); } };
@@ -236,6 +238,11 @@ export default function PrecosTab({ showToast }) {
 
   // Distancia relativa ate a meta: preco_atual / preco_alvo.
   // < 1 = ja abaixo do alvo (oportunidade). Voos sem preco coletado vao para o fim.
+  // Faixas fixas por status: ativos no topo, comprados abaixo, desistencias por ultimo.
+  // Vale para qualquer ordenacao — status sempre vence o criterio escolhido.
+  const statusRank = (f) =>
+    f.status === 'encerrado' ? 2 : f.status === 'passagem comprada' ? 1 : 0;
+
   const targetRatio = (f) => {
     if (f.preco_atual == null || !f.preco_esperado) return Infinity;
     return f.preco_atual / f.preco_esperado;
@@ -246,6 +253,8 @@ export default function PrecosTab({ showToast }) {
     : flights.filter(f => priorityFilter.has(f.prioridade));
 
   const sortedFlights = [...visibleFlights].sort((a, b) => {
+    const faixa = statusRank(a) - statusRank(b);
+    if (faixa !== 0) return faixa;
     if (sortBy === 'proximidade') {
       const ra = targetRatio(a), rb = targetRatio(b);
       // ra !== rb evita Infinity - Infinity = NaN quando ambos estao sem preco
