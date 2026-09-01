@@ -3,6 +3,7 @@ import { X, Settings, Eye, EyeOff } from 'lucide-react';
 import api from '../hooks/useApi';
 import { useAuth } from '../hooks/useAuth';
 import UsersTab from './UsersTab';
+import BackupsPanel from './BackupsPanel';
 
 export default function SettingsModal({ isOpen, onClose, onToast }) {
   const [settings, setSettings] = useState(null);
@@ -90,6 +91,12 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
               Usuários
             </button>
           )}
+          {currentUser?.role === 'admin' && (
+            <button onClick={() => setInnerTab('backups')}
+              className={`px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'backups' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              Backup
+            </button>
+          )}
         </div>
 
         {innerTab === 'geral' ? (
@@ -156,6 +163,10 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
               </button>
             </div>
           </>
+        ) : innerTab === 'backups' ? (
+          <div className="p-6">
+            <BackupsPanel onToast={onToast} />
+          </div>
         ) : (
           <div className="p-6">
             <UsersTab onToast={onToast} />

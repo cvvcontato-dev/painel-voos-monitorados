@@ -116,6 +116,10 @@ function runMigrations() {
         "ALTER TABLE flights ADD COLUMN ultima_verificacao TEXT",
         "ALTER TABLE flights ADD COLUMN alerta_enviado INTEGER DEFAULT 0",
         "ALTER TABLE flights ADD COLUMN status TEXT DEFAULT 'ativo'",
+        // Diagnostico de falhas de verificacao de preco
+        "ALTER TABLE flights ADD COLUMN falhas_consecutivas INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE flights ADD COLUMN ultima_falha TEXT",
+        "ALTER TABLE flights ADD COLUMN ultimo_erro TEXT",
         // Link de gerenciamento da reserva (companhia aérea) no monitoramento de status
         "ALTER TABLE monitored_flights_status ADD COLUMN link_gerenciamento TEXT",
         // Override manual de horário — quando 1, updateSnapshot não sobrescreve

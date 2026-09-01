@@ -4,7 +4,7 @@ import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
   AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X,
   Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock, Bell,
-  ShoppingBag, XCircle, LineChart as LineChartIcon, Filter
+  ShoppingBag, XCircle, LineChart as LineChartIcon, Filter, AlertTriangle
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
@@ -13,15 +13,32 @@ const API_URL = '/api/flights';
 const PRIORIDADES = ['Urgente', 'Alta', 'Média', 'Baixa'];
 const fmt = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-function timeAgo(dateStr) {
+// Voos ativos sao verificados 2x ao dia; 2 dias sem sucesso ja indica problema.
+const DIAS_DESATUALIZADO = 2;
+
+function diasDesde(dateStr) {
   if (!dateStr) return null;
-  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `Verificado há ${mins} min`;
+  const iso = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function tempoAtras(dateStr) {
+  if (!dateStr) return null;
+  const iso = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  if (isNaN(d)) return null;
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 60) return `há ${mins} min`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `Verificado há ${hrs}h`;
-  return `Verificado há ${Math.floor(hrs / 24)} dias`;
+  if (hrs < 24) return `há ${hrs}h`;
+  return `há ${Math.floor(hrs / 24)} dias`;
+}
+
+function timeAgo(dateStr) {
+  const t = tempoAtras(dateStr);
+  return t ? `Verificado ${t}` : null;
 }
 
 export default function PrecosTab({ showToast }) {
@@ -266,6 +283,8 @@ export default function PrecosTab({ showToast }) {
     return 0;
   });
 
+  const comFalha = flights.filter(f => f.status === 'ativo' && (f.falhas_consecutivas || 0) > 0).length;
+
   const allChecked = flights.length > 0 && flights.every(f => f.check_diario);
 
   // Grid columns: drag | cliente | viagem | prioridade | preço alvo | preço atual | check | ações
@@ -295,7 +314,7 @@ export default function PrecosTab({ showToast }) {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {/* Total */}
         <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
           <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><Plane className="w-4 h-4" /></div>
@@ -326,6 +345,18 @@ export default function PrecosTab({ showToast }) {
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Checks</div>
             <div className="text-lg font-bold text-slate-900 dark:text-white">{flights.filter(f => f.check_diario).length}<span className="text-xs font-normal text-slate-400 dark:text-slate-500">/{flights.length}</span></div>
+          </div>
+        </div>
+        {/* Com falha */}
+        <div className={`bg-white/80 dark:bg-slate-900/40 dark:backdrop-blur-xl p-4 rounded-xl flex items-center gap-3 border ${
+          comFalha > 0 ? 'border-red-200/70 dark:border-red-800/40' : 'border-slate-200 dark:border-slate-800/50'
+        }`}>
+          <div className={`p-2.5 rounded-lg border shrink-0 ${
+            comFalha > 0 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+          }`}><AlertTriangle className="w-4 h-4" /></div>
+          <div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Com falha</div>
+            <div className={`text-lg font-bold ${comFalha > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{comFalha}</div>
           </div>
         </div>
         {/* Ordenar */}
@@ -439,6 +470,12 @@ export default function PrecosTab({ showToast }) {
           const isClosed = flight.status === 'encerrado';
           const isBought = flight.status === 'passagem comprada';
           const chartOpen = expandedCharts.has(flight.id);
+          const falhas = flight.falhas_consecutivas || 0;
+          const diasSemCheck = diasDesde(flight.ultima_verificacao);
+          // Só alerta de "desatualizado" quando já houve alguma verificação:
+          // voo recém-cadastrado ainda não passou pelo agendador.
+          const desatualizado = flight.status === 'ativo' && falhas === 0
+            && diasSemCheck !== null && diasSemCheck >= DIAS_DESATUALIZADO;
 
           return (
             <div
@@ -539,6 +576,23 @@ export default function PrecosTab({ showToast }) {
                     </div>
                   ) : (
                     <span className="text-slate-300 dark:text-slate-600 text-sm">—</span>
+                  )}
+                  {flight.status === 'ativo' && falhas > 0 && (
+                    <div
+                      className="flex items-center gap-1 text-[10px] font-semibold text-red-600 dark:text-red-400 mt-1"
+                      title={`${flight.ultimo_erro || 'Falha na verificação'}${flight.ultima_falha ? ` — última tentativa ${tempoAtras(flight.ultima_falha)}` : ''}`}
+                    >
+                      <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                      {falhas} {falhas === 1 ? 'falha' : 'falhas'} seguidas
+                    </div>
+                  )}
+                  {desatualizado && (
+                    <div
+                      className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 mt-1"
+                      title={`Sem verificação bem-sucedida há ${diasSemCheck} dias`}
+                    >
+                      <AlertTriangle className="w-2.5 h-2.5 shrink-0" /> desatualizado
+                    </div>
                   )}
                 </div>
 

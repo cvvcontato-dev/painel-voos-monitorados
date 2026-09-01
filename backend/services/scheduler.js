@@ -9,18 +9,43 @@ let currentJob = null;
 /**
  * Process a single flight: scrape price, update DB, send alerts if needed.
  */
+/**
+ * Registra uma falha de verificação no próprio voo, para a interface conseguir
+ * mostrar que aquele preço parou de ser atualizado (antes isso só ia para o log).
+ */
+function registrarFalha(flightId, motivo) {
+    return new Promise((resolve) => {
+        db.run(
+            `UPDATE flights
+                SET falhas_consecutivas = COALESCE(falhas_consecutivas, 0) + 1,
+                    ultima_falha = datetime('now'),
+                    ultimo_erro = ?
+              WHERE id = ?`,
+            [motivo, flightId],
+            (err) => {
+                if (err) console.error(`[SCHEDULER] Não consegui registrar a falha do voo #${flightId}:`, err.message);
+                resolve();
+            }
+        );
+    });
+}
+
 async function processFlight(flight) {
     const result = await scrapeFlightPrice(flight.link_voo);
 
     // Blocked by captcha
     if (result.bloqueado) {
         console.log(`[SCHEDULER] Voo #${flight.id} bloqueado por captcha. Pulando.`);
+        await registrarFalha(flight.id, result.motivo
+            ? `Bloqueado pelo Google: ${result.motivo}`
+            : 'Bloqueado pelo Google (captcha/anti-bot)');
         return { id: flight.id, status: 'bloqueado' };
     }
 
     // Scraping failed
     if (result.preco === null) {
         console.log(`[SCHEDULER] Voo #${flight.id} — falha no scraping. Preço não obtido.`);
+        await registrarFalha(flight.id, 'Preço não encontrado na página do Google Voos');
         return { id: flight.id, status: 'falha' };
     }
 
@@ -32,7 +57,13 @@ async function processFlight(flight) {
     // with "cannot start a transaction within a transaction".
     await new Promise((resolve, reject) => {
         db.run(
-            `UPDATE flights SET preco_atual = ?, ultima_verificacao = datetime('now') WHERE id = ?`,
+            `UPDATE flights
+                SET preco_atual = ?,
+                    ultima_verificacao = datetime('now'),
+                    falhas_consecutivas = 0,
+                    ultima_falha = NULL,
+                    ultimo_erro = NULL
+              WHERE id = ?`,
             [preco, flight.id],
             function(err) {
                 if (err) {

@@ -31,6 +31,8 @@ const requireAuth = require('./middleware/requireAuth');
 const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const { startScheduler, startStatusScheduler } = require('./services/scheduler');
+const { startBackupScheduler } = require('./services/backup');
+const backupsRouter = require('./routes/backups');
 const { startJob: startVoucherRetention } = require('./services/voucherRetention');
 const monitoredFlightsRouter = require('./routes/monitoredFlights');
 const flightsRouter = require('./routes/flights');
@@ -94,6 +96,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/promotions', promotionsRouter);
 app.use('/api/vouchers', vouchersRouter);
 app.use('/api/packages', packagesRouter);
+app.use('/api/backups', backupsRouter);
 
 // Serve local static assets (e.g. background images for promo rendering)
 app.use('/static', express.static(path.join(__dirname, 'static')));
@@ -116,6 +119,7 @@ app.listen(PORT, '0.0.0.0', () => {
     // Start the scheduler after server is up
     startScheduler();
     startStatusScheduler();
+    startBackupScheduler();
     startVoucherRetention();
     // Limpa pastas de trabalho de promoções no boot e a cada hora (TTL 24h),
     // honrando o expires_at retornado por /render-image.
