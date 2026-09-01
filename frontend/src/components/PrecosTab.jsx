@@ -4,12 +4,13 @@ import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
   AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X,
   Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock, Bell,
-  ShoppingBag, XCircle, LineChart as LineChartIcon
+  ShoppingBag, XCircle, LineChart as LineChartIcon, Filter
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
 
 const API_URL = '/api/flights';
+const PRIORIDADES = ['Urgente', 'Alta', 'Média', 'Baixa'];
 const fmt = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 function timeAgo(dateStr) {
@@ -28,7 +29,15 @@ export default function PrecosTab({ showToast }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('manual');
+  const [sortBy, setSortBy] = useState(() => {
+    try { return localStorage.getItem('precos_sort_by') || 'proximidade'; }
+    catch { return 'proximidade'; }
+  });
+  // Filtro por prioridade — Set vazio significa "todas"
+  const [priorityFilter, setPriorityFilter] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('precos_priority_filter') || '[]')); }
+    catch { return new Set(); }
+  });
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
   const [testingNotifId, setTestingNotifId] = useState(null);
@@ -167,9 +176,37 @@ export default function PrecosTab({ showToast }) {
     }
   };
 
-  const handleDragStart = (e, i) => { if (sortBy !== 'manual') return; setDraggedIndex(i); e.dataTransfer.effectAllowed = 'move'; };
+  const changeSort = (value) => {
+    setSortBy(value);
+    try { localStorage.setItem('precos_sort_by', value); } catch { /* ignore */ }
+  };
+
+  const persistFilter = (set) => {
+    try { localStorage.setItem('precos_priority_filter', JSON.stringify([...set])); } catch { /* ignore */ }
+  };
+
+  const togglePriority = (p) => {
+    setPriorityFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p); else next.add(p);
+      persistFilter(next);
+      return next;
+    });
+  };
+
+  const clearPriorityFilter = () => {
+    const empty = new Set();
+    setPriorityFilter(empty);
+    persistFilter(empty);
+  };
+
+  // Arrastar so faz sentido na ordenacao manual e sem filtro ativo: os indices do
+  // drag apontam para a lista completa, entao com filtro a reordenacao corromperia.
+  const dragEnabled = sortBy === 'manual' && priorityFilter.size === 0;
+
+  const handleDragStart = (e, i) => { if (!dragEnabled) return; setDraggedIndex(i); e.dataTransfer.effectAllowed = 'move'; };
   const handleDragOver = (e, i) => {
-    if (sortBy !== 'manual') return; e.preventDefault();
+    if (!dragEnabled) return; e.preventDefault();
     if (draggedIndex === null || draggedIndex === i) return;
     const n = [...flights]; n.splice(draggedIndex, 1); n.splice(i, 0, flights[draggedIndex]);
     setFlights(n); setDraggedIndex(i);
@@ -197,7 +234,24 @@ export default function PrecosTab({ showToast }) {
     }
   };
 
-  const sortedFlights = [...flights].sort((a, b) => {
+  // Distancia relativa ate a meta: preco_atual / preco_alvo.
+  // < 1 = ja abaixo do alvo (oportunidade). Voos sem preco coletado vao para o fim.
+  const targetRatio = (f) => {
+    if (f.preco_atual == null || !f.preco_esperado) return Infinity;
+    return f.preco_atual / f.preco_esperado;
+  };
+
+  const visibleFlights = priorityFilter.size === 0
+    ? flights
+    : flights.filter(f => priorityFilter.has(f.prioridade));
+
+  const sortedFlights = [...visibleFlights].sort((a, b) => {
+    if (sortBy === 'proximidade') {
+      const ra = targetRatio(a), rb = targetRatio(b);
+      // ra !== rb evita Infinity - Infinity = NaN quando ambos estao sem preco
+      if (ra !== rb) return ra - rb;
+      return (priorityRank[b.prioridade] || 0) - (priorityRank[a.prioridade] || 0);
+    }
     if (sortBy === 'priority') return (priorityRank[b.prioridade] || 0) - (priorityRank[a.prioridade] || 0);
     if (sortBy === 'date') return parseTravelDate(a.mes_viagem) - parseTravelDate(b.mes_viagem);
     return 0;
@@ -210,7 +264,7 @@ export default function PrecosTab({ showToast }) {
     display: 'grid',
     gap: '1rem',
     alignItems: 'center',
-    gridTemplateColumns: sortBy === 'manual'
+    gridTemplateColumns: dragEnabled
       ? '28px minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 232px'
       : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 232px',
   };
@@ -270,8 +324,9 @@ export default function PrecosTab({ showToast }) {
           <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><span className="text-xs font-bold font-mono">ORD</span></div>
           <div className="w-full">
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Ordenar por</div>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            <select value={sortBy} onChange={e => changeSort(e.target.value)}
               className="bg-transparent border-0 text-sm font-bold text-slate-900 dark:text-white focus:ring-0 focus:outline-none cursor-pointer w-full mt-0.5">
+              <option value="proximidade" className="bg-white dark:bg-slate-900">Proximidade da meta 🎯</option>
               <option value="manual" className="bg-white dark:bg-slate-900">Manual ↕</option>
               <option value="priority" className="bg-white dark:bg-slate-900">Prioridade ★</option>
               <option value="date" className="bg-white dark:bg-slate-900">Data Viagem 📅</option>
@@ -280,12 +335,54 @@ export default function PrecosTab({ showToast }) {
         </div>
       </div>
 
+      {/* Filtro por prioridade */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          <Filter className="w-3.5 h-3.5" /> Prioridade
+        </span>
+        {PRIORIDADES.map(p => {
+          const active = priorityFilter.has(p);
+          const count = flights.filter(f => f.prioridade === p).length;
+          return (
+            <button
+              key={p}
+              onClick={() => togglePriority(p)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                active
+                  ? `${getPriorityColor(p)} ring-2 ring-indigo-400/50 dark:ring-indigo-500/40`
+                  : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-600'
+              }`}
+              title={active ? `Remover filtro: ${p}` : `Filtrar por ${p}`}
+            >
+              {p}<span className="opacity-60 font-mono">{count}</span>
+            </button>
+          );
+        })}
+        {priorityFilter.size > 0 && (
+          <>
+            <button
+              onClick={clearPriorityFilter}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+            >
+              <X className="w-3 h-3" /> Limpar
+            </button>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              {sortedFlights.length} de {flights.length} voos
+            </span>
+          </>
+        )}
+        {sortBy === 'manual' && priorityFilter.size > 0 && (
+          <span className="text-[11px] text-amber-600 dark:text-amber-400">
+            Reordenação manual desativada com filtro ativo
+          </span>
+        )}
+      </div>
       {/* ── Card Table ── */}
       <div className="space-y-1.5">
 
         {/* Column Headers */}
         <div style={gridStyle} className="px-4 py-2">
-          {sortBy === 'manual' && <div />}
+          {dragEnabled && <div />}
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Cliente</div>
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Viagem</div>
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Prior.</div>
@@ -311,10 +408,19 @@ export default function PrecosTab({ showToast }) {
             <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
             Carregando...
           </div>
-        ) : flights.length === 0 ? (
+        ) : sortedFlights.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
             <Plane className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm">Nenhum voo sendo monitorado.</p>
+            <p className="text-sm">
+              {flights.length === 0
+                ? 'Nenhum voo sendo monitorado.'
+                : 'Nenhum voo com a prioridade selecionada.'}
+            </p>
+            {flights.length > 0 && (
+              <button onClick={clearPriorityFilter} className="mt-2 text-xs text-indigo-500 hover:text-indigo-400 underline cursor-pointer">
+                Limpar filtro
+              </button>
+            )}
           </div>
         ) : sortedFlights.map((flight, index) => {
           const hasPrice = flight.preco_atual != null;
@@ -328,7 +434,7 @@ export default function PrecosTab({ showToast }) {
           return (
             <div
               key={flight.id}
-              draggable={sortBy === 'manual'}
+              draggable={dragEnabled}
               onDragStart={e => handleDragStart(e, index)}
               onDragOver={e => handleDragOver(e, index)}
               onDragEnd={handleDragEnd}
@@ -340,7 +446,7 @@ export default function PrecosTab({ showToast }) {
                   isClosed  ? 'bg-slate-50/80 dark:bg-slate-800/30 border-slate-200/60 dark:border-slate-700/30 opacity-60 hover:opacity-80' :
                   'bg-white dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/50 hover:-translate-y-px hover:shadow-md hover:shadow-slate-200/60 dark:hover:shadow-slate-900/60 hover:border-slate-300/80 dark:hover:border-slate-600/60'
                 }
-                ${sortBy === 'manual' ? 'cursor-move' : ''}
+                ${dragEnabled ? 'cursor-move' : ''}
               `}
             >
               {/* Left accent bar — status do cliente tem prioridade sobre preço */}
@@ -359,7 +465,7 @@ export default function PrecosTab({ showToast }) {
               <div style={gridStyle} className="relative px-4 py-3.5">
 
                 {/* Drag handle */}
-                {sortBy === 'manual' && (
+                {dragEnabled && (
                   <div className="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 transition-colors flex justify-center">
                     <GripVertical className="w-4 h-4 cursor-grab" />
                   </div>
