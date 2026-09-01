@@ -143,7 +143,9 @@ router.put('/:id', (req, res) => {
                      posicao = COALESCE(?, posicao),
                      email_cliente = ?,
                      telegram_chat_id = ?,
-                     status = COALESCE(?, status)
+                     status = COALESCE(?, status),
+                     preco_compra = ?,
+                     comprado_em = ?
                  WHERE id = ?`;
 
     // For email and telegram: if they were provided in the body (even as empty string),
@@ -152,15 +154,31 @@ router.put('/:id', (req, res) => {
     const telegramValue = telegram_chat_id !== undefined ? (telegram_chat_id || null) : undefined;
 
     // We need to handle the "keep existing" case by first fetching the current row
-    db.get('SELECT email_cliente, telegram_chat_id FROM flights WHERE id = ?', [id], (err, existing) => {
+    db.get('SELECT email_cliente, telegram_chat_id, status, preco_atual, preco_compra, comprado_em FROM flights WHERE id = ?', [id], (err, existing) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!existing) return res.status(404).json({ error: 'Flight not found' });
 
         const finalEmail = emailValue !== undefined ? emailValue : existing.email_cliente;
         const finalTelegram = telegramValue !== undefined ? telegramValue : existing.telegram_chat_id;
 
+        // Congela o preco no momento em que o voo passa a "passagem comprada" e
+        // limpa quando ele deixa esse status, para a economia refletir a compra.
+        const virouComprado = status === 'passagem comprada' && existing.status !== 'passagem comprada';
+        const deixouComprado = status !== undefined && status !== null
+            && status !== 'passagem comprada' && existing.status === 'passagem comprada';
+
+        let precoCompra = existing.preco_compra;
+        let compradoEm = existing.comprado_em;
+        if (virouComprado) {
+            precoCompra = existing.preco_atual;
+            compradoEm = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        } else if (deixouComprado) {
+            precoCompra = null;
+            compradoEm = null;
+        }
+
         const params = [cliente, mes_viagem, prioridade, preco_esperado, isCheckDiario, link_voo,
-                        paxQty, pos, finalEmail, finalTelegram, status, id];
+                        paxQty, pos, finalEmail, finalTelegram, status, precoCompra, compradoEm, id];
 
         db.run(sql, params, function(err) {
             if (err) {
@@ -310,6 +328,54 @@ router.get('/:id/history', (req, res) => {
         (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows || []);
+        }
+    );
+});
+
+// Estatisticas de preco do periodo — base para sugerir um alvo realista.
+router.get('/:id/price-stats', (req, res) => {
+    const { id } = req.params;
+    const parsed = parseInt(req.query.days, 10);
+    const days = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 365) : 60;
+
+    db.all(
+        `SELECT preco FROM flight_price_history
+         WHERE flight_id = ? AND verificado_em >= datetime('now', ?)
+         ORDER BY preco ASC`,
+        [id, `-${days} days`],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const precos = (rows || []).map(r => Number(r.preco)).filter(Number.isFinite);
+            if (precos.length === 0) {
+                return res.json({ dias: days, amostras: 0 });
+            }
+
+            // Percentil sobre a lista ja ordenada, com interpolacao linear.
+            const percentil = (p) => {
+                const idx = (precos.length - 1) * p;
+                const lo = Math.floor(idx), hi = Math.ceil(idx);
+                return lo === hi ? precos[lo] : precos[lo] + (precos[hi] - precos[lo]) * (idx - lo);
+            };
+
+            const min = precos[0];
+            const max = precos[precos.length - 1];
+            const media = precos.reduce((a, b) => a + b, 0) / precos.length;
+            const p25 = percentil(0.25);
+
+            // Alvo sugerido: o percentil 25 arredondado para a dezena mais proxima.
+            // E um preco que de fato ocorreu no quarto mais barato do periodo, entao
+            // e agressivo o bastante para valer a pena e realista o bastante para disparar.
+            const sugerido = Math.round(p25 / 10) * 10;
+
+            res.json({
+                dias: days,
+                amostras: precos.length,
+                min, max, media,
+                mediana: percentil(0.5),
+                p25,
+                sugerido
+            });
         }
     );
 });

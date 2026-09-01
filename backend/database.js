@@ -120,6 +120,10 @@ function runMigrations() {
         "ALTER TABLE flights ADD COLUMN falhas_consecutivas INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE flights ADD COLUMN ultima_falha TEXT",
         "ALTER TABLE flights ADD COLUMN ultimo_erro TEXT",
+        // Preco congelado no momento da compra — preco_atual continuaria mudando
+        // e a economia calculada em cima dele seria a de hoje, nao a da compra.
+        "ALTER TABLE flights ADD COLUMN preco_compra REAL",
+        "ALTER TABLE flights ADD COLUMN comprado_em TEXT",
         // Link de gerenciamento da reserva (companhia aérea) no monitoramento de status
         "ALTER TABLE monitored_flights_status ADD COLUMN link_gerenciamento TEXT",
         // Override manual de horário — quando 1, updateSnapshot não sobrescreve
@@ -127,12 +131,23 @@ function runMigrations() {
         "ALTER TABLE monitored_flights_status ADD COLUMN override_ativo INTEGER NOT NULL DEFAULT 0"
     ];
 
-    migrations.forEach(sql => {
-        db.run(sql, (err) => {
-            if (err && !err.message.includes('duplicate column name')) {
-                console.error('Migration error:', err.message);
-            }
-        });
+    const onMigrationError = (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Migration error:', err.message);
+        }
+    };
+
+    // serialize garante a ordem: o backfill abaixo depende das colunas criadas
+    // pelas ALTERs acima, e por padrao o node-sqlite3 executa em paralelo.
+    db.serialize(() => {
+        migrations.forEach(sql => db.run(sql, onMigrationError));
+
+        // Backfill unico para compras anteriores a coluna preco_compra: o agendador
+        // so verifica voos ativos, entao preco_atual de um voo comprado ficou parado
+        // no ultimo valor visto enquanto ele ainda era monitorado — boa aproximacao.
+        db.run(`UPDATE flights SET preco_compra = preco_atual
+                 WHERE status = 'passagem comprada' AND preco_compra IS NULL AND preco_atual IS NOT NULL`,
+               onMigrationError);
     });
 
     // Create price history table

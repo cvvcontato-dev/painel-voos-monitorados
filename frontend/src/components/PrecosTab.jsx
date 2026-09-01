@@ -4,7 +4,7 @@ import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
   AlertCircle, Calendar, DollarSign, User, Link as LinkIcon, X,
   Users, GripVertical, RefreshCw, Mail, MessageSquare, TrendingDown, Clock, Bell,
-  ShoppingBag, XCircle, LineChart as LineChartIcon, Filter, AlertTriangle
+  ShoppingBag, XCircle, LineChart as LineChartIcon, Filter, AlertTriangle, PiggyBank, Sparkles
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
@@ -63,7 +63,10 @@ export default function PrecosTab({ showToast }) {
   const [historyData, setHistoryData] = useState({});
   const [historyState, setHistoryState] = useState({});
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
+  // Estatisticas do historico para sugerir um alvo realista ao editar um voo.
+  const [priceStats, setPriceStats] = useState(null);
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
 
   const fetchFlights = useCallback(async () => {
     setIsLoading(true);
@@ -74,10 +77,19 @@ export default function PrecosTab({ showToast }) {
 
   useEffect(() => { fetchFlights(); }, [fetchFlights]);
 
+  const carregarPriceStats = async (flightId) => {
+    try {
+      const { data } = await api.get(`${API_URL}/${flightId}/price-stats?days=60`);
+      setPriceStats(data);
+    } catch { setPriceStats(null); }
+  };
+
   const openModal = (flight = null) => {
+    setPriceStats(null);
     if (flight) {
       setEditingFlight(flight);
       Object.keys(flight).forEach(k => setValue(k, flight[k]));
+      carregarPriceStats(flight.id);
     } else {
       setEditingFlight(null);
       reset({ cliente: '', mes_viagem: '', prioridade: '', preco_esperado: '', link_voo: '', quantidade_pax: 1, email_cliente: '', telegram_chat_id: '', status: 'ativo' });
@@ -85,7 +97,7 @@ export default function PrecosTab({ showToast }) {
     setIsModalOpen(true);
   };
 
-  const closeModal = () => { setIsModalOpen(false); setEditingFlight(null); reset(); };
+  const closeModal = () => { setIsModalOpen(false); setEditingFlight(null); setPriceStats(null); reset(); };
 
   const onSubmit = async (data) => {
     try {
@@ -283,6 +295,28 @@ export default function PrecosTab({ showToast }) {
     return 0;
   });
 
+  // Economia usa preco_compra (congelado na compra), nunca preco_atual — que
+  // continuaria mudando e daria a economia de hoje, nao a do dia da compra.
+  const economiaDoVoo = (f) =>
+    f.preco_compra == null ? null
+      : (f.preco_esperado - f.preco_compra) * (f.quantidade_pax || 1);
+
+  const comprados = flights.filter(f => f.status === 'passagem comprada');
+  const compradosComPreco = comprados.filter(f => f.preco_compra != null);
+  const economiaTotal = compradosComPreco.reduce((acc, f) => acc + economiaDoVoo(f), 0);
+
+  // Percentil exige alguma massa de dados; abaixo disso a sugestao seria ruido.
+  const MIN_AMOSTRAS_SUGESTAO = 4;
+  const temSugestao = !!priceStats && priceStats.amostras >= MIN_AMOSTRAS_SUGESTAO;
+  const alvoDigitado = parseFloat(watch('preco_esperado'));
+  const avisoAlvo = temSugestao && Number.isFinite(alvoDigitado)
+    ? (alvoDigitado < priceStats.min
+        ? `Esse alvo está abaixo do menor preço já visto no período (${fmt(priceStats.min)}) — o alerta pode nunca disparar.`
+        : alvoDigitado > priceStats.max
+          ? `Esse alvo está acima do maior preço do período (${fmt(priceStats.max)}) — o alerta dispararia em toda verificação.`
+          : null)
+    : null;
+
   const comFalha = flights.filter(f => f.status === 'ativo' && (f.falhas_consecutivas || 0) > 0).length;
 
   const allChecked = flights.length > 0 && flights.every(f => f.check_diario);
@@ -328,7 +362,16 @@ export default function PrecosTab({ showToast }) {
           <div className="bg-emerald-500/10 p-2.5 rounded-lg text-emerald-500 border border-emerald-500/20 shrink-0"><ShoppingBag className="w-4 h-4" /></div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Compradas</div>
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{flights.filter(f => f.status === 'passagem comprada').length}</div>
+            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{comprados.length}</div>
+            {compradosComPreco.length > 0 && (
+              <div
+                className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400/80 mt-0.5"
+                title={`Soma de (preço-alvo − preço pago) × pax em ${compradosComPreco.length} de ${comprados.length} compra(s) com preço registrado`}
+              >
+                <PiggyBank className="w-2.5 h-2.5 shrink-0" />
+                {economiaTotal >= 0 ? `${fmt(economiaTotal)} economizados` : `${fmt(Math.abs(economiaTotal))} acima do alvo`}
+              </div>
+            )}
           </div>
         </div>
         {/* Desistências */}
@@ -528,6 +571,19 @@ export default function PrecosTab({ showToast }) {
                     {statusStyle && (
                       <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${statusStyle.cls}`}>
                         {statusStyle.icon} {statusStyle.label}
+                      </span>
+                    )}
+                    {isBought && economiaDoVoo(flight) != null && (
+                      <span
+                        className={`inline-flex items-center gap-1 text-[10px] font-semibold ${
+                          economiaDoVoo(flight) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                        }`}
+                        title={`Pago ${fmt(flight.preco_compra)} · alvo ${fmt(flight.preco_esperado)} · ${flight.quantidade_pax || 1} pax`}
+                      >
+                        <PiggyBank className="w-2.5 h-2.5 shrink-0" />
+                        {economiaDoVoo(flight) >= 0
+                          ? `economia ${fmt(economiaDoVoo(flight))}`
+                          : `${fmt(Math.abs(economiaDoVoo(flight)))} acima do alvo`}
                       </span>
                     )}
                   </div>
@@ -772,6 +828,43 @@ export default function PrecosTab({ showToast }) {
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><DollarSign className="w-4 h-4" /> Preço Esperado (R$)</label>
                 <input type="number" step="0.01" {...register('preco_esperado', { required: true, min: 0 })} className={inputCls} placeholder="2500.00" />
                 {errors.preco_esperado && <span className="text-xs text-red-700 dark:text-red-400">Preço inválido</span>}
+
+                {editingFlight && temSugestao && (
+                  <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50/60 dark:border-indigo-500/25 dark:bg-indigo-500/10 p-3 space-y-2">
+                    <div className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0 mt-0.5" />
+                      <span>
+                        Nos últimos {priceStats.dias} dias este voo variou entre{' '}
+                        <strong className="font-mono">{fmt(priceStats.min)}</strong> e{' '}
+                        <strong className="font-mono">{fmt(priceStats.max)}</strong>
+                        {' '}(média <span className="font-mono">{fmt(priceStats.media)}</span>, {priceStats.amostras} verificações).
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setValue('preco_esperado', priceStats.sugerido, { shouldDirty: true, shouldValidate: true })}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer active:scale-95"
+                      >
+                        Usar {fmt(priceStats.sugerido)}
+                      </button>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        preço do quarto mais barato do período
+                      </span>
+                    </div>
+                    {avisoAlvo && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                        <span>{avisoAlvo}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {editingFlight && priceStats && !temSugestao && (
+                  <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                    Ainda sem histórico suficiente para sugerir um alvo ({priceStats.amostras} verificação(ões) em 60 dias).
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Link do Google Voos</label>
