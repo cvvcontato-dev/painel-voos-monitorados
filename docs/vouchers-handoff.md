@@ -215,3 +215,18 @@ São ~30 commits no total. `git log --oneline` na branch pra lista completa.
 - [ ] Disclaimer ainda aparece no **e-mail** (foi removido só do PDF). Confirmar se quer remover do e-mail também.
 - [ ] Deep-links das cias são best-effort e podem quebrar quando as cias mudarem os sites — revisar `manageBookingUrl` se pararem de funcionar. Latam usa `orderId` que pode diferir do PNR de 6 letras.
 - [ ] Limpar branch/worktree após reconciliar main.
+
+---
+
+## Aba Cartões de Embarque (2026-09-23)
+
+Spec: `docs/superpowers/specs/2026-09-23-aba-cartoes-embarque-design.md` · Plano: `docs/superpowers/plans/2026-09-23-aba-cartoes-embarque.md`
+
+- **Limpeza de link** (`helpers/boardingPassLink.js`): Azul/Gol vêm como `accounts.google.com/...?continue=<LINK>&followup=...` → extrai `<LINK>` (pay.google.com). O JWT traz voo/data/trecho/localizador (id `prd20260924AD2730SSARECRNWDKT...`). Latam já vem final → só remove `utm_*`/`messageId`. Gol assumida igual à Azul (sem link real ainda).
+- **Link curto** `/c/:code` (público, `routes/shortLink.js`): redirect 302 só para hosts da allowlist; conta aberturas (ignora bots de preview); expira com a retenção.
+- **Mensagens** (`helpers/boardingPassMessage.js`): fonte única do texto WhatsApp e das instruções por cia (Latam: "Entendi" → "Adicionar à minha carteira").
+- **E-mail** (`services/boardingPassEmail.js`): reaproveita `transporter` e logo CID exportados de `notifier.js`.
+- **Retenção** (`services/boardingPassRetention.js`): cron 03:45, apaga envios `BOARDING_PASS_RETENTION_DAYS` (default 7) após o voo.
+- **Backend estrito:** link preenchido e inválido → 422 (o frontend já mostra o erro inline).
+- **WhatsApp automático via API**: fora do escopo (evolução futura). Hoje é `wa.me` com texto pronto.
+- **Pendências conhecidas:** suítes `auth`/`users` já falhavam antes (403 CSRF no `makeAuthApp`), sem relação com esta aba.
