@@ -59,7 +59,9 @@ function instructionsHtml(group) {
   const keys = instructionKeysOf(group);
   const blocks = keys.map(k => {
     const title = keys.length > 1 ? `Como salvar no celular (${INSTRUCTION_LABEL[k]})` : 'Como salvar no celular';
+    // No e-mail o cliente vê um botão, não um link: adapta o passo 1.
     const steps = INSTRUCTIONS[k]
+      .map((step, i) => (i === 0 ? 'Toque no botão azul do seu trecho, acima' : step))
       .map((step, i) => `<tr><td valign="top" style="padding:4px 10px 4px 0;"><span style="display:inline-block;width:22px;height:22px;line-height:22px;border-radius:11px;background:#00539C;color:#fff;font-size:12px;font-weight:700;text-align:center;">${i + 1}</span></td><td style="padding:4px 0;font-size:14px;color:#2D3748;line-height:1.5;">${richText(step)}</td></tr>`)
       .join('');
     return `<div style="font-size:15px;font-weight:700;color:#00539C;margin:0 0 8px;">${escapeHtml(title)}</div>

@@ -30,6 +30,8 @@ test('HTML: logo CID, botão por trecho, instruções da cia e dicas', () => {
   expect(html.match(/Adicionar à carteira<\/a>/g)).toHaveLength(2);
   expect(html).toContain('<strong>Entendi</strong>');
   expect(html).toContain('tire um print do QR code');
+  expect(html).toContain('Toque no botão azul do seu trecho, acima');
+  expect(html).not.toContain('Toque no link acima');
   expect(html).toContain('No aeroporto');
   expect(html).toContain('João &lt;b&gt;Souza&lt;/b&gt;'); // escapado
 });

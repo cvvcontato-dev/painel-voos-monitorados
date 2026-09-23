@@ -47,7 +47,8 @@ export default function SendPanel({
           <div key={i} className="border border-slate-200 dark:border-slate-700/60 rounded-lg p-3">
             <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
               <span className="pii">{m.label}</span>
-              <span className="text-slate-400"> · {m.phone ? `+${m.phone}` : 'sem número'}</span>
+              <span className="text-slate-400"> · </span>
+              <span className={m.phone ? 'pii text-slate-400' : 'text-slate-400'}>{m.phone ? `+${m.phone}` : 'sem número'}</span>
             </div>
             <pre className="pii mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700 dark:text-slate-300 font-sans">
               {m.text}

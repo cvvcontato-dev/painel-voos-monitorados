@@ -26,6 +26,8 @@ const INSTRUCTIONS = {
 
 const INSTRUCTION_LABEL = { google: 'Azul / Gol', latam: 'Latam', other: 'outras companhias' };
 
+const CARRIER_NAME = { azul: 'Azul', gol: 'Gol', latam: 'Latam' };
+
 const AIRPORT_TIPS = [
   'Apresente o QR code do cartão e um documento oficial com foto na inspeção de segurança e no portão de embarque',
   'Deixe o brilho da tela no máximo',
@@ -53,7 +55,8 @@ function segmentLabel(link, fallbackLabel, segmentIndex) {
     return `${d.flightNumber} · ${cityOr(d.origin)} → ${cityOr(d.destination)} · ${dayMonth(d.date)}`;
   }
   if (fallbackLabel) return fallbackLabel;
-  return `Trecho ${segmentIndex + 1}`;
+  const cia = CARRIER_NAME[link.carrier];
+  return cia ? `${cia} · Trecho ${segmentIndex + 1}` : `Trecho ${segmentIndex + 1}`;
 }
 
 function linkUrl(link, { baseUrl, useOriginal }) {

@@ -24,9 +24,10 @@ describe('segmentLabel', () => {
   test('usa dados do JWT com nome da cidade', () => {
     expect(segmentLabel(azulLink(0, 0), null, 0)).toBe('AD2730 · Salvador → Recife · 24/09');
   });
-  test('sem dados: usa rótulo do voucher, senão "Trecho N"', () => {
+  test('sem dados: usa rótulo do voucher, senão "Cia · Trecho N"', () => {
     expect(segmentLabel(latamLink(0, 1), 'LA3456 · São Paulo → Recife · 01/10', 1)).toBe('LA3456 · São Paulo → Recife · 01/10');
-    expect(segmentLabel(latamLink(0, 1), null, 1)).toBe('Trecho 2');
+    expect(segmentLabel(latamLink(0, 1), null, 1)).toBe('Latam · Trecho 2');
+    expect(segmentLabel({ carrier: null, data: null }, null, 0)).toBe('Trecho 1');
   });
 });
 
