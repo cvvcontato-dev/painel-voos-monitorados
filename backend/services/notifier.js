@@ -1064,4 +1064,8 @@ async function sendPackageEmail({ to, bcc, packageData, settings, attachmentPath
     }
 }
 
-module.exports = { sendTelegram, sendEmail, sendVoucherEmail, buildVoucherEmailHtml, buildPackageEmailHtml, sendPackageEmail };
+module.exports = {
+    sendTelegram, sendEmail, sendVoucherEmail, buildVoucherEmailHtml, buildPackageEmailHtml, sendPackageEmail,
+    // Reaproveitados pelo e-mail de cartão de embarque (services/boardingPassEmail.js)
+    transporter, AGENCY_LOGO_PATH, AGENCY_LOGO_CID, SOCIAL_WHATSAPP_URL
+};

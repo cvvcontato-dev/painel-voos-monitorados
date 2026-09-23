@@ -42,6 +42,9 @@ const vouchersRouter = require('./routes/vouchers');
 const packagesRouter = require('./routes/packages');
 const itinerarioRouter = require('./routes/itinerario');
 const pacoteRouter = require('./routes/pacote');
+const boardingPassesRouter = require('./routes/boardingPasses');
+const shortLinkRouter = require('./routes/shortLink');
+const { startJob: startBoardingPassRetention } = require('./services/boardingPassRetention');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,6 +81,8 @@ app.use(session({
 // Mounted BEFORE any /api auth — clients click the link from the e-mail.
 app.use('/itinerario', itinerarioRouter);
 app.use('/pacote', pacoteRouter);
+// Link curto do cartão de embarque (público; redireciona para o link da cia).
+app.use('/c', shortLinkRouter);
 
 // 1. CSRF middleware for all /api routes
 app.use('/api', csrfMiddleware);
@@ -96,6 +101,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/promotions', promotionsRouter);
 app.use('/api/vouchers', vouchersRouter);
 app.use('/api/packages', packagesRouter);
+app.use('/api/boarding-passes', boardingPassesRouter);
 app.use('/api/backups', backupsRouter);
 
 // Serve local static assets (e.g. background images for promo rendering)
@@ -121,6 +127,7 @@ app.listen(PORT, '0.0.0.0', () => {
     startStatusScheduler();
     startBackupScheduler();
     startVoucherRetention();
+    startBoardingPassRetention();
     // Limpa pastas de trabalho de promoções no boot e a cada hora (TTL 24h),
     // honrando o expires_at retornado por /render-image.
     const { cleanupExpired } = require('./helpers/promoWorkspace');

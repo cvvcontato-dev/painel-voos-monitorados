@@ -19,6 +19,8 @@ const usersRouter = require('../routes/users');
 const promotionsRouter = require('../routes/promotions');
 const vouchersRouter = require('../routes/vouchers');
 const packagesRouter = require('../routes/packages');
+const boardingPassesRouter = require('../routes/boardingPasses');
+const shortLinkRouter = require('../routes/shortLink');
 const csrfMiddleware = require('../middleware/csrf');
 const requireAuth = require('../middleware/requireAuth');
 
@@ -124,6 +126,31 @@ function makePackageApp() {
   return app;
 }
 
+function makeBoardingPassApp() {
+  const app = express();
+  app.use(cookieParser());
+  app.use(express.json());
+  app.use(session({
+    store: new SqliteStore({
+      db: 'sessions-test.sqlite',
+      dir: process.env.DB_PATH,
+      cleanupInterval: 3600
+    }),
+    name: 'cvv.sid',
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'strict', secure: false }
+  }));
+  app.use('/c', shortLinkRouter);
+  app.use('/api', csrfMiddleware);
+  app.use('/api/auth', authRouter);
+  app.use('/api', requireAuth);
+  app.use('/api/vouchers', vouchersRouter);
+  app.use('/api/boarding-passes', boardingPassesRouter);
+  return app;
+}
+
 /**
  * Read the csrf token from a supertest response's set-cookie header.
  * Usage: const csrf = getCsrfFromResponse(res); then agent.post(...).set('X-CSRF-Token', csrf)
@@ -152,4 +179,4 @@ async function waitForDb() {
   throw new Error('waitForDb: monitored_flights_status table never appeared after 5s');
 }
 
-module.exports = { makeApp, makeAuthApp, makePromoApp, makeVoucherApp, makePackageApp, getCsrfFromResponse, waitForDb };
+module.exports = { makeApp, makeAuthApp, makePromoApp, makeVoucherApp, makePackageApp, makeBoardingPassApp, getCsrfFromResponse, waitForDb };
