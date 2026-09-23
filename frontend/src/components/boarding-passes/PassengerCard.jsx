@@ -4,6 +4,20 @@ import { inputCls, labelCls, sectionCls, btnGhost, badgeFor } from './formState'
 export default function PassengerCard({
   index, passenger, onChange, onSegmentChange, onSegmentParse, onAddSegment, onRemoveSegment, onCopy
 }) {
+  // Clique no campo vazio cola o que estiver copiado, se for um link.
+  // O navegador pede permissão na primeira vez; se negar ou não suportar,
+  // segue o fluxo normal (Ctrl+V).
+  async function pasteFromClipboard(si) {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!/^https?:\/\//i.test(text)) return;
+      onSegmentChange(si, { url: text, parsed: null, error: null });
+      onSegmentParse(si, text);
+    } catch {
+      // sem permissão / sem suporte: nada a fazer
+    }
+  }
+
   return (
     <div className={sectionCls}>
       <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
@@ -38,7 +52,8 @@ export default function PassengerCard({
                 <input
                   className={inputCls}
                   value={s.url}
-                  placeholder="Cole aqui o link do cartão de embarque"
+                  placeholder="Clique para colar o link do cartão de embarque"
+                  onClick={() => { if (!s.url) pasteFromClipboard(si); }}
                   onChange={e => onSegmentChange(si, { url: e.target.value, parsed: null, error: null })}
                   onBlur={e => onSegmentParse(si, e.target.value)}
                   onPaste={e => {
