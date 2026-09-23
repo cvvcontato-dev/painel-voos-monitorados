@@ -388,6 +388,51 @@ function runMigrations() {
             });
         }
     });
+
+    // --- Cartões de embarque ---
+    db.run(`CREATE TABLE IF NOT EXISTS boarding_pass_sends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        voucher_id INTEGER,
+        payload_json TEXT NOT NULL,
+        flight_date TEXT,
+        email_status TEXT NOT NULL DEFAULT 'not_sent',
+        email_sent_at TEXT,
+        email_log_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`, (err) => {
+        if (err) console.error('Error creating boarding_pass_sends table:', err.message);
+        else {
+            db.run(`CREATE INDEX IF NOT EXISTS idx_bps_user ON boarding_pass_sends(user_id, id DESC)`, (e) => {
+                if (e) console.error('Error creating idx_bps_user:', e.message);
+            });
+        }
+    });
+
+    db.run(`CREATE TABLE IF NOT EXISTS boarding_pass_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        send_id INTEGER NOT NULL REFERENCES boarding_pass_sends(id) ON DELETE CASCADE,
+        passenger_index INTEGER NOT NULL,
+        segment_index INTEGER NOT NULL,
+        original_url TEXT NOT NULL,
+        clean_url TEXT NOT NULL,
+        carrier TEXT,
+        recognized INTEGER NOT NULL DEFAULT 0,
+        parsed_json TEXT,
+        short_code TEXT UNIQUE,
+        open_count INTEGER NOT NULL DEFAULT 0,
+        first_opened_at TEXT,
+        last_opened_at TEXT
+    )`, (err) => {
+        if (err) console.error('Error creating boarding_pass_links table:', err.message);
+        else {
+            db.run(`CREATE INDEX IF NOT EXISTS idx_bpl_send ON boarding_pass_links(send_id)`, (e) => {
+                if (e) console.error('Error creating idx_bpl_send:', e.message);
+            });
+        }
+    });
 }
 
 module.exports = db;
