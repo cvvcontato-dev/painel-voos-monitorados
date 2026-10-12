@@ -3,6 +3,7 @@ const path = require('path');
 const ws = require('../helpers/promoWorkspace');
 const { stripInternal } = require('./promoValidator');
 const { brl } = require('./whatsappMessage');
+const library = require('./backgroundLibrary');
 
 const TEMPLATE = path.join(__dirname, '..', 'templates', 'promo-art.html');
 // Logo dentro de backend/static para ser empacotada no container (o Dockerfile copia backend/).
@@ -72,6 +73,14 @@ function fillTemplate(p, backgroundUrl) {
 function backgroundCss(backgroundUrl) {
   if (!backgroundUrl) return 'none';
   if (/^https?:\/\//i.test(backgroundUrl)) return `url('${backgroundUrl}')`;
+  // Foto do banco de fundos (volume persistente): lida do disco e embutida como data URL.
+  const libFile = library.pathFromUrl(backgroundUrl);
+  if (libFile) {
+    try {
+      const ext = path.extname(libFile).slice(1).toLowerCase().replace('jpg', 'jpeg');
+      return `url('data:image/${ext};base64,${fs.readFileSync(libFile).toString('base64')}')`;
+    } catch (e) { return 'none'; }
+  }
   const m = backgroundUrl.match(/\/static\/promo-backgrounds\/([^/?#]+)$/);
   if (m) {
     const file = path.join(__dirname, '..', 'static', 'promo-backgrounds', m[1]);

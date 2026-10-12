@@ -63,9 +63,13 @@ router.post('/render-image', async (req, res) => {
 });
 
 router.get('/backgrounds', async (req, res) => {
-  const { destination, country } = req.query;
-  if (!destination) return res.status(400).json({ error: 'destination é obrigatório' });
-  return res.json(await listBackgrounds(destination, country));
+  const { destination, country, q, include_pexels } = req.query;
+  // q = busca livre no Pexels (não precisa de destino); sem q, destination é obrigatório.
+  if (!destination && !q) return res.status(400).json({ error: 'destination é obrigatório' });
+  return res.json(await listBackgrounds(destination, country, {
+    query: typeof q === 'string' ? q : undefined,
+    includePexels: include_pexels === '1' || include_pexels === 'true'
+  }));
 });
 
 router.get('/:promo_id/file/:name', (req, res) => {

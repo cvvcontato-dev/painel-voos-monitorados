@@ -350,6 +350,30 @@ function runMigrations() {
         }
     });
 
+    // --- Banco de fundos das promocoes ---
+    // Metadados das fotos de destino; os arquivos ficam em <DB_PATH>/promo-backgrounds/
+    // (volume persistente — o diretorio static/ e recriado a cada deploy).
+    db.run(`CREATE TABLE IF NOT EXISTS promo_backgrounds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        destination_slug TEXT NOT NULL,
+        destination_label TEXT NOT NULL,
+        filename TEXT NOT NULL UNIQUE,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'upload',
+        source_url TEXT,
+        mime TEXT,
+        bytes INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating promo_backgrounds table:', err.message);
+        else {
+            console.log('promo_backgrounds table created or already exists.');
+            db.run(`CREATE INDEX IF NOT EXISTS idx_promo_bg_slug ON promo_backgrounds(destination_slug)`, (e) => {
+                if (e) console.error('Error creating idx_promo_bg_slug:', e.message);
+            });
+        }
+    });
+
     // --- Packages tables ---
     db.run(`CREATE TABLE IF NOT EXISTS packages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

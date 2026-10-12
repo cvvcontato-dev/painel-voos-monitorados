@@ -33,6 +33,7 @@ const usersRouter = require('./routes/users');
 const { startScheduler, startStatusScheduler } = require('./services/scheduler');
 const { startBackupScheduler } = require('./services/backup');
 const backupsRouter = require('./routes/backups');
+const promoBackgroundsRouter = require('./routes/promoBackgrounds');
 const { startJob: startVoucherRetention } = require('./services/voucherRetention');
 const monitoredFlightsRouter = require('./routes/monitoredFlights');
 const flightsRouter = require('./routes/flights');
@@ -103,6 +104,7 @@ app.use('/api/vouchers', vouchersRouter);
 app.use('/api/packages', packagesRouter);
 app.use('/api/boarding-passes', boardingPassesRouter);
 app.use('/api/backups', backupsRouter);
+app.use('/api/promo-backgrounds', promoBackgroundsRouter);
 
 // Serve local static assets (e.g. background images for promo rendering)
 app.use('/static', express.static(path.join(__dirname, 'static')));

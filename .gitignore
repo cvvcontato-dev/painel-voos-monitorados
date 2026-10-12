@@ -23,6 +23,9 @@ backend/__tests__/.tmp-promos-render/
 # Promo automation output (generated PNGs, uploaded prints)
 backend/output/
 
+# Banco de fundos das promocoes (em producao fica em <DB_PATH>/promo-backgrounds, no volume)
+backend/promo-backgrounds/
+
 # Env
 .env
 

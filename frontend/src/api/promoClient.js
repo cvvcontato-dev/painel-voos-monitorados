@@ -39,9 +39,56 @@ export async function renderImage(promotion, background_choice) {
   } catch (err) { throw toApiError(err); }
 }
 
-export async function listBackgrounds(destination, country) {
+// opts.query = busca livre no Pexels; opts.includePexels = soma sugestões do Pexels às fotos do banco.
+export async function listBackgrounds(destination, country, opts = {}) {
   try {
-    const res = await api.get('/api/promotions/backgrounds', { params: { destination, country } });
+    const res = await api.get('/api/promotions/backgrounds', {
+      params: {
+        destination, country,
+        q: opts.query || undefined,
+        include_pexels: opts.includePexels ? '1' : undefined
+      }
+    });
+    return res.data;
+  } catch (err) { throw toApiError(err); }
+}
+
+// ── Banco de fundos (uma ou mais fotos por destino, uma delas padrão) ──────────
+export async function getBackgroundBank() {
+  try {
+    const res = await api.get('/api/promo-backgrounds');
+    return res.data;
+  } catch (err) { throw toApiError(err); }
+}
+
+export async function uploadBackground({ destination, file, makeDefault = false }) {
+  const fd = new FormData();
+  fd.append('destination', destination);
+  fd.append('make_default', makeDefault ? 'true' : 'false');
+  fd.append('image', file);
+  try {
+    const res = await api.post('/api/promo-backgrounds', fd);
+    return res.data.image;
+  } catch (err) { throw toApiError(err); }
+}
+
+export async function saveBackgroundFromUrl({ destination, url, makeDefault = false }) {
+  try {
+    const res = await api.post('/api/promo-backgrounds/from-url', { destination, url, make_default: makeDefault });
+    return res.data.image;
+  } catch (err) { throw toApiError(err); }
+}
+
+export async function setDefaultBackground(id) {
+  try {
+    const res = await api.put(`/api/promo-backgrounds/${id}/default`);
+    return res.data.image;
+  } catch (err) { throw toApiError(err); }
+}
+
+export async function deleteBackground(id) {
+  try {
+    const res = await api.delete(`/api/promo-backgrounds/${id}`);
     return res.data;
   } catch (err) { throw toApiError(err); }
 }
