@@ -7,6 +7,8 @@ import MessageBox from './MessageBox';
 import UploadZone from './UploadZone';
 import FlightDiffView, { tripSummary } from './FlightDiffView';
 import CorrectionForm from './CorrectionForm';
+import NewVoucherSection from './NewVoucherSection';
+import EmailPreviewModal from './EmailPreviewModal';
 
 const h3 = 'text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider';
 
@@ -17,6 +19,8 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   const [busy, setBusy] = useState(null); // 'notice' | 'upload' | 'save' | 'confirm' | 'email'
   const [skip, setSkip] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [preview, setPreview] = useState(null); // 'aviso' | 'confirmacao'
+  const [pvTs, setPvTs] = useState(() => Date.now());
   const alive = useRef(true);
   const lock = useRef(false);
   const ver = useRef(0); // versão do detalhe: descarta respostas antigas
@@ -68,11 +72,16 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   const st = STATUS[detail.status] || STATUS.aviso_pendente;
   const old = detail.old || {};
   const apply = (d) => { commit(d, ++ver.current); onChanged?.(); };
+  const bumpPreview = () => { if (alive.current) setPvTs(Date.now()); };
+  const openPreview = (kind) => {
+    if (editing) showToast('Salve ou cancele a correção — o modelo mostra a última versão salva', 'warning');
+    setPreview(kind);
+  };
   const stopEditing = () => { if (alive.current) setEditing(false); };
 
   const markNotice = () => run('notice', () => api.markNoticeSent(id), d => { apply(d); showToast('Aviso marcado como enviado', 'success'); });
-  const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); stopEditing(); showToast('Voucher novo lido', 'success'); });
-  const saveEdits = (unified) => run('save', () => api.saveNew(id, unified), d => { apply(d); stopEditing(); showToast('Correções salvas', 'success'); });
+  const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); stopEditing(); bumpPreview(); showToast('Voucher novo lido', 'success'); });
+  const saveEdits = (unified) => run('save', () => api.saveNew(id, unified), d => { apply(d); stopEditing(); bumpPreview(); showToast('Correções salvas', 'success'); });
   const sendEmail = (kind) => (emails) => run('email', () => api.sendEmail(id, kind, emails), async () => {
     showToast('E-mail enviado', 'success');
     const v = ++ver.current;
@@ -90,6 +99,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   }
 
   return (
+    <>
     <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1" aria-busy={!!busy}>
       <div className={sectionCls}>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -121,6 +131,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
           blocked={editing}
           emailLabel="Enviar e-mail do aviso"
           onSendEmail={sendEmail('aviso')}
+          onPreview={() => openPreview('aviso')}
           showToast={showToast}
         >
           {!done && detail.status === 'aviso_pendente' && (
@@ -158,6 +169,9 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                   </div>
                 )}
                 <FlightDiffView diff={detail.diff} />
+                {detail.new_voucher_id && (
+                  <NewVoucherSection voucherId={detail.new_voucher_id} url={detail.new_voucher_url} ts={pvTs} showToast={showToast} />
+                )}
                 {!done && !editing && (
                   <button type="button" className={btnGhost} onClick={() => setEditing(true)} disabled={!!busy}>
                     <Pencil className="w-3.5 h-3.5" /> Corrigir dados lidos
@@ -176,6 +190,9 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                     blocked={editing}
                     emailLabel="Enviar e-mail com novo voucher (opcional)"
                     onSendEmail={sendEmail('confirmacao')}
+                    onPreview={() => openPreview('confirmacao')}
+                    previewDisabled={!detail.new_voucher_id}
+                    previewTitle={!detail.new_voucher_id ? 'Envie o voucher novo para ver o modelo' : undefined}
                     showToast={showToast}
                   />
                 )}
@@ -191,5 +208,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
         )}
       </div>
     </div>
+    {preview && <EmailPreviewModal key={preview} id={id} kind={preview} onClose={() => setPreview(null)} showToast={showToast} />}
+    </>
   );
 }

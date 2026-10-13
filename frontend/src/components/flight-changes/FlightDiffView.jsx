@@ -86,7 +86,18 @@ export default function FlightDiffView({ diff }) {
       )}
       {add.length > 0 && <Note tone="green"><span className="font-medium">Passageiros adicionados:</span> {names(add)}</Note>}
       {rem.length > 0 && <Note tone="red"><span className="font-medium">Passageiros removidos:</span> {names(rem)}</Note>}
-      {diff.baggageChanged && <Note tone="amber"><span className="font-medium">Bagagem alterada</span> em relação ao voucher antigo.</Note>}
+      {diff.baggageChanged && (
+        diff.baggageDetail
+          ? (
+            <Note tone="amber">
+              <span className="font-medium">Bagagem alterada:</span>{' '}
+              <span className="line-through opacity-70">{(diff.baggageDetail.antes || []).join(', ') || '—'}</span>{' '}
+              <ArrowRight className="inline w-3.5 h-3.5 -mt-0.5" />{' '}
+              <span className="font-semibold">{(diff.baggageDetail.depois || []).join(', ') || '—'}</span>
+            </Note>
+          )
+          : <Note tone="amber"><span className="font-medium">Bagagem alterada</span> em relação ao voucher antigo.</Note>
+      )}
     </div>
   );
 }

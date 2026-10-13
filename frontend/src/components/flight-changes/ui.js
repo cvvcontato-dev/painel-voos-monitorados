@@ -44,3 +44,22 @@ export function isoToDateLabel(iso) {
 
 // Dia/mês/ano de dois ISO são iguais? (compara só a parte da data escrita)
 export const sameIsoDate = (a, b) => String(a || '').slice(0, 10) === String(b || '').slice(0, 10);
+
+// Copia texto com fallback (execCommand). Retorna true/false.
+export async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch { /* cai no fallback */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch { return false; }
+}

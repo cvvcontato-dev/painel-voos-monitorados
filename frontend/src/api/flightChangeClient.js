@@ -19,6 +19,7 @@ export const uploadNewVoucher = (id, file) => api.post(`${BASE}/${id}/new-vouche
 export const saveNew = (id, unified) => api.put(`${BASE}/${id}/new`, { unified }).then(r => r.data);
 export const confirm = (id) => api.post(`${BASE}/${id}/confirm`, {}).then(r => r.data);
 export const sendEmail = (id, kind, emails) => api.post(`${BASE}/${id}/send-email`, { kind, emails }).then(r => r.data);
+export const emailPreview = (id, kind) => api.get(`${BASE}/${id}/email-preview`, { params: { kind } }).then(r => r.data);
 export const remove = (id) => api.delete(`${BASE}/${id}`);
 
 // Lista de vouchers salvos para o seletor. Usa o mesmo endpoint da aba Cartões de
