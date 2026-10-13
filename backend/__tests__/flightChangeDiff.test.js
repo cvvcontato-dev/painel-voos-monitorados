@@ -59,7 +59,8 @@ test('trecho removido e trecho novo', () => {
   expect(d1.trips.map(t => t.status)).toEqual(['igual', 'removido']);
   const d2 = diffVouchers(semVolta, v());
   expect(d2.trips.map(t => t.status)).toEqual(['igual', 'novo']);
-  expect(d1.hasChanges && d2.hasChanges).toBe(true);
+  expect(d1.hasChanges).toBe(true);
+  expect(d2.hasChanges).toBe(true);
 });
 
 test('pareia por direção + ordem, não por posição absoluta', () => {
@@ -112,4 +113,46 @@ test('passageiro sem name e número de voo numérico não quebram', () => {
   const x = v(); x.trips[0].flightNumber = 4001;
   const y = v(); y.trips[0].flightNumber = '4001';
   expect(diffVouchers(x, y).trips[0].status).toBe('igual');
+});
+
+test('datetime inválido: textos diferentes => alterado; iguais => igual; nulo vs válido => alterado', () => {
+  const mk = (dt) => { const x = v(); x.trips[0].departure.datetime = dt; return x; };
+  const d = diffVouchers(mk('x'), mk('z'));
+  expect(d.trips[0].status).toBe('alterado');
+  expect(d.trips[0].changes).toEqual([{ campo: 'partida', antes: 'x', depois: 'z' }]);
+  expect(diffVouchers(mk('x'), mk('x')).trips[0].status).toBe('igual');
+  expect(diffVouchers(mk(null), v()).trips[0].status).toBe('alterado');
+});
+
+test('pareamento: trecho removido no meio não vira alterado + removido', () => {
+  const mk = (flightNumber, dep) => trip({ direction: 'multi', flightNumber,
+    departure: { airport: 'GRU', datetime: dep } });
+  const a = v({ trips: [mk('G3 1234', '2026-09-10T08:00:00-03:00'), mk('A1', '2026-09-11T09:00:00-03:00')] });
+  const b = v({ trips: [mk('A1', '2026-09-11T09:00:00-03:00')] });
+  expect(diffVouchers(a, b).trips.map(t => t.status)).toEqual(['removido', 'igual']);
+});
+
+test('pareamento: troca de voo no mesmo dia/direção cai no passe por ordem', () => {
+  const n = v(); n.trips[0].flightNumber = 'AD 9999';
+  const d = diffVouchers(v(), n);
+  expect(d.trips[0].status).toBe('alterado');
+  expect(d.trips[0].changes.map(c => c.campo)).toEqual(['voo']);
+});
+
+test('datetime sem offset é tratado como -03:00', () => {
+  const n = v(); n.trips[0].departure.datetime = '2026-09-12T08:30:00';
+  expect(diffVouchers(v(), n).trips[0].status).toBe('igual');
+});
+
+test('passageiros sem nome são ignorados', () => {
+  const n = v({ passengers: [...v().passengers, {}, { name: '  ' }] });
+  expect(diffVouchers(v(), n).passengers).toEqual({ adicionados: [], removidos: [] });
+});
+
+test('voo "G3 1234" vs "G31234" => igual; quantity "1" vs 1 => sem mudança', () => {
+  const a = v(); a.trips[0].flightNumber = 'G3 1234';
+  const b = v(); b.trips[0].flightNumber = 'G31234';
+  expect(diffVouchers(a, b).trips[0].status).toBe('igual');
+  const c = v({ baggage: [{ direction: 'ida', weightText: '23kg', quantity: '1' }] });
+  expect(diffVouchers(v(), c).baggageChanged).toBe(false);
 });
