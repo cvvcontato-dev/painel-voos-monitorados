@@ -44,9 +44,12 @@ function parse(json) { try { return json ? JSON.parse(json) : null; } catch { re
  * Remove um voucher (linha + arquivo) de forma best-effort. Escopo por user_id.
  * Só é chamado para o voucher NOVO do caso, nunca para o antigo (que pode ser da aba Vouchers).
  */
-async function dropVoucher(id, userId) {
+async function dropVoucher(id, userId, exceptCaseId = 0) {
   if (!id) return;
   try {
+    // Outro caso pode usar este voucher (ex.: como antigo): nesse caso não apaga nem a linha nem o arquivo.
+    const emUso = await get(`SELECT 1 FROM flight_changes WHERE (old_voucher_id = ? OR new_voucher_id = ?) AND id != ?`, [id, id, exceptCaseId]);
+    if (emUso) return;
     const v = await get(`SELECT source_file_path FROM vouchers WHERE id = ? AND user_id = ?`, [id, userId]);
     if (!v) return;
     await run(`DELETE FROM vouchers WHERE id = ? AND user_id = ?`, [id, userId]);
@@ -147,17 +150,17 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     const diff = diffVouchers(parse(row.old_json), unified);
     let upd;
     try {
-      upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, updated_at=datetime('now')
+      upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
                          WHERE id=? AND user_id=? AND status != 'confirmado'`,
         [newId, JSON.stringify(unified), JSON.stringify(diff), row.id, userId]);
-    } catch (e) { await dropVoucher(newId, userId); throw e; }
+    } catch (e) { await dropVoucher(newId, userId, row.id); throw e; }
     if (upd.changes === 0) {   // confirmado por outra requisição entre a leitura e a escrita
-      await dropVoucher(newId, userId);
+      await dropVoucher(newId, userId, row.id);
       return res.status(409).json({ error: 'caso já confirmado' });
     }
     // Re-upload: o voucher NOVO anterior fica órfão. Nunca apagar o antigo (old_voucher_id).
     if (row.new_voucher_id && row.new_voucher_id !== newId && row.new_voucher_id !== row.old_voucher_id) {
-      await dropVoucher(row.new_voucher_id, userId);
+      await dropVoucher(row.new_voucher_id, userId, row.id);
     }
     res.json(await detail(await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
@@ -184,7 +187,7 @@ router.put('/:id/new', async (req, res) => {
     // Duas escritas sem transação explícita (uma única conexão sqlite3 compartilhada com o resto do app:
     // BEGIN/COMMIT poderia englobar queries de outras requisições). Em vez disso: caso primeiro (com guarda de
     // status) e, se a escrita em `vouchers` falhar, restaura o JSON anterior do caso.
-    const upd = await run(`UPDATE flight_changes SET new_json=?, diff_json=?, updated_at=datetime('now')
+    const upd = await run(`UPDATE flight_changes SET new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
                             WHERE id=? AND user_id=? AND status != 'confirmado'`, [json, JSON.stringify(diff), row.id, userId]);
     if (upd.changes === 0) return res.status(409).json({ error: 'caso já confirmado' });
     // O PDF enviado por e-mail é renderizado a partir de `vouchers`: mantém em sincronia.
@@ -273,7 +276,7 @@ router.delete('/:id', async (req, res) => {
     const r = await run(`DELETE FROM flight_changes WHERE id = ? AND user_id = ?`, [row.id, userId]);
     if (!r.changes) return res.status(404).json({ error: 'não encontrado' });
     // Apaga só o voucher NOVO (criado por este fluxo). O antigo pode ser da aba Vouchers: nunca remover.
-    if (row.new_voucher_id && row.new_voucher_id !== row.old_voucher_id) await dropVoucher(row.new_voucher_id, userId);
+    if (row.new_voucher_id && row.new_voucher_id !== row.old_voucher_id) await dropVoucher(row.new_voucher_id, userId, row.id);
     res.status(204).end();
   } catch (e) { fail(req, res, e); }
 });

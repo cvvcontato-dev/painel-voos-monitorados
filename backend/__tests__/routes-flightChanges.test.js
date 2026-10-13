@@ -409,6 +409,41 @@ describe('revisão de qualidade (Task 4)', () => {
   });
 });
 
+describe('ajustes finais', () => {
+  test('PUT /new e re-upload zeram confirmation_email_sent_at', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('zera-1');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const novo = r.body.new;
+    novo.trips[0].departure.datetime = '2026-09-12T10:15:00-03:00';
+    await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
+    const put = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo });
+    expect(put.status).toBe(200);
+    expect(put.body.messages.confirmation).toContain('Em instantes enviamos');
+    expect((await q.get('SELECT confirmation_email_sent_at x FROM flight_changes WHERE id=?', [c.id])).x).toBeNull();
+
+    await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
+    const f2 = pdf('zera-2');
+    await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f2.buf, f2.opts);
+    expect((await q.get('SELECT confirmation_email_sent_at x FROM flight_changes WHERE id=?', [c.id])).x).toBeNull();
+  });
+
+  test('apagar o caso A mantém o voucher novo dele quando o caso B o usa como antigo', async () => {
+    const { agent, csrf } = await authed();
+    const a = await criarCaso(agent, csrf);
+    const f = pdf('compartilhado');
+    const r = await agent.post(`/api/flight-changes/${a.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const shared = r.body.new_voucher_id;
+    const p = (await voucherRow(shared)).source_file_path;
+    const b = await agent.post('/api/flight-changes').set('X-CSRF-Token', csrf).send({ voucher_id: shared });
+    expect(b.status).toBe(201);
+    expect((await agent.delete(`/api/flight-changes/${a.id}`).set('X-CSRF-Token', csrf)).status).toBe(204);
+    expect(await voucherRow(shared)).toBeDefined();
+    expect(require('fs').existsSync(p)).toBe(true);
+  });
+});
+
 describe('e-mail do aviso', () => {
   const v = { reservation: { locator: 'ABC123' }, route: { origin: 'GRU', destination: 'REC' },
     passengers: [{ name: '<script>x</script> MARIA' }], trips: [{ dateLabel: '12 SET 2026' }] };
