@@ -28,8 +28,6 @@ async function processRow(r) {
     }
     fileExisted = false;
   }
-  // PDF guardado para o link do cliente (PII): expira junto com o arquivo de origem.
-  try { pdfStore.purge(r.id); } catch (e) { console.error('[voucherRetention] erro ao remover PDF guardado', r.id, e.message); }
   try {
     await dbRun(`UPDATE vouchers SET source_file_path = NULL WHERE id = ?`, [r.id]);
     await dbRun(
@@ -103,6 +101,13 @@ async function runOncePackages() {
   return { cleaned, failed };
 }
 
+// Faxina dos PDFs guardados para o link do cliente (prazo próprio, alinhado ao link: 90 dias).
+function runSweepPdfs() {
+  return pdfStore.sweep()
+    .then(({ removed }) => { if (removed) console.log(`[voucherPdfStore] faxina removeu ${removed} arquivo(s)`); })
+    .catch(e => console.error('[voucherPdfStore] erro na faxina', e && e.message));
+}
+
 function startJob() {
   // NOTE: chamado APENAS por server.js dentro do app.listen — não invocar de testes.
   cron.schedule('30 3 * * *', () => {
@@ -112,7 +117,10 @@ function startJob() {
     runOncePackages().then(({ cleaned, failed }) => {
       if (cleaned || failed) console.log(`[packageRetention] limpou ${cleaned}, falhou ${failed}`);
     });
+    runSweepPdfs();
   });
+  // Também uma vez após o boot (atrasado, para não competir com a subida); o cron só roda às 03:30.
+  setTimeout(runSweepPdfs, 60 * 1000).unref();
 }
 
-module.exports = { runOnce, runOncePackages, startJob };
+module.exports = { runOnce, runOncePackages, runSweepPdfs, startJob };

@@ -67,3 +67,43 @@ describe('QR de assistência', () => {
     expect(html).not.toMatch(/<script>x<\/script>/);
   });
 });
+
+describe('SVG dos QR Codes é bem formado', () => {
+  const multi = () => voucher({
+    trips: [
+      { direction: 'ida', flightNumber: 'AD4050', locator: 'AAA111', departure: { airport: 'VCP', datetime: '2026-09-12T08:30:00-03:00' }, arrival: { airport: 'REC', datetime: '2026-09-12T11:30:00-03:00' } },
+      { direction: 'volta', flightNumber: 'AD4051', locator: 'BBB222', departure: { airport: 'REC', datetime: '2026-09-20T08:30:00-03:00' }, arrival: { airport: 'VCP', datetime: '2026-09-20T11:30:00-03:00' } }
+    ]
+  });
+  const svgsOf = (html) => html.match(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"[\s\S]*?<\/svg>/g) || [];
+  const qrSvgsOf = (html) => svgsOf(html).filter(s => s.includes('shape-rendering'));
+
+  test.each([['reservas múltiplas + assistência', multi, 3], ['reserva única (só assistência + check-in)', () => voucher(), 2]])('%s', async (_n, mk, esperado) => {
+    const html = await renderItinerarioPage({ voucherData: mk(), settings: { contact_phone: '11912345678' } });
+    const qrs = qrSvgsOf(html);
+    expect(qrs.length).toBeGreaterThanOrEqual(esperado - 1);
+    // assistência: 1 QR no <a> com aria-label; reservas: 1 por grupo
+    expect(html).toMatch(/aria-label="Falar com a Clube do Voo pelo WhatsApp"[^>]*>\s*<div[^>]*>\s*<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="110" height="110" viewBox=/);
+    for (const s of qrs) {
+      expect(s.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="110" viewBox=')).toBe(true);
+      expect(s).not.toContain('<svg <');
+      expect(s).not.toContain('<?xml');
+      expect((s.match(/<svg/g) || []).length).toBe(1);
+      expect((s.match(/<\/svg>/g) || []).length).toBe(1);
+      expect(s).toMatch(/<svg [^<>]*>/);            // tag de abertura íntegra
+      expect(s).not.toMatch(/width="d\+?"/);
+    }
+  });
+
+  test('QR por reserva e de assistência usam o mesmo gerador (ambos com xml removido e 110x110)', async () => {
+    spy.mockRestore();
+    const orig = QRCode.toString;
+    spy = jest.spyOn(QRCode, 'toString').mockImplementation(async (t, o) =>
+      `<?xml version="1.0" encoding="utf-8"?><svg xmlns="http://www.w3.org/2000/svg" width="999" height="999" viewBox="0 0 5 5"><path d="M0 0"/></svg>`);
+    const html = await renderItinerarioPage({ voucherData: multi(), settings: { contact_phone: '11912345678' } });
+    expect(html).not.toContain('<?');
+    expect(html).not.toContain('width="999"');
+    expect((html.match(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="110" height="110" viewBox="0 0 5 5">/g) || []).length).toBe(3);
+    void orig;
+  });
+});

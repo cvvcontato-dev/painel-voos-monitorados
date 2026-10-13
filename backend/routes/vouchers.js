@@ -258,6 +258,7 @@ router.delete('/:id', (req, res) => {
           const paths = String(row.source_file_path || '').split('|').filter(Boolean);
           paths.forEach(p => { if (fs.existsSync(p)) fs.unlinkSync(p); });
         } catch (e) { console.error('[VOUCHERS] arquivo órfão após delete', row.source_file_path, e.message); }
+        try { require('../services/voucherPdfStore').purge(req.params.id); } catch (e) { console.error('[VOUCHERS] PDF guardado órfão após delete', req.params.id, e.message); }
         audit(req.params.id, req.session.userId, 'delete', null, null);
         res.status(204).end();
       });

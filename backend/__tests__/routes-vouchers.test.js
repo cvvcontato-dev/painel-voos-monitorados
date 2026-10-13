@@ -148,3 +148,22 @@ test('POST /combine com 1 arquivo retorna 400', async () => {
     .attach('files', pdf(), { filename: 'a.pdf', contentType: 'application/pdf' }).field('roles', 'ida');
   expect(res.status).toBe(400);
 });
+
+test('DELETE apaga também o PDF guardado do voucher (voucher-pdfs)', async () => {
+  const fs = require('fs');
+  const pdfStore = require('../services/voucherPdfStore');
+  const { agent, csrf } = await authed();
+  const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+    .attach('file', Buffer.from('fake-pdf-bytes-del'), { filename: 'voucher.pdf', contentType: 'application/pdf' });
+  expect(created.status).toBe(201);
+  const id = created.body.id;
+  const p = pdfStore.filePath(id, '{"x":1}');
+  fs.writeFileSync(p, 'pdf');
+  const outro = pdfStore.filePath(id + 100000, '{"x":1}');
+  fs.writeFileSync(outro, 'pdf');
+  const del = await agent.delete(`/api/vouchers/${id}`).set('X-CSRF-Token', csrf);
+  expect(del.status).toBe(204);
+  expect(fs.existsSync(p)).toBe(false);
+  expect(fs.existsSync(outro)).toBe(true);
+  fs.unlinkSync(outro);
+});

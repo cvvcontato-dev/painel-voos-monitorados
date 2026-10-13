@@ -95,6 +95,29 @@ describe('GET /itinerario/:token/voucher.pdf', () => {
     expect((await request(app).get(`/itinerario/${token}`)).text).not.toContain(BTN);
   });
 
+  test('envia nosniff junto dos demais cabeçalhos', async () => {
+    const json = unified();
+    const id = await novoVoucher(json); created.push(id);
+    guardaPdf(id, json);
+    const res = await request(app).get(`/itinerario/${sign(id)}/voucher.pdf`);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  test('erro ao abrir o arquivo: 404 HTML, sem Content-Type pdf nem Content-Disposition', async () => {
+    const json = unified();
+    const id = await novoVoucher(json); created.push(id);
+    guardaPdf(id, json);
+    const { Readable } = require('stream');
+    const spy = jest.spyOn(fs, 'createReadStream').mockImplementation(() => { const s = new Readable({ read() {} }); process.nextTick(() => s.destroy(new Error('EIO'))); return s; });
+    try {
+      const res = await request(app).get(`/itinerario/${sign(id)}/voucher.pdf`);
+      expect(res.status).toBe(404);
+      expect(res.headers['content-type']).toMatch(/html/);
+      expect(res.headers['content-type']).not.toMatch(/pdf/);
+      expect(res.headers['content-disposition']).toBeUndefined();
+    } finally { spy.mockRestore(); }
+  });
+
   test('voucher inexistente: 404', async () => {
     expect((await request(app).get(`/itinerario/${sign(99999999)}/voucher.pdf`)).status).toBe(404);
   });
@@ -113,7 +136,7 @@ describe('GET /itinerario/:token (botão do PDF)', () => {
     guardaPdf(id, json);
     const com = await request(app).get(`/itinerario/${token}`);
     expect(com.text).toContain(BTN);
-    expect(com.text).toMatch(new RegExp(`<a href="/itinerario/${token.replace(/\./g, '\.')}/voucher\.pdf" download`));
+    expect(com.text).toMatch(new RegExp(`<a href="/itinerario/${token.replace(/\./g, '\\.')}/voucher\\.pdf" download`));
   });
 
   test('token inválido continua 403', async () => {

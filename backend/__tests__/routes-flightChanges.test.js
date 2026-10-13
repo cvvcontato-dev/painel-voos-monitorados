@@ -684,7 +684,7 @@ describe('PDF guardado para o link do cliente (voucher-pdfs)', () => {
     expect(s.status).toBe(200);
     const att = sendMail.mock.calls[0][0].attachments.find(a => /\.pdf$/.test(a.filename));
     expect(path.dirname(att.path)).toBe(pdfsDir());
-    expect(path.basename(att.path)).toMatch(new RegExp(`^voucher-${d.new_voucher_id}-[0-9a-f]{12}\.pdf$`));
+    expect(path.basename(att.path)).toMatch(new RegExp(`^voucher-${d.new_voucher_id}-[0-9a-f]{12}\\.pdf$`));
     await new Promise(r => setTimeout(r, 50));
     expect(fs.existsSync(att.path)).toBe(true);
   });

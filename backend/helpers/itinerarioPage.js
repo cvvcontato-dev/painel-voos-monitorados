@@ -66,6 +66,14 @@ const SOCIAL_ICONS = {
   whatsapp: '<svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 14.4c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.42-1.49-.9-.8-1.5-1.78-1.67-2.08-.17-.3-.02-.46.13-.61.13-.13.3-.34.45-.51.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.21-.24-.58-.49-.5-.67-.51-.17 0-.37-.02-.57-.02-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.47 1.07 2.88 1.22 3.08.15.2 2.1 3.21 5.08 4.5.71.3 1.26.49 1.7.62.71.22 1.36.19 1.87.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35zM12 2a10 10 0 0 0-8.49 15.31L2 22l4.81-1.5A10 10 0 1 0 12 2zm0 18.18a8.18 8.18 0 0 1-4.16-1.13l-.3-.18-2.86.89.91-2.78-.2-.32A8.18 8.18 0 1 1 12 20.18z"/></svg>'
 };
 
+// QR em SVG 110x110 (sem prólogo XML) para embutir no HTML; '' se a geração falhar.
+async function qrSvg(target) {
+  try {
+    const svg = await QRCode.toString(target, { type: 'svg', width: 110, margin: 1, color: { dark: '#0e1726', light: '#ffffff' } });
+    return svg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="110"').replace(/height="\d+"/, 'height="110"').trim();
+  } catch { return ''; }
+}
+
 const CALENDAR_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#8a93a4" style="vertical-align:-2px;margin-right:6px;"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>';
 
 async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
@@ -112,11 +120,7 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
   const safeGroupUrl = (u) => (u && /^https?:\/\//i.test(u)) ? u : contactSiteHref;
   const qrByGroup = await Promise.all(groups.map(async g => {
     const target = safeGroupUrl(g.bookingUrl);
-    let svg = '';
-    try {
-      svg = await QRCode.toString(target, { type: 'svg', width: 110, margin: 1, color: { dark: '#0e1726', light: '#ffffff' } });
-      svg = svg.replace(/<\?xml[^?]*\?>/, '').replace(/width="\d+"/, 'width="110"').replace(/height="\d+"/, 'height="110"');
-    } catch { svg = ''; }
+    const svg = await qrSvg(target);
     return { label: g.label, locator: g.locator, carrierKey: g.carrierKey, target, svg };
   }));
 
@@ -127,11 +131,7 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
   const helpText = `Olá! Preciso de ajuda com a minha reserva${helpLocator ? ` ${helpLocator}` : ''}${helpName ? ` (${helpName})` : ''}.`;
   const waHelpLink = buildWaLink(contactPhone, helpText);
   const assistTarget = waHelpLink || contactSiteHref;
-  let assistSvg = '';
-  try {
-    assistSvg = await QRCode.toString(assistTarget, { type: 'svg', width: 110, margin: 1, color: { dark: '#0e1726', light: '#ffffff' } });
-    assistSvg = assistSvg.replace(/<?xml[^?]*?>/, '').replace(/width="d+"/, 'width="110"').replace(/height="d+"/, 'height="110"');
-  } catch { assistSvg = ''; }
+  const assistSvg = await qrSvg(assistTarget);
   const assistLabel = waHelpLink ? 'Falar com a Clube do Voo pelo WhatsApp' : 'Abrir o site da Clube do Voo';
   const assistHint = waHelpLink
     ? 'Dúvidas, alterações ou pedidos especiais — escaneie ou toque no QR para falar conosco no WhatsApp.'

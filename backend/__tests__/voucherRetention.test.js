@@ -33,15 +33,13 @@ describe('voucherRetention.runOnce', () => {
       );
     });
 
-    // PDF guardado do voucher expirado (e de um voucher que não expira) em voucher-pdfs/
-    const pdfExpirado = pdfStore.filePath(voucherId, '{}');
-    const pdfOutro = pdfStore.filePath(voucherId + 100000, '{}');
-    fs.writeFileSync(pdfExpirado, 'pdf'); fs.writeFileSync(pdfOutro, 'pdf');
+    // PDF guardado do link do cliente NÃO expira aos 30 dias do arquivo de origem (dura 90, igual ao link).
+    const pdfGuardado = pdfStore.filePath(voucherId, '{}');
+    fs.writeFileSync(pdfGuardado, 'pdf');
 
     const { cleaned, failed } = await runOnce();
-    expect(fs.existsSync(pdfExpirado)).toBe(false);
-    expect(fs.existsSync(pdfOutro)).toBe(true);
-    fs.unlinkSync(pdfOutro);
+    expect(fs.existsSync(pdfGuardado)).toBe(true);
+    fs.unlinkSync(pdfGuardado);
     expect(cleaned).toBeGreaterThanOrEqual(1);
     expect(failed).toBe(0);
     expect(fs.existsSync(tmp)).toBe(false);
@@ -52,6 +50,42 @@ describe('voucherRetention.runOnce', () => {
 
     const audit = await new Promise(r => db.get(`SELECT * FROM voucher_audit_log WHERE voucher_id = ? AND action = 'retention_cleanup'`, [voucherId], (e, row) => r(row)));
     expect(audit).toBeTruthy();
+  });
+});
+
+describe('voucherRetention: faxina dos PDFs guardados', () => {
+  const cron = require('node-cron');
+  const pdfStore = require('../services/voucherPdfStore');
+  const { startJob, runSweepPdfs } = require('../services/voucherRetention');
+  afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
+
+  test('o cron diário chama a faxina dos PDFs', () => {
+    let cb;
+    jest.spyOn(cron, 'schedule').mockImplementation((_expr, fn) => { cb = fn; });
+    const sweep = jest.spyOn(pdfStore, 'sweep').mockResolvedValue({ removed: 0 });
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.useFakeTimers();
+    startJob();
+    expect(sweep).not.toHaveBeenCalled();
+    cb();
+    expect(sweep).toHaveBeenCalledTimes(1);
+  });
+
+  test('também roda uma vez após o boot (atrasado)', () => {
+    jest.spyOn(cron, 'schedule').mockImplementation(() => {});
+    const sweep = jest.spyOn(pdfStore, 'sweep').mockResolvedValue({ removed: 0 });
+    jest.useFakeTimers();
+    startJob();
+    expect(sweep).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(61 * 1000);
+    expect(sweep).toHaveBeenCalledTimes(1);
+  });
+
+  test('falha da faxina só é logada (não derruba o job)', async () => {
+    jest.spyOn(pdfStore, 'sweep').mockRejectedValue(new Error('disco'));
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(runSweepPdfs()).resolves.toBeUndefined();
+    expect(err.mock.calls.some(c => /faxina/.test(c[0]) && c[1] === 'disco')).toBe(true);
   });
 });
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const { pipeline } = require('stream');
 const db = require('../database');
 const { verify } = require('../helpers/voucherToken');
 const { renderItinerarioPage } = require('../helpers/itinerarioPage');
@@ -26,11 +27,17 @@ router.get('/:token/voucher.pdf', (req, res) => {
     let file;
     try { file = pdfStore.exists(v.voucherId, row.unified_json) ? pdfStore.filePath(v.voucherId, row.unified_json) : null; } catch { file = null; }
     if (!file) return res.status(404).send(pdfMissingHtml);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Voucher-${safeLoc}.pdf"`);
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('X-Robots-Tag', 'noindex,nofollow');
-    fs.createReadStream(file).on('error', () => { if (!res.headersSent) res.status(404).send(pdfMissingHtml); else res.destroy(); }).pipe(res);
+    // Só define os cabeçalhos de download depois que o arquivo abriu: erro de leitura vira 404 HTML, não "PDF" quebrado.
+    const stream = fs.createReadStream(file);
+    stream.once('error', () => { if (!res.headersSent) res.status(404).send(pdfMissingHtml); else res.destroy(); });
+    stream.once('open', () => {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="Voucher-${safeLoc}.pdf"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Robots-Tag', 'noindex,nofollow');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      pipeline(stream, res, (err) => { if (err) res.destroy(); });
+    });
   });
 });
 
