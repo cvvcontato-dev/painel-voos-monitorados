@@ -1,5 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { normalize } = require('./voucherNormalizer');
+const { normalize, toISO } = require('./voucherNormalizer');
 
 const SUPPORTED = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 
@@ -101,6 +101,51 @@ async function callGemini(buffer, mimetype, promptText) {
   throw lastErr;
 }
 
+const FLIGHTS_PROMPT = `Você recebe um PRINT ou PDF do site/app de uma companhia aérea brasileira (Azul, Gol ou Latam) que mostra APENAS OS VOOS (sem passageiros). Pode não haver localizador.
+Devolva UM ÚNICO objeto JSON, sem texto extra, com as chaves:
+
+carrier: "azul", "gol" ou "latam" (minúsculas) ou null. Decida pelo prefixo do número do voo: AD=azul, G3/GLO=gol, LA/JJ=latam.
+locator: o localizador/código da reserva SOMENTE se estiver visível, senão null.
+trips: [{
+  direction ("ida"|"volta"|"interno"|"multi"): "Voo da ida"/"Voo de ida" => "ida"; "Voo da volta"/"Voo de volta" => "volta"; escalas/conexões de um mesmo sentido ficam na mesma direção; sem rótulo claro use "multi",
+  dateLabel (ex.: "17 NOV 2026"),
+  departure: { airport (IATA 3 letras maiúsculas), airportName (cidade/aeroporto se visível, senão null), datetime (ISO 8601 com offset -03:00, ex.: "2026-11-17T14:45:00-03:00") },
+  arrival:   { airport (IATA), airportName (ou null), datetime (ISO 8601 com offset -03:00) },
+  flightNumber (prefixo + número, ex.: "G3 1922", lido da linha "G3 1922 OPERADO POR GOL"),
+  durationText (ex.: "1h20", a partir de "1 hora e 20 minutos"),
+  cabinClass (null: "Tarifa Light/Plus/Promo" é TARIFA, não classe; só preencha se o texto disser classe, ex.: "Econômica"),
+  airlineDisplayName (ex.: "Gol Linhas Aéreas"), status (ex.: "Confirmado" ou null)
+}]
+
+REGRAS:
+- Datas dd/mm/aaaa hh:mm viram ISO 8601 com offset -03:00.
+- IATA sempre 3 letras maiúsculas.
+- Se um campo não estiver visível, use null. NÃO invente passageiros, localizador, horários nem voos.
+- Não inclua nenhum texto fora do JSON.`;
+
+/** Extrai só os voos de um print/PDF. Sem GEMINI_API_KEY (stub) devolve os trechos do STUB. */
+async function extractFlights(buffer, mimetype) {
+  if (!SUPPORTED.includes(mimetype)) {
+    throw new Error(`mimetype não suportado: ${mimetype}`);
+  }
+  let parsed;
+  if (!process.env.GEMINI_API_KEY) {
+    parsed = { carrier: STUB.carrier, locator: STUB.reservation.locator, trips: JSON.parse(JSON.stringify(STUB.trips)) };
+  } else {
+    parsed = await callGemini(buffer, mimetype, FLIGHTS_PROMPT);
+  }
+  const trips = (parsed && Array.isArray(parsed.trips) ? parsed.trips : []).filter(t => t && typeof t === 'object');
+  trips.forEach(t => {
+    if (t.departure) t.departure.datetime = toISO(t.departure.datetime);
+    if (t.arrival) t.arrival.datetime = toISO(t.arrival.datetime);
+  });
+  return {
+    carrier: typeof parsed.carrier === 'string' ? parsed.carrier.toLowerCase().trim() : null,
+    locator: typeof parsed.locator === 'string' && parsed.locator.trim() ? parsed.locator.trim() : null,
+    trips
+  };
+}
+
 async function extractVoucher(buffer, mimetype) {
   if (!SUPPORTED.includes(mimetype)) {
     throw new Error(`mimetype não suportado: ${mimetype}`);
@@ -113,4 +158,4 @@ async function extractVoucher(buffer, mimetype) {
   return normalize(parsed);
 }
 
-module.exports = { extractVoucher, STUB, callGemini };
+module.exports = { extractVoucher, extractFlights, STUB, callGemini, FLIGHTS_PROMPT };

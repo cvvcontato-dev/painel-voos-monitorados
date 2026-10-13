@@ -8,7 +8,7 @@ const pdfStore = require('../services/voucherPdfStore');
 const { sendVoucherEmail, buildVoucherEmailHtml, AGENCY_LOGO_PATH, AGENCY_LOGO_CID } = require('../services/notifier');
 const { sendNoticeEmail, buildNoticeEmailHtml, SUBJECT: NOTICE_SUBJECT } = require('../services/flightChangeEmail');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
-const { extractAndValidate, saveVoucher } = require('../helpers/voucherStore');
+const { extractAndValidate, extractFlightsMerged, saveVoucher } = require('../helpers/voucherStore');
 const { diffVouchers } = require('../helpers/flightChangeDiff');
 const { buildNoticeText, buildConfirmationText, buildChangeSummaryLines } = require('../helpers/flightChangeMessage');
 
@@ -187,9 +187,10 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     if (!row) return res.status(404).json({ error: 'não encontrado' });
     if (row.status === 'confirmado') return res.status(409).json({ error: 'caso já confirmado' });
     if (!req.file) return res.status(400).json({ error: 'arquivo obrigatório (campo "file")' });
-    const unified = await extractAndValidate(req.file);
+    const oldVoucher = parse(row.old_json);
+    const unified = await extractFlightsMerged(req.file, oldVoucher);
     const newId = await saveVoucher({ userId, file: req.file, unified });
-    const diff = diffVouchers(parse(row.old_json), unified);
+    const diff = diffVouchers(oldVoucher, unified);
     let upd;
     try {
       upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')

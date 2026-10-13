@@ -7,6 +7,12 @@ jest.mock('../services/voucherRenderer', () => ({
   })
 }));
 delete process.env.GEMINI_API_KEY;
+// extractVoucher segue real (stub); extractFlights é um jest.fn que por padrão repassa ao real (stub).
+jest.mock('../services/voucherExtractor', () => {
+  const actual = jest.requireActual('../services/voucherExtractor');
+  return { ...actual, extractFlights: jest.fn((...a) => actual.extractFlights(...a)) };
+});
+const { extractFlights } = require('../services/voucherExtractor');
 const request = require('supertest');
 const { makeFlightChangeApp, waitForDb, getCsrfFromResponse } = require('./testApp');
 const db = require('../database');
@@ -703,5 +709,62 @@ describe('PDF guardado para o link do cliente (voucher-pdfs)', () => {
     expect(await until(() => stored(v2).length === 1)).toBe(true);
     expect((await agent.delete(`/api/flight-changes/${c.id}`).set('X-CSRF-Token', csrf)).status).toBe(204);
     expect(stored(v2)).toEqual([]);
+  });
+});
+
+
+describe('POST /:id/new-voucher com print só de voos', () => {
+  const tr = (direction, dep, arr, d1, d2, flight) => ({
+    direction, dateLabel: d1.slice(0, 10),
+    departure: { airport: dep, airportName: null, datetime: d1 },
+    arrival: { airport: arr, airportName: null, datetime: d2 },
+    flightNumber: flight, durationText: '1h20', cabinClass: null, airlineDisplayName: 'Gol Linhas Aéreas', status: null
+  });
+
+  test('mantém passageiros do antigo, troca a ida e a mensagem traz Partida: antes → depois', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    extractFlights.mockResolvedValueOnce({
+      carrier: 'gol', locator: null,
+      trips: [
+        tr('ida', 'GRU', 'REC', '2026-09-12T14:45:00-03:00', '2026-09-12T16:05:00-03:00', 'G3 1922'),
+        tr('volta', 'REC', 'GRU', '2026-09-19T13:00:00-03:00', '2026-09-19T16:30:00-03:00', 'AD 4002')
+      ]
+    });
+    const f = pdf('print');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, { filename: 'p.png', contentType: 'image/png' });
+    expect(r.status).toBe(200);
+    expect(r.body.new.passengers).toEqual(c.old.passengers);
+    expect(r.body.new.trips[0].flightNumber).toBe('G3 1922');
+    expect(r.body.new.carrier).toBe('gol');
+    expect(r.body.diff.passengers).toEqual({ adicionados: [], removidos: [] });
+    expect(r.body.messages.confirmation).toMatch(/Partida: .* → /);
+  });
+
+  test('extração sem voos: 422 com a mensagem ao operador e nada é salvo', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const antes = await countVouchers();
+    extractFlights.mockResolvedValueOnce({ carrier: null, locator: null, trips: [] });
+    const f = pdf('vazio');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    expect(r.status).toBe(422);
+    expect(r.body.error).toBe('Não encontrei voos nessa imagem. Envie um print ou PDF que mostre os voos (partida, chegada e número do voo).');
+    expect(await countVouchers()).toBe(antes);
+  });
+
+  test('mimetype inválido: 400', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', Buffer.from('a,b'), { filename: 'x.csv', contentType: 'text/csv' });
+    expect(r.status).toBe(400);
+  });
+
+  test('caso confirmado continua devolvendo 409', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const f = pdf('outro');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    expect(r.status).toBe(409);
   });
 });

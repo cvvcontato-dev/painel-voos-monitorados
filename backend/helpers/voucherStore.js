@@ -3,9 +3,27 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const db = require('../database');
-const { extractVoucher } = require('../services/voucherExtractor');
+const { extractVoucher, extractFlights } = require('../services/voucherExtractor');
+const { mergeNewFlights } = require('./flightChangeMerge');
 const { validate } = require('../services/voucherSchema');
 const { uploadsDir } = require('./voucherWorkspace');
+
+/** Converte erro do extrator em { status, body } (mesmos códigos de routes/vouchers.js). */
+function mapExtractionError(err) {
+  console.error('[VOUCHER-STORE] extração falhou:', err.message);
+  if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
+    return { status: 503, body: { error: 'Serviço de extração (Gemini) com alta demanda. Tente novamente em instantes.', retryable: true } };
+  }
+  if (/quota|exceeded/i.test(err.message)) {
+    return { status: 429, body: { error: 'Cota da API Gemini esgotada. Aguarde alguns minutos.', retryable: true } };
+  }
+  if (/mimetype não suportado/.test(err.message)) {
+    return { status: 400, body: { error: 'Formato não suportado. Envie PDF, PNG, JPG ou WebP.' } };
+  }
+  return { status: 500, body: { error: 'erro ao processar voucher' } };
+}
+
+const hashOf = (file) => 'sha256:' + crypto.createHash('sha256').update(file.buffer).digest('hex');
 
 /** Extrai e valida. Lança { status, body } em caso de falha (mesmos códigos de routes/vouchers.js). */
 async function extractAndValidate(file) {
@@ -13,21 +31,24 @@ async function extractAndValidate(file) {
   try {
     unified = await extractVoucher(file.buffer, file.mimetype);
   } catch (err) {
-    console.error('[VOUCHER-STORE] extração falhou:', err.message);
-    if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
-      throw { status: 503, body: { error: 'Serviço de extração (Gemini) com alta demanda. Tente novamente em instantes.', retryable: true } };
-    }
-    if (/quota|exceeded/i.test(err.message)) {
-      throw { status: 429, body: { error: 'Cota da API Gemini esgotada. Aguarde alguns minutos.', retryable: true } };
-    }
-    if (/mimetype não suportado/.test(err.message)) {
-      throw { status: 400, body: { error: 'Formato não suportado. Envie PDF, PNG, JPG ou WebP.' } };
-    }
-    throw { status: 500, body: { error: 'erro ao processar voucher' } };
+    throw mapExtractionError(err);
   }
   const v = validate(unified);
   if (!v.ok) throw { status: 422, body: { error: 'schema inválido após extração', details: v.errors } };
-  unified.meta.sourceFileHash = 'sha256:' + crypto.createHash('sha256').update(file.buffer).digest('hex');
+  unified.meta.sourceFileHash = hashOf(file);
+  return unified;
+}
+
+/** Print/PDF só com voos: extrai os trechos e mescla com o voucher ANTIGO (passageiros etc. ficam dele). */
+async function extractFlightsMerged(file, oldVoucher) {
+  let extracted;
+  try {
+    extracted = await extractFlights(file.buffer, file.mimetype);
+  } catch (err) {
+    throw mapExtractionError(err);
+  }
+  const unified = mergeNewFlights(oldVoucher, extracted);   // lança { status: 422, body } se inválido
+  unified.meta.sourceFileHash = hashOf(file);
   return unified;
 }
 
@@ -50,4 +71,4 @@ function saveVoucher({ userId, file, unified }) {
   });
 }
 
-module.exports = { extractAndValidate, saveVoucher };
+module.exports = { extractAndValidate, extractFlightsMerged, saveVoucher };
