@@ -25,34 +25,71 @@ describe('extractFlights', () => {
     await expect(extractFlights(Buffer.from(''), 'text/csv')).rejects.toThrow(/mimetype/i);
   });
 
-  test('com chave: normaliza dd/mm/aaaa hh:mm para ISO -03:00 e manda o prompt de voos', async () => {
+  const T = (dep, arr, extra = {}) => ({
+    direction: 'ida', dateLabel: 'x',
+    departure: { airport: 'SSA', airportName: null, datetime: dep },
+    arrival: { airport: 'REC', airportName: null, datetime: arr },
+    flightNumber: 'G3 1922', durationText: '1h20', cabinClass: null, airlineDisplayName: 'Gol Linhas Aéreas', status: null, ...extra
+  });
+
+  test('com chave: formatos de data variados viram ISO -03:00 (e ISO completo passa intacto)', async () => {
     process.env.GEMINI_API_KEY = 'fake';
     mockGenerate.mockResolvedValue(respostaModelo({
-      carrier: 'GOL', locator: null,
+      carrier: 'GOL', locator: ' ',
       trips: [
-        { direction: 'ida', dateLabel: '17 NOV 2026',
-          departure: { airport: 'SSA', airportName: 'Salvador', datetime: '17/11/2026 14:45' },
-          arrival: { airport: 'REC', airportName: 'Recife', datetime: '17/11/2026 16:05' },
-          flightNumber: 'G3 1922', durationText: '1h20', cabinClass: null, airlineDisplayName: 'Gol Linhas Aéreas', status: null },
-        { direction: 'volta', dateLabel: '22 NOV 2026',
-          departure: { airport: 'REC', airportName: null, datetime: '2026-11-22T07:10:00-03:00' },
-          arrival: { airport: 'SSA', airportName: null, datetime: '22/11/2026 08:30' },
-          flightNumber: 'G3 1925', durationText: '1h20', cabinClass: null, airlineDisplayName: 'Gol Linhas Aéreas', status: null }
+        T('17/11/2026 14:45', '17/11/2026 16:05:30'),
+        T('2026-11-22 07:10', '2026-11-22T08:30'),
+        T('2026-11-23T07:10:00-03:00', '2026-11-23T08:30:00Z'),
+        T(12345, null),
+        T('lixo', { x: 1 })
       ]
     }));
     const out = await extractFlights(Buffer.from('png'), 'image/png');
     expect(out.carrier).toBe('gol');
     expect(out.locator).toBeNull();
-    expect(out.trips[0].departure.datetime).toBe('2026-11-17T14:45:00-03:00');
-    expect(out.trips[0].arrival.datetime).toBe('2026-11-17T16:05:00-03:00');
-    expect(out.trips[1].departure.datetime).toBe('2026-11-22T07:10:00-03:00');
-    expect(out.trips[1].arrival.datetime).toBe('2026-11-22T08:30:00-03:00');
+    const dts = out.trips.map(t => [t.departure.datetime, t.arrival.datetime]);
+    expect(dts[0]).toEqual(['2026-11-17T14:45:00-03:00', '2026-11-17T16:05:30-03:00']);
+    expect(dts[1]).toEqual(['2026-11-22T07:10:00-03:00', '2026-11-22T08:30:00-03:00']);
+    expect(dts[2]).toEqual(['2026-11-23T07:10:00-03:00', '2026-11-23T08:30:00Z']);
+    expect(out.trips[3].departure.datetime).toBe(12345);   // não-string não explode: quem valida (merge) devolve 422
     expect(mockGenerate.mock.calls[0][0][0]).toMatch(/APENAS OS VOOS/);
   });
 
-  test('resposta sem trips vira trips vazio (o merge dá o erro ao operador)', async () => {
+  test('o prompt leva o ano de referência do voucher antigo', async () => {
+    process.env.GEMINI_API_KEY = 'fake';
+    mockGenerate.mockResolvedValue(respostaModelo({ carrier: null, locator: null, trips: [] }));
+    await extractFlights(Buffer.from('p'), 'image/png', { referenceYear: 2026, referenceDate: '18/11/2026' });
+    expect(mockGenerate.mock.calls[0][0][0]).toMatch(/Ano de referência: 2026 \(data de partida original: 18\/11\/2026\)/);
+    mockGenerate.mockClear();
+    await extractFlights(Buffer.from('p'), 'image/png');
+    expect(mockGenerate.mock.calls[0][0][0]).not.toMatch(/Ano de referência: \d/);
+  });
+
+  test('resposta sem trips (lista vazia) segue vazia para o merge dar a mensagem', async () => {
     process.env.GEMINI_API_KEY = 'fake';
     mockGenerate.mockResolvedValue(respostaModelo({ carrier: null, locator: null, trips: [] }));
     expect((await extractFlights(Buffer.from('p'), 'image/png')).trips).toEqual([]);
+  });
+
+  test.each([['null', null], ['string', 'oi'], ['lista', []], ['trips não-array', { trips: 'x' }], ['sem trips', { carrier: 'gol' }]])(
+    'resposta %s do modelo => erro flights_unreadable', async (_n, payload) => {
+      process.env.GEMINI_API_KEY = 'fake';
+      mockGenerate.mockResolvedValue(respostaModelo(payload));
+      await expect(extractFlights(Buffer.from('p'), 'image/png')).rejects.toMatchObject({ code: 'flights_unreadable' });
+    });
+
+  test('JSON malformado do modelo => flights_unreadable (nunca SyntaxError cru)', async () => {
+    process.env.GEMINI_API_KEY = 'fake';
+    mockGenerate.mockResolvedValue({ response: { text: () => '{ isto nao e json' } });
+    await expect(extractFlights(Buffer.from('p'), 'image/png')).rejects.toMatchObject({ code: 'flights_unreadable' });
+  });
+
+  test('stub em produção (sem chave) é recusado', async () => {
+    delete process.env.GEMINI_API_KEY;
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      await expect(extractFlights(Buffer.from('x'), 'image/png')).rejects.toMatchObject({ code: 'gemini_not_configured' });
+    } finally { process.env.NODE_ENV = prevEnv; }
   });
 });

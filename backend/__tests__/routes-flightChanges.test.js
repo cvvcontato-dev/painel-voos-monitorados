@@ -736,7 +736,9 @@ describe('POST /:id/new-voucher com print só de voos', () => {
     expect(r.status).toBe(200);
     expect(r.body.new.passengers).toEqual(c.old.passengers);
     expect(r.body.new.trips[0].flightNumber).toBe('G3 1922');
-    expect(r.body.new.carrier).toBe('gol');
+    expect(r.body.new.carrier).toBe('multi');   // ida G3 (gol) + volta AD (azul)
+    expect(r.body.new.reservation).toMatchObject({ primaryCarrier: 'gol', secondaryCarrier: 'azul' });
+    expect(r.body.warnings).toContain('Ida e volta agora são de companhias diferentes: confira o localizador de cada reserva');
     expect(r.body.diff.passengers).toEqual({ adicionados: [], removidos: [] });
     expect(r.body.messages.confirmation).toMatch(/Partida: .* → /);
   });
@@ -751,6 +753,37 @@ describe('POST /:id/new-voucher com print só de voos', () => {
     expect(r.status).toBe(422);
     expect(r.body.error).toBe('Não encontrei voos nessa imagem. Envie um print ou PDF que mostre os voos (partida, chegada e número do voo).');
     expect(await countVouchers()).toBe(antes);
+  });
+
+  test('sem avisos: warnings vem vazio e extractFlights recebe o ano de referência do voucher antigo', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    extractFlights.mockClear();
+    extractFlights.mockResolvedValueOnce({ carrier: null, locator: null, trips: [
+      tr('ida', 'GRU', 'REC', '2026-09-12T09:30:00-03:00', '2026-09-12T12:45:00-03:00', 'AD 4001')
+    ] });
+    const f = pdf('print2');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, { filename: 'p.png', contentType: 'image/png' });
+    expect(r.status).toBe(200);
+    expect(r.body.warnings).toEqual([]);
+    expect(extractFlights.mock.calls[0][2]).toEqual({ referenceYear: 2026, referenceDate: '12/09/2026' });
+    const g = await agent.get(`/api/flight-changes/${c.id}`);
+    expect(g.body.warnings).toEqual([]);
+  });
+
+  test('modelo ilegível => 422 amigável; produção sem GEMINI_API_KEY => 503', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('ilegivel');
+    const err = Object.assign(new Error('Não consegui ler os voos nessa imagem. Tente outro print.'), { code: 'flights_unreadable' });
+    extractFlights.mockRejectedValueOnce(err);
+    let r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    expect(r.status).toBe(422);
+    expect(r.body.error).toMatch(/Não consegui ler os voos/);
+    extractFlights.mockRejectedValueOnce(Object.assign(new Error('Extração por IA não configurada (GEMINI_API_KEY)'), { code: 'gemini_not_configured' }));
+    r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    expect(r.status).toBe(503);
+    expect(r.body.error).toBe('Extração por IA não configurada (GEMINI_API_KEY)');
   });
 
   test('mimetype inválido: 400', async () => {

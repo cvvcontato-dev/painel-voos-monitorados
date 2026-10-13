@@ -111,6 +111,7 @@ async function detail(row, { emailSent = false, baseUrl = '' } = {}) {
     notice_sent_at: row.notice_sent_at, confirmed_at: row.confirmed_at, created_at: row.created_at,
     confirmation_email_sent_at: row.confirmation_email_sent_at,
     old, new: novo, diff, support_phone: phone,
+    warnings: Array.isArray(novo && novo.meta && novo.meta.mergeWarnings) ? novo.meta.mergeWarnings : [],
     messages: {
       notice: old ? buildNoticeText(old, { supportPhone: phone }) : null,
       confirmation: novo && diff ? buildConfirmationText(novo, diff, { emailSent, voucherUrl }) : null

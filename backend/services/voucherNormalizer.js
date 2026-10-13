@@ -6,11 +6,18 @@ const LAYOUT_ALIASES = {
   'azul.v1': 'azul.confirmacao.v1'
 };
 
+// Aceita ISO completo (devolvido como veio), 'AAAA-MM-DD HH:mm[:ss]', 'AAAA-MM-DDTHH:mm[:ss]' sem fuso e
+// 'dd/mm/aaaa hh:mm[:ss]' (os dois últimos viram -03:00). Valor que não é string volta intacto
+// (quem valida decide; nunca lança).
 function toISO(dt) {
-  if (!dt) return dt;
-  if (/^\d{4}-\d{2}-\d{2}T/.test(dt)) return dt;
-  const m = dt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:00-03:00`;
+  if (typeof dt !== 'string') return dt;
+  const s = dt.trim();
+  if (!s) return dt;
+  const local = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (local) return `${local[1]}-${local[2]}-${local[3]}T${local[4]}:${local[5]}:${local[6] || '00'}-03:00`;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}-03:00`;
   return dt;
 }
 

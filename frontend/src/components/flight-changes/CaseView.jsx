@@ -158,7 +158,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
-                label={hasNew ? 'Substituir o voucher novo — clique, arraste ou, com esta área selecionada, cole (Ctrl+V)' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros, bagagem e localizador são mantidos do voucher antigo; só os trechos que aparecerem na imagem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).'}
+                label={hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODOS os trechos alterados. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só os trechos que aparecerem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).'}
               />
             )}
             {hasNew && detail.diff && (
@@ -166,6 +166,14 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 {!hasChanges && (
                   <div className="rounded-lg border border-yellow-300 dark:border-yellow-500/40 bg-yellow-50 dark:bg-yellow-500/10 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-200">
                     Nenhuma diferença encontrada entre os vouchers
+                  </div>
+                )}
+                {Array.isArray(detail.warnings) && detail.warnings.length > 0 && (
+                  <div role="status" className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                    <div className="font-medium">Confira antes de confirmar:</div>
+                    <ul className="list-disc pl-5">
+                      {detail.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
                   </div>
                 )}
                 <FlightDiffView diff={detail.diff} />

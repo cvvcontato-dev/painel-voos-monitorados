@@ -101,13 +101,13 @@ async function callGemini(buffer, mimetype, promptText) {
   throw lastErr;
 }
 
-const FLIGHTS_PROMPT = `Você recebe um PRINT ou PDF do site/app de uma companhia aérea brasileira (Azul, Gol ou Latam) que mostra APENAS OS VOOS (sem passageiros). Pode não haver localizador.
+const FLIGHTS_PROMPT = `Você recebe um PRINT ou PDF do site/app de uma companhia aérea brasileira (Azul, Gol ou Latam) que mostra APENAS OS VOOS (sem passageiros). Pode não haver localizador. Se for um e-ticket/voucher completo, extraia SÓ os voos e o localizador (ignore passageiros).
 Devolva UM ÚNICO objeto JSON, sem texto extra, com as chaves:
 
-carrier: "azul", "gol" ou "latam" (minúsculas) ou null. Decida pelo prefixo do número do voo: AD=azul, G3/GLO=gol, LA/JJ=latam.
-locator: o localizador/código da reserva SOMENTE se estiver visível, senão null.
+carrier: "azul", "gol" ou "latam" (minúsculas) ou null. DÊ PRIORIDADE ao prefixo do número do voo: AD=azul, G3/GLO=gol, LA/JJ=latam. Logo/cores só como dica.
+locator: o localizador/código da reserva SOMENTE se estiver visível (5 a 8 letras/números), senão null.
 trips: [{
-  direction ("ida"|"volta"|"interno"|"multi"): "Voo da ida"/"Voo de ida" => "ida"; "Voo da volta"/"Voo de volta" => "volta"; escalas/conexões de um mesmo sentido ficam na mesma direção; sem rótulo claro use "multi",
+  direction ("ida"|"volta"|"interno"|"multi"): "Voo da ida"/"Voo de ida" => "ida"; "Voo da volta"/"Voo de volta" => "volta"; sem rótulo claro use "multi",
   dateLabel (ex.: "17 NOV 2026"),
   departure: { airport (IATA 3 letras maiúsculas), airportName (cidade/aeroporto se visível, senão null), datetime (ISO 8601 com offset -03:00, ex.: "2026-11-17T14:45:00-03:00") },
   arrival:   { airport (IATA), airportName (ou null), datetime (ISO 8601 com offset -03:00) },
@@ -118,26 +118,60 @@ trips: [{
 }]
 
 REGRAS:
-- Datas dd/mm/aaaa hh:mm viram ISO 8601 com offset -03:00.
+- Voo com 1 parada/conexão: liste os DOIS (ou mais) trechos, todos com a MESMA direction.
+- Use a data do VOO; ignore datas de compra, emissão ou check-in.
+- Datas dd/mm/aaaa hh:mm viram ISO 8601 com offset -03:00. Se o print mostrar a data SEM ano, use o ano de referência informado abaixo.
 - IATA sempre 3 letras maiúsculas.
 - Se um campo não estiver visível, use null. NÃO invente passageiros, localizador, horários nem voos.
 - Não inclua nenhum texto fora do JSON.`;
 
-/** Extrai só os voos de um print/PDF. Sem GEMINI_API_KEY (stub) devolve os trechos do STUB. */
-async function extractFlights(buffer, mimetype) {
+const UNREADABLE_MSG = 'Não consegui ler os voos nessa imagem. Tente outro print ou um PDF mais nítido que mostre partida, chegada e número do voo.';
+
+function flightsPrompt(ctx = {}) {
+  if (!ctx.referenceYear) return FLIGHTS_PROMPT;
+  const ref = ctx.referenceDate ? ` (data de partida original: ${ctx.referenceDate})` : '';
+  return `${FLIGHTS_PROMPT}
+
+CONTEXTO: Ano de referência: ${ctx.referenceYear}${ref}. Se o print mostrar a data sem ano, use esse ano (ou o seguinte se a data ficaria ANTES da data de partida original por mais de 6 meses).`;
+}
+
+function unreadable(cause) {
+  const e = new Error(UNREADABLE_MSG);
+  e.code = 'flights_unreadable';
+  if (cause) e.cause = cause;
+  return e;
+}
+
+/**
+ * Extrai só os voos de um print/PDF. ctx = { referenceYear, referenceDate } (do voucher antigo).
+ * Sem GEMINI_API_KEY (stub) devolve os trechos do STUB — exceto em produção, onde recusa (voos falsos
+ * chegariam ao cliente). Resposta ilegível do modelo lança erro com code 'flights_unreadable'.
+ */
+async function extractFlights(buffer, mimetype, ctx = {}) {
   if (!SUPPORTED.includes(mimetype)) {
     throw new Error(`mimetype não suportado: ${mimetype}`);
   }
   let parsed;
   if (!process.env.GEMINI_API_KEY) {
+    if (process.env.NODE_ENV === 'production') {
+      const e = new Error('Extração por IA não configurada (GEMINI_API_KEY)');
+      e.code = 'gemini_not_configured';
+      throw e;
+    }
     parsed = { carrier: STUB.carrier, locator: STUB.reservation.locator, trips: JSON.parse(JSON.stringify(STUB.trips)) };
   } else {
-    parsed = await callGemini(buffer, mimetype, FLIGHTS_PROMPT);
+    try {
+      parsed = await callGemini(buffer, mimetype, flightsPrompt(ctx));
+    } catch (err) {
+      if (err instanceof SyntaxError) throw unreadable(err);
+      throw err;
+    }
   }
-  const trips = (parsed && Array.isArray(parsed.trips) ? parsed.trips : []).filter(t => t && typeof t === 'object');
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Array.isArray(parsed.trips)) throw unreadable();
+  const trips = parsed.trips.filter(t => t && typeof t === 'object' && !Array.isArray(t));
   trips.forEach(t => {
-    if (t.departure) t.departure.datetime = toISO(t.departure.datetime);
-    if (t.arrival) t.arrival.datetime = toISO(t.arrival.datetime);
+    if (t.departure && typeof t.departure === 'object') t.departure.datetime = toISO(t.departure.datetime);
+    if (t.arrival && typeof t.arrival === 'object') t.arrival.datetime = toISO(t.arrival.datetime);
   });
   return {
     carrier: typeof parsed.carrier === 'string' ? parsed.carrier.toLowerCase().trim() : null,

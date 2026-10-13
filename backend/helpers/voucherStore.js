@@ -17,6 +17,12 @@ function mapExtractionError(err) {
   if (/quota|exceeded/i.test(err.message)) {
     return { status: 429, body: { error: 'Cota da API Gemini esgotada. Aguarde alguns minutos.', retryable: true } };
   }
+  if (err.code === 'gemini_not_configured') {
+    return { status: 503, body: { error: err.message } };
+  }
+  if (err.code === 'flights_unreadable') {
+    return { status: 422, body: { error: err.message } };
+  }
   if (/mimetype não suportado/.test(err.message)) {
     return { status: 400, body: { error: 'Formato não suportado. Envie PDF, PNG, JPG ou WebP.' } };
   }
@@ -39,11 +45,18 @@ async function extractAndValidate(file) {
   return unified;
 }
 
+/** Contexto de datas para o prompt: ano (e data) da 1ª partida do voucher antigo. */
+function referenceOf(v) {
+  const iso = v && Array.isArray(v.trips) && v.trips[0] && v.trips[0].departure && v.trips[0].departure.datetime;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? { referenceYear: Number(m[1]), referenceDate: `${m[3]}/${m[2]}/${m[1]}` } : {};
+}
+
 /** Print/PDF só com voos: extrai os trechos e mescla com o voucher ANTIGO (passageiros etc. ficam dele). */
 async function extractFlightsMerged(file, oldVoucher) {
   let extracted;
   try {
-    extracted = await extractFlights(file.buffer, file.mimetype);
+    extracted = await extractFlights(file.buffer, file.mimetype, referenceOf(oldVoucher));
   } catch (err) {
     throw mapExtractionError(err);
   }
