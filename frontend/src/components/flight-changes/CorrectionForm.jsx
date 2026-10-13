@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { inputCls, labelCls, btnPrimary, btnGhost, isoToLocalInput, localInputToIso } from './ui';
+import { inputCls, labelCls, btnPrimary, btnGhost, isoToLocalInput, localInputToIso, isoToDateLabel, sameIsoDate } from './ui';
 
 // Mini-formulário para corrigir o que a IA leu no voucher novo.
 export default function CorrectionForm({ unified, saving, onSave, onCancel, showToast }) {
@@ -28,7 +28,13 @@ export default function CorrectionForm({ unified, saving, onSave, onCancel, show
       // Só reescreve o horário se o usuário mudou (preserva segundos/offset originais).
       const depChanged = f.dep !== isoToLocalInput(orig.departure?.datetime);
       const arrChanged = f.arr !== isoToLocalInput(orig.arrival?.datetime);
+      const oldDep = orig.departure?.datetime;
       orig.departure = { ...orig.departure, airport: f.from, ...(depChanged ? { datetime: localInputToIso(f.dep) } : {}) };
+      // dateLabel acompanha a data de partida, mas só se o dia/mês/ano mudou.
+      if (depChanged && !sameIsoDate(oldDep, orig.departure.datetime)) {
+        const lbl = isoToDateLabel(orig.departure.datetime);
+        if (lbl) orig.dateLabel = lbl;
+      }
       orig.arrival = { ...orig.arrival, airport: f.to, ...(arrChanged ? { datetime: localInputToIso(f.arr) } : {}) };
     }
     onSave(out);

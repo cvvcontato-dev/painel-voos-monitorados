@@ -103,6 +103,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
           text={detail.messages?.notice}
           busy={busy}
           readOnly={done}
+          emailBlocked={editing}
           emailLabel="Enviar e-mail do aviso"
           onSendEmail={sendEmail('aviso')}
           showToast={showToast}
@@ -157,6 +158,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                     text={detail.messages.confirmation}
                     busy={busy}
                     readOnly={done}
+                    emailBlocked={editing}
                     emailLabel="Enviar e-mail com novo voucher (opcional)"
                     onSendEmail={sendEmail('confirmacao')}
                     showToast={showToast}

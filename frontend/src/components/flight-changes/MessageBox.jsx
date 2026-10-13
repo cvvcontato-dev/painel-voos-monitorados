@@ -4,7 +4,7 @@ import { inputCls, labelCls, btnGhost, btnPrimary, validEmails } from './ui';
 
 // Texto pronto (somente leitura) + copiar, WhatsApp e envio por e-mail.
 // `idPrefix` garante ids únicos de label/campo. `readOnly` esconde o envio de e-mail.
-export default function MessageBox({ idPrefix, title, text, disabled, busy, emailLabel, onSendEmail, showToast, readOnly, children }) {
+export default function MessageBox({ idPrefix, title, text, disabled, busy, emailLabel, onSendEmail, showToast, readOnly, emailBlocked, children }) {
   const [emails, setEmails] = useState('');
   const off = disabled || !!busy;
 
@@ -54,7 +54,8 @@ export default function MessageBox({ idPrefix, title, text, disabled, busy, emai
             <input id={`${idPrefix}-em`} className={`${inputCls} pii`} value={emails} placeholder="cliente@email.com"
               onChange={e => setEmails(e.target.value)} disabled={off} />
           </div>
-          <button type="button" className={btnPrimary} onClick={send} disabled={off || !emails.trim()} aria-busy={busy === 'email'}>
+          <button type="button" className={btnPrimary} onClick={send} disabled={off || emailBlocked || !emails.trim()}
+            title={emailBlocked ? 'Salve ou cancele a correção antes de enviar' : undefined} aria-busy={busy === 'email'}>
             {busy === 'email' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} {emailLabel}
           </button>
         </div>

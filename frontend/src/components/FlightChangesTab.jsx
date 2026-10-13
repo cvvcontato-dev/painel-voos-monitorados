@@ -6,11 +6,17 @@ import { sectionCls, inputCls, labelCls, btnPrimary, btnGhost, STATUS, fmtDateTi
 import UploadZone from './flight-changes/UploadZone';
 import CaseView from './flight-changes/CaseView';
 
-function NewCasePanel({ showToast, onCreated, onClose }) {
+function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
   const [vouchers, setVouchers] = useState(null);
   const [voucherId, setVoucherId] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   useEffect(() => {
     let cancel = false;
@@ -26,12 +32,13 @@ function NewCasePanel({ showToast, onCreated, onClose }) {
     setBusy(true);
     try {
       const d = await fn();
-      onCreated(d);
+      if (alive.current) onCreated(d);
+      else onLate(d); // painel já fechado/trocado: não rouba a seleção atual
     } catch (e) {
       showToast(errorMessage(e, 'Erro ao criar a alteração'), 'error');
     } finally {
       lock.current = false;
-      setBusy(false);
+      if (alive.current) setBusy(false);
     }
   }
 
@@ -90,6 +97,11 @@ export default function FlightChangesTab({ showToast }) {
     reload();
   }
 
+  function createdLate(detail) {
+    reload();
+    showToast(`Alteração criada para ${detail.client_name || 'cliente'}`, 'success');
+  }
+
   async function remove(item) {
     if (removing) return;
     if (!window.confirm(`Apagar a alteração de ${item.client_name || 'cliente'} (${item.locator || 's/ localizador'})?`)) return;
@@ -146,7 +158,7 @@ export default function FlightChangesTab({ showToast }) {
 
       <div className="lg:col-span-2">
         {creating ? (
-          <NewCasePanel showToast={showToast} onCreated={created} onClose={() => setCreating(false)} />
+          <NewCasePanel showToast={showToast} onCreated={created} onLate={createdLate} onClose={() => setCreating(false)} />
         ) : selected ? (
           <CaseView key={selected.id} id={selected.id} initial={selected.initial} showToast={showToast} onChanged={reload} />
         ) : (

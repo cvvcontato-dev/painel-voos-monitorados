@@ -31,3 +31,16 @@ export function localInputToIso(v) {
   const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/.exec(String(v || ''));
   return m ? `${m[1]}:00-03:00` : '';
 }
+
+const MESES = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+
+// ISO "2026-09-05T08:30:00-03:00" -> "05 SET 2026" (formato do extrator; usa a data escrita no ISO, sem converter fuso).
+export function isoToDateLabel(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return '';
+  const mes = MESES[Number(m[2]) - 1];
+  return mes ? `${m[3]} ${mes} ${m[1]}` : '';
+}
+
+// Dia/mês/ano de dois ISO são iguais? (compara só a parte da data escrita)
+export const sameIsoDate = (a, b) => String(a || '').slice(0, 10) === String(b || '').slice(0, 10);
