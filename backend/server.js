@@ -40,6 +40,7 @@ const flightsRouter = require('./routes/flights');
 const settingsRouter = require('./routes/settings');
 const promotionsRouter = require('./routes/promotions');
 const vouchersRouter = require('./routes/vouchers');
+const flightChangesRouter = require('./routes/flightChanges');
 const packagesRouter = require('./routes/packages');
 const itinerarioRouter = require('./routes/itinerario');
 const pacoteRouter = require('./routes/pacote');
@@ -103,6 +104,7 @@ app.use('/api/promotions', promotionsRouter);
 app.use('/api/vouchers', vouchersRouter);
 app.use('/api/packages', packagesRouter);
 app.use('/api/boarding-passes', boardingPassesRouter);
+app.use('/api/flight-changes', flightChangesRouter);
 app.use('/api/backups', backupsRouter);
 app.use('/api/promo-backgrounds', promoBackgroundsRouter);
 

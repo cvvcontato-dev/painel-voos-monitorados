@@ -290,6 +290,27 @@ function runMigrations() {
         }
     });
 
+    db.run(`CREATE TABLE IF NOT EXISTS flight_changes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        old_voucher_id INTEGER,
+        new_voucher_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'aviso_pendente',
+        client_name TEXT,
+        locator TEXT,
+        old_json TEXT NOT NULL,
+        new_json TEXT,
+        diff_json TEXT,
+        notice_sent_at TEXT,
+        confirmed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`, (err) => {
+        if (err) console.error('Error creating flight_changes table:', err.message);
+        else db.run(`CREATE INDEX IF NOT EXISTS idx_flight_changes_user ON flight_changes(user_id, status)`);
+    });
+
     db.run(`CREATE TABLE IF NOT EXISTS voucher_audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         voucher_id INTEGER,

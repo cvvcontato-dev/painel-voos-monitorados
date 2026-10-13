@@ -59,11 +59,14 @@ function noticeClientMessage(v) {
   return `Olá! Recebi o aviso de alteração do meu voo.${extra ? ` ${extra}.` : ''}`;
 }
 
+/** "GRU → REC, 12 SET 2026 e 19 SET 2026" (rota + datas válidas de todos os trechos, sem horário). */
+function noticeDetail(v) {
+  return [routeOf(v), joinDates(datesOf(v))].filter(Boolean).join(', ');
+}
+
 function buildNoticeText(v, { supportPhone } = {}) {
   const loc = safeLoc(v?.reservation?.locator);
-  const rota = routeOf(v);
-  const data = joinDates(datesOf(v));
-  const detalhe = [rota, data].filter(Boolean).join(', ');
+  const detalhe = noticeDetail(v);
   const link = buildWaLink(supportPhone, noticeClientMessage(v));
   const linhas = [
     hello(v, '✈️'), '',
@@ -100,4 +103,4 @@ function buildConfirmationText(newV, diff, { emailSent = false } = {}) {
   return linhas.join('\n');
 }
 
-module.exports = { buildWaLink, buildNoticeText, buildConfirmationText, noticeClientMessage };
+module.exports = { noticeDetail, buildWaLink, buildNoticeText, buildConfirmationText, noticeClientMessage };

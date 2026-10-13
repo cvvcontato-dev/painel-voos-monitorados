@@ -926,7 +926,7 @@ function _legacy({ voucherData, settings, customMessage, bookingUrl }) {
 }
 */
 
-async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, itinerarioUrl }) {
+async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, itinerarioUrl, subject: subjectOverride }) {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
@@ -935,7 +935,7 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
         const locator = vd.reservation?.locator || 'N/A';
         const names = (vd.passengers || []).map(p => p && p.name).filter(Boolean);
         // Assunto fixo conforme padrão da agência.
-        const subject = 'Eba! Sua viagem está confirmada';
+        const subject = subjectOverride || 'Eba! Sua viagem está confirmada';
 
         const attachments = [
             { filename: `Voucher-${locator}.pdf`, path: attachmentPath }
