@@ -1,4 +1,11 @@
 process.env.EXTRACTION_MODE = 'stub';
+jest.mock('../services/voucherRenderer', () => ({
+  renderVoucher: jest.fn(async () => {
+    const f = require('path').join(require('os').tmpdir(), `fc-test-${Date.now()}-${Math.random()}.pdf`);
+    require('fs').writeFileSync(f, 'pdf');
+    return f;
+  })
+}));
 delete process.env.GEMINI_API_KEY;
 const request = require('supertest');
 const { makeFlightChangeApp, waitForDb, getCsrfFromResponse } = require('./testApp');
@@ -382,12 +389,12 @@ describe('revisão de qualidade (Task 4)', () => {
   test('confirmation_email_sent_at alimenta o texto; body.emailSent do cliente é ignorado', async () => {
     const { agent, csrf } = await authed();
     const { c } = await criarCasoConfirmado(agent, csrf);
-    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).toContain('Em instantes enviamos');
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).not.toContain('Também enviamos');
     await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
-    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).toContain('Enviamos o novo voucher por e-mail');
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).toContain('Também enviamos o PDF por e-mail');
     const c2 = await criarCasoConfirmado(agent, csrf);
     const r = await agent.post(`/api/flight-changes/${c2.c.id}/confirm`).set('X-CSRF-Token', csrf).send({ emailSent: true });
-    expect(r.body.messages.confirmation).toContain('Em instantes enviamos');
+    expect(r.body.messages.confirmation).not.toContain('Também enviamos');
   });
 
   test('voucher_id de outro usuário: 404 (IDOR)', async () => {
@@ -420,7 +427,7 @@ describe('ajustes finais', () => {
     await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
     const put = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo });
     expect(put.status).toBe(200);
-    expect(put.body.messages.confirmation).toContain('Em instantes enviamos');
+    expect(put.body.messages.confirmation).not.toContain('Também enviamos');
     expect((await q.get('SELECT confirmation_email_sent_at x FROM flight_changes WHERE id=?', [c.id])).x).toBeNull();
 
     await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
@@ -457,5 +464,82 @@ describe('e-mail do aviso', () => {
   test('ida e volta citam as duas datas', () => {
     const iv = { ...v, trips: [{ dateLabel: '12 SET 2026' }, { dateLabel: '19 SET 2026' }] };
     expect(buildNoticeEmailHtml(iv, {})).toContain('GRU → REC, 12 SET 2026 e 19 SET 2026');
+  });
+});
+
+describe('link do voucher novo e preview do e-mail', () => {
+  const { transporter } = require('../services/notifier');
+  const { verify } = require('../helpers/voucherToken');
+  const emailEnv = {};
+  beforeAll(() => { emailEnv.u = process.env.EMAIL_USER; emailEnv.p = process.env.EMAIL_PASS; process.env.EMAIL_USER = 'u@test.com'; process.env.EMAIL_PASS = 'x'; emailEnv.b = process.env.PUBLIC_BASE_URL; process.env.PUBLIC_BASE_URL = 'https://app.test'; });
+  afterAll(() => { for (const [k, v] of [['EMAIL_USER', emailEnv.u], ['EMAIL_PASS', emailEnv.p], ['PUBLIC_BASE_URL', emailEnv.b]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+  afterEach(() => jest.restoreAllMocks());
+  const preview = (agent, id, kind) => agent.get(`/api/flight-changes/${id}/email-preview${kind ? `?kind=${kind}` : ''}`);
+  // O token do itinerario embute o instante de emissao (segundos): mascara-o ao comparar e valida-o a parte.
+  const noLogo = (h) => h.replace(/src="(cid:|data:image\/png;base64,)[^"]*"/g, 'src="LOGO"').replace(/\/itinerario\/[^"\s<]+/g, '/itinerario/TOKEN');
+
+  test('detalhe devolve new_voucher_url assinado e a mensagem o usa; antes do voucher novo é null', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    expect(c.new_voucher_url).toBeNull();
+    const { c: cc } = await criarCasoConfirmado(agent, csrf);
+    const d = (await agent.get(`/api/flight-changes/${cc.id}`)).body;
+    const m = /^https?:\/\/[^/]+\/itinerario\/(.+)$/.exec(d.new_voucher_url);
+    expect(m).not.toBeNull();
+    expect(verify(m[1])).toMatchObject({ ok: true, voucherId: d.new_voucher_id });
+    expect(d.messages.confirmation).toContain(`Seu novo voucher já está disponível:\n${d.new_voucher_url}`);
+  });
+
+  test('preview do aviso == html do aviso; logo vira data URI', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const r = await preview(agent, c.id, 'aviso');
+    expect(r.status).toBe(200);
+    expect(r.body.subject).toBe(require('../services/flightChangeEmail').SUBJECT);
+    expect(r.body.html).not.toContain('cid:');
+    expect(r.body.html).toContain('data:image/png;base64,');
+    expect(noLogo(r.body.html)).toBe(noLogo(buildNoticeEmailHtml(c.old, { supportPhone: c.support_phone })));
+  });
+
+  test('preview da confirmação == html que o send-email enviaria (mesmos parâmetros)', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const sendMail = jest.spyOn(transporter, 'sendMail').mockResolvedValue({ messageId: 'm1' });
+    const s = await agent.post(`/api/flight-changes/${c.id}/send-email`).set('X-CSRF-Token', csrf).send({ kind: 'confirmacao', emails: 'cli@x.com' });
+    expect(s.status).toBe(200);
+    const sent = sendMail.mock.calls[0][0];
+    const r = await preview(agent, c.id, 'confirmacao');
+    expect(r.status).toBe(200);
+    expect(r.body.subject).toBe(sent.subject);
+    expect(r.body.subject).toBe('Seu voo foi reajustado ✈️ Novo voucher em anexo');
+    expect(noLogo(r.body.html)).toBe(noLogo(sent.html));
+    const d = (await agent.get(`/api/flight-changes/${c.id}`)).body;
+    for (const h of [sent.html, r.body.html]) {
+      const t = /https:\/\/app\.test\/itinerario\/([^"\s<]+)/.exec(h);
+      expect(verify(t[1])).toMatchObject({ ok: true, voucherId: d.new_voucher_id });
+    }
+    expect(sent.html).toContain('Seu voo foi reajustado. Veja o que mudou:');
+    expect(sent.html).toContain('Partida: 12/09/2026 08:30');
+  });
+
+  test('preview: kind inválido 400, sem voucher novo 409, outro usuário 404, sem login 401', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    expect((await preview(agent, c.id)).status).toBe(400);
+    expect((await preview(agent, c.id, 'x')).status).toBe(400);
+    const r = await preview(agent, c.id, 'confirmacao');
+    expect(r.status).toBe(409); expect(r.body.error).toBe('sem_voucher_novo');
+    const u = await q.run(`INSERT INTO users (email, nome, password_hash, role, criado_em) VALUES ('prev-${Date.now()}@test.com', 'X', 'x', 'user', datetime('now'))`);
+    const outro = await q.run(`INSERT INTO flight_changes (user_id, client_name, locator, old_json) VALUES (?, 'X', 'Z', '{}')`, [u.lastID]);
+    expect((await preview(agent, outro.lastID, 'aviso')).status).toBe(404);
+    expect((await request(app).get(`/api/flight-changes/${c.id}/email-preview?kind=aviso`)).status).toBe(401);
+  });
+
+  test('preview com new_json corrompido: 500 voucher_corrompido', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    await q.run("UPDATE flight_changes SET new_json='{lixo' WHERE id=?", [c.id]);
+    const r = await preview(agent, c.id, 'confirmacao');
+    expect(r.status).toBe(500); expect(r.body.error).toBe('voucher_corrompido');
   });
 });

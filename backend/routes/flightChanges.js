@@ -5,11 +5,12 @@ const db = require('../database');
 const { validate } = require('../services/voucherSchema');
 const { normalize } = require('../services/voucherNormalizer');
 const { renderVoucher } = require('../services/voucherRenderer');
-const { sendVoucherEmail } = require('../services/notifier');
-const { sendNoticeEmail } = require('../services/flightChangeEmail');
+const { sendVoucherEmail, buildVoucherEmailHtml, AGENCY_LOGO_PATH, AGENCY_LOGO_CID } = require('../services/notifier');
+const { sendNoticeEmail, buildNoticeEmailHtml, SUBJECT: NOTICE_SUBJECT } = require('../services/flightChangeEmail');
+const { sign: signVoucherToken } = require('../helpers/voucherToken');
 const { extractAndValidate, saveVoucher } = require('../helpers/voucherStore');
 const { diffVouchers } = require('../helpers/flightChangeDiff');
-const { buildNoticeText, buildConfirmationText } = require('../helpers/flightChangeMessage');
+const { buildNoticeText, buildConfirmationText, buildChangeSummaryLines } = require('../helpers/flightChangeMessage');
 
 const router = express.Router();
 const uploader = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -57,21 +58,43 @@ async function dropVoucher(id, userId, exceptCaseId = 0) {
   } catch (e) { console.error('[FLIGHT-CHANGES] cleanup de voucher falhou', id, e.message); }
 }
 
+// Base pública (links do voucher): PUBLIC_BASE_URL ou o host da própria requisição.
+const publicBaseUrl = (req) => (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+// Link público assinado da página do itinerário do voucher novo (mesmo padrão da aba Vouchers).
+const itinerarioUrlOf = (voucherId, baseUrl) => (voucherId && baseUrl ? `${baseUrl}/itinerario/${signVoucherToken(voucherId)}` : '');
+const detailFor = (req, row, opts) => detail(row, { ...opts, baseUrl: publicBaseUrl(req) });
+
+/**
+ * Fonte ÚNICA do e-mail de confirmação: usada pelo envio e pelo preview (sem divergência).
+ * customMessage = resumo das mudanças em texto puro (o e-mail já tem o PDF anexo e o link do itinerário).
+ */
+function confirmationEmailArgs(novo, diff, settings, itinerarioUrl) {
+  return {
+    subject: 'Seu voo foi reajustado ✈️ Novo voucher em anexo',
+    voucherData: novo, settings,
+    customMessage: ['Seu voo foi reajustado. Veja o que mudou:', '', ...buildChangeSummaryLines(diff)].join('\n'),
+    itinerarioUrl
+  };
+}
+
+const loadSettings = async () => (await get(`SELECT contact_phone, contact_email, contact_site, contact_extra FROM voucher_settings WHERE id = 1`, [])) || {};
+
 /** Monta a resposta de detalhe (inclui diff e as mensagens prontas). */
-async function detail(row, { emailSent = false } = {}) {
+async function detail(row, { emailSent = false, baseUrl = '' } = {}) {
   const old = parse(row.old_json), novo = parse(row.new_json);
   const diff = old && novo ? diffVouchers(old, novo) : null;
   const phone = await supportPhone();
   emailSent = emailSent || !!row.confirmation_email_sent_at;
+  const voucherUrl = itinerarioUrlOf(row.new_voucher_id, baseUrl);
   return {
     id: row.id, status: row.status, client_name: row.client_name, locator: row.locator,
-    old_voucher_id: row.old_voucher_id, new_voucher_id: row.new_voucher_id,
+    old_voucher_id: row.old_voucher_id, new_voucher_id: row.new_voucher_id, new_voucher_url: voucherUrl || null,
     notice_sent_at: row.notice_sent_at, confirmed_at: row.confirmed_at, created_at: row.created_at,
     confirmation_email_sent_at: row.confirmation_email_sent_at,
     old, new: novo, diff, support_phone: phone,
     messages: {
       notice: old ? buildNoticeText(old, { supportPhone: phone }) : null,
-      confirmation: novo && diff ? buildConfirmationText(novo, diff, { emailSent }) : null
+      confirmation: novo && diff ? buildConfirmationText(novo, diff, { emailSent, voucherUrl }) : null
     }
   };
 }
@@ -115,7 +138,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       if (req.file) await dropVoucher(voucherId, userId);
       throw e;
     }
-    res.status(201).json(await detail(await own(r.lastID, userId)));
+    res.status(201).json(await detailFor(req, await own(r.lastID, userId)));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -123,7 +146,7 @@ router.get('/:id', async (req, res) => {
   try {
     const row = await own(req.params.id, req.session.userId);
     if (!row) return res.status(404).json({ error: 'não encontrado' });
-    res.json(await detail(row));
+    res.json(await detailFor(req, row));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -134,7 +157,7 @@ router.post('/:id/notice-sent', async (req, res) => {
     if (row.status === 'aviso_pendente') {
       await run(`UPDATE flight_changes SET status='aviso_enviado', notice_sent_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND status='aviso_pendente'`, [row.id]);
     }
-    res.json(await detail(await own(row.id, req.session.userId)));
+    res.json(await detailFor(req, await own(row.id, req.session.userId)));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -162,7 +185,7 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     if (row.new_voucher_id && row.new_voucher_id !== newId && row.new_voucher_id !== row.old_voucher_id) {
       await dropVoucher(row.new_voucher_id, userId, row.id);
     }
-    res.json(await detail(await own(row.id, userId)));
+    res.json(await detailFor(req, await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -201,7 +224,7 @@ router.put('/:id/new', async (req, res) => {
         throw e;
       }
     }
-    res.json(await detail(await own(row.id, userId)));
+    res.json(await detailFor(req, await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -217,7 +240,7 @@ router.post('/:id/confirm', async (req, res) => {
     if (row.status !== 'confirmado') {
       await run(`UPDATE flight_changes SET status='confirmado', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND user_id=?`, [row.id, req.session.userId]);
     }
-    res.json(await detail(await own(row.id, req.session.userId)));
+    res.json(await detailFor(req, await own(row.id, req.session.userId)));
   } catch (e) { fail(req, res, e); }
 });
 
@@ -249,14 +272,11 @@ router.post('/:id/send-email', async (req, res) => {
       const sync = await run(`UPDATE vouchers SET unified_json=?, layout_version=?, updated_at=datetime('now') WHERE id=? AND user_id=?`,
         [row.new_json, novo.layoutVersion || 'azul.confirmacao.v1', row.new_voucher_id, userId]);
       if (sync.changes === 0) return res.status(409).json({ error: 'voucher_novo_removido' });
-      const settings = (await get(`SELECT contact_phone, contact_email, contact_site, contact_extra FROM voucher_settings WHERE id = 1`, [])) || {};
+      const settings = await loadSettings();
       const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
       pdfPath = await renderVoucher({ voucherId: row.new_voucher_id, format: 'pdf', cookieHeader: req.headers.cookie, baseUrl });
-      result = await sendVoucherEmail({
-        to: emails, bcc, voucherData: novo, settings, attachmentPath: pdfPath,
-        subject: 'Seu voo foi reajustado ✈️ Novo voucher em anexo',
-        customMessage: buildConfirmationText(novo, diff, { emailSent: true }).replace(/\*/g, '')
-      });
+      const args = confirmationEmailArgs(novo, diff, settings, itinerarioUrlOf(row.new_voucher_id, publicBaseUrl(req)));
+      result = await sendVoucherEmail({ to: emails, bcc, attachmentPath: pdfPath, ...args });
     }
     if (!result.sucesso) return res.status(500).json({ error: 'falha ao enviar e-mail', details: result.erro });
     if (kind === 'confirmacao') {
@@ -266,6 +286,33 @@ router.post('/:id/send-email', async (req, res) => {
     res.json({ sent: emails.length, messageId: result.messageId, subject: result.subject });
   } catch (e) { fail(req, res, e); }
   finally { if (pdfPath) fs.unlink(pdfPath, () => {}); }
+});
+
+// Logo do e-mail vai como anexo CID; no preview (navegador) troca por data URI para a imagem aparecer.
+function inlineLogo(html) {
+  let uri;
+  try { uri = 'data:image/png;base64,' + fs.readFileSync(AGENCY_LOGO_PATH).toString('base64'); } catch { return html; }
+  return html.split(`cid:${AGENCY_LOGO_CID}`).join(uri);
+}
+
+router.get('/:id/email-preview', async (req, res) => {
+  try {
+    const kind = req.query.kind;
+    if (kind !== 'aviso' && kind !== 'confirmacao') return res.status(400).json({ error: 'kind deve ser "aviso" ou "confirmacao"' });
+    const row = await own(req.params.id, req.session.userId);
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    if (kind === 'aviso') {
+      const old = parse(row.old_json);
+      if (!old) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
+      return res.json({ subject: NOTICE_SUBJECT, html: inlineLogo(buildNoticeEmailHtml(old, { supportPhone: await supportPhone() })) });
+    }
+    if (!row.new_json || !row.new_voucher_id) return res.status(409).json({ error: 'sem_voucher_novo' });
+    const old = parse(row.old_json), novo = parse(row.new_json);
+    if (!old || !novo) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
+    const args = confirmationEmailArgs(novo, diffVouchers(old, novo), await loadSettings(), itinerarioUrlOf(row.new_voucher_id, publicBaseUrl(req)));
+    const html = await buildVoucherEmailHtml({ voucherData: args.voucherData, settings: args.settings, customMessage: args.customMessage, itinerarioUrl: args.itinerarioUrl });
+    res.json({ subject: args.subject, html: inlineLogo(html) });
+  } catch (e) { fail(req, res, e); }
 });
 
 router.delete('/:id', async (req, res) => {

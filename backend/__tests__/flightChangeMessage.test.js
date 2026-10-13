@@ -1,4 +1,4 @@
-const { buildNoticeText, buildConfirmationText, buildWaLink, noticeClientMessage } = require('../helpers/flightChangeMessage');
+const { buildNoticeText, buildConfirmationText, buildChangeSummaryLines, buildWaLink, noticeClientMessage } = require('../helpers/flightChangeMessage');
 const { diffVouchers } = require('../helpers/flightChangeDiff');
 
 const trip = (o = {}) => ({
@@ -49,7 +49,7 @@ test('confirmação: só trechos alterados, antes → depois e nota do e-mail', 
   expect(t).toContain('*Ida (GRU → REC)*');
   expect(t).toContain('Partida: 12/09/2026 08:30 → 12/09/2026 10:15');
   expect(t).not.toContain('Volta');                 // trecho igual omitido
-  expect(t).toContain('novo voucher por e-mail');
+  expect(t).toContain('Também enviamos o PDF por e-mail');
 });
 
 test('confirmação: trecho removido e localizador novo', () => {
@@ -144,4 +144,40 @@ test('M4 mensagem do cliente sem travessão solto', () => {
   expect(m).toBe('Olá! Recebi o aviso de alteração do meu voo. Maria.');
   expect(noticeClientMessage(voucher({ passengers: [] }))).toBe('Olá! Recebi o aviso de alteração do meu voo. Reserva ABC123.');
   expect(noticeClientMessage(voucher())).toBe('Olá! Recebi o aviso de alteração do meu voo. Reserva ABC123 — Maria.');
+});
+
+describe('link do voucher e resumo de mudanças', () => {
+  const antigo = voucher({ trips: [trip(), trip({ direction: 'volta', flightNumber: 'AD 4002' })] });
+  const novo = voucher({ reservation: { locator: 'XYZ999' }, trips: [trip({ departure: { airport: 'GRU', datetime: '2026-09-12T10:15:00-03:00' } }),
+    trip({ direction: 'volta', flightNumber: 'AD 4002' })] });
+  const diff = diffVouchers(antigo, novo);
+  const URL = 'https://x.com/itinerario/abc.123.sig';
+
+  test('com link: linha do voucher e URL na linha seguinte', () => {
+    const t = buildConfirmationText(novo, diff, { voucherUrl: URL });
+    const l = t.split('\n');
+    expect(l[l.indexOf('Seu novo voucher já está disponível:') + 1]).toBe(URL);
+    expect(t).not.toContain('Em instantes');
+    expect(t).not.toContain('Também enviamos');
+  });
+  test('link + e-mail enviado', () => {
+    const t = buildConfirmationText(novo, diff, { voucherUrl: URL, emailSent: true });
+    expect(t).toContain(URL); expect(t).toContain('Também enviamos o PDF por e-mail 📧');
+  });
+  test('sem link e sem e-mail: "Em instantes"; só e-mail: sem linha do link', () => {
+    expect(buildConfirmationText(novo, diff, {})).toContain('Em instantes enviamos o novo voucher.');
+    const t = buildConfirmationText(novo, diff, { emailSent: true });
+    expect(t).not.toContain('já está disponível');
+  });
+  test('buildChangeSummaryLines: texto puro, só mudanças, e confirmação a reutiliza', () => {
+    const lines = buildChangeSummaryLines(diff);
+    expect(lines).toEqual([
+      'Novo localizador: XYZ999', '',
+      'Ida (GRU → REC)', '• Partida: 12/09/2026 08:30 → 12/09/2026 10:15'
+    ]);
+    expect(lines.join('\n')).not.toContain('*');
+    expect(buildChangeSummaryLines(diffVouchers(antigo, antigo))).toEqual([]);
+    const t = buildConfirmationText(novo, diff, {});
+    expect(t).toContain('Novo localizador: *XYZ999*\n\n*Ida (GRU → REC)*\n• Partida: 12/09/2026 08:30 → 12/09/2026 10:15');
+  });
 });

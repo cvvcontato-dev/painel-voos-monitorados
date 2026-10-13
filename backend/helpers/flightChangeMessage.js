@@ -77,30 +77,48 @@ function buildNoticeText(v, { supportPhone } = {}) {
   return linhas.join('\n');
 }
 
-function buildConfirmationText(newV, diff, { emailSent = false } = {}) {
-  const loc = safeLoc(newV?.reservation?.locator);
-  const linhas = [hello(newV, '😊'), '', `Seu voo foi reajustado ✅${loc ? ` Reserva *${loc}*` : ''}`];
-  if (diff?.locatorChanged) linhas.push(`Novo localizador: *${safeLoc(diff.locatorChanged.depois)}*`);
-
-  const mudou = (diff?.trips || []).some(t => t.status !== 'igual');
-  if (!mudou && !diff?.locatorChanged) linhas.push('', 'Os detalhes estão no novo voucher.');
-
+/**
+ * Blocos de mudança (cada bloco = lista de linhas): [localizador novo?] e um bloco por trecho alterado.
+ * `b` envolve trechos em negrito do WhatsApp (ou não, para texto puro).
+ */
+function changeBlocks(diff, b) {
+  const loc = diff?.locatorChanged ? [`Novo localizador: ${b(safeLoc(diff.locatorChanged.depois))}`] : null;
+  const trips = [];
   for (const t of diff?.trips || []) {
     if (t.status === 'igual') continue;
-    linhas.push('');
     if (t.status === 'removido') {
-      linhas.push(`*${tripLabel(t.old)}*`, '• Trecho cancelado');
+      trips.push([b(tripLabel(t.old)), '• Trecho cancelado']);
     } else if (t.status === 'novo') {
-      linhas.push(`*${tripLabel(t.new)}*`, '• Trecho incluído', `• Voo: ${t.new.flightNumber || '—'}`);
+      trips.push([b(tripLabel(t.new)), '• Trecho incluído', `• Voo: ${t.new.flightNumber || '—'}`]);
     } else {
-      linhas.push(`*${tripLabel(t.new)}*`);
-      t.changes.forEach(c => linhas.push(`• ${FIELD_LABEL[c.campo] || c.campo}: ${c.antes} → ${c.depois}`));
+      trips.push([b(tripLabel(t.new)), ...t.changes.map(c => `• ${FIELD_LABEL[c.campo] || c.campo}: ${c.antes} → ${c.depois}`)]);
     }
   }
-  linhas.push('', emailSent
-    ? 'Enviamos o novo voucher por e-mail 📧'
-    : 'Em instantes enviamos o novo voucher.');
+  return { loc, trips };
+}
+
+/** Linhas de mudança em texto puro (sem asteriscos, sem saudação/fechamento). Usada também no e-mail. */
+function buildChangeSummaryLines(diff) {
+  const { loc, trips } = changeBlocks(diff, s => s);
+  const linhas = [];
+  if (loc) linhas.push(...loc);
+  trips.forEach(t => { if (linhas.length) linhas.push(''); linhas.push(...t); });
+  return linhas;
+}
+
+function buildConfirmationText(newV, diff, { emailSent = false, voucherUrl = '' } = {}) {
+  const loc = safeLoc(newV?.reservation?.locator);
+  const linhas = [hello(newV, '😊'), '', `Seu voo foi reajustado ✅${loc ? ` Reserva *${loc}*` : ''}`];
+  const { loc: locBlock, trips } = changeBlocks(diff, s => `*${s}*`);
+  if (locBlock) linhas.push(...locBlock);
+
+  if (!trips.length && !locBlock) linhas.push('', 'Os detalhes estão no novo voucher.');
+  trips.forEach(t => linhas.push('', ...t));
+
+  if (voucherUrl) linhas.push('', 'Seu novo voucher já está disponível:', voucherUrl);
+  if (emailSent) linhas.push('', 'Também enviamos o PDF por e-mail 📧');
+  if (!voucherUrl && !emailSent) linhas.push('', 'Em instantes enviamos o novo voucher.');
   return linhas.join('\n');
 }
 
-module.exports = { noticeDetail, buildWaLink, buildNoticeText, buildConfirmationText, noticeClientMessage };
+module.exports = { noticeDetail, buildWaLink, buildNoticeText, buildConfirmationText, buildChangeSummaryLines, noticeClientMessage };
