@@ -11,6 +11,7 @@ const {
   manageBookingUrl
 } = require('./voucherCarrier');
 const { buildReservationGroups, dedupeReservationGroups } = require('./reservationGroups');
+const { buildWaLink } = require('./flightChangeMessage');
 
 // Rótulo curto de um grupo de reserva pra CTAs/QRs (ex.: "Interno").
 function groupShortLabel(label) {
@@ -118,7 +119,23 @@ async function renderItinerarioPage({ voucherData, settings }) {
     } catch { svg = ''; }
     return { label: g.label, locator: g.locator, carrierKey: g.carrierKey, target, svg };
   }));
-  const qrSvg = qrByGroup[0]?.svg || ''; // QR principal (ida) usado no bloco de assistência
+
+  // QR do bloco "Assistência": leva o cliente a FALAR COM A AGÊNCIA (WhatsApp com mensagem
+  // pré-preenchida); sem telefone válido, cai no site da agência — nunca no link da companhia.
+  const helpLocator = (vd.reservation?.locator || groups[0]?.locator || '').toString().trim();
+  const helpName = firstName(passengers[0]?.name) || '';
+  const helpText = `Olá! Preciso de ajuda com a minha reserva${helpLocator ? ` ${helpLocator}` : ''}${helpName ? ` (${helpName})` : ''}.`;
+  const waHelpLink = buildWaLink(contactPhone, helpText);
+  const assistTarget = waHelpLink || contactSiteHref;
+  let assistSvg = '';
+  try {
+    assistSvg = await QRCode.toString(assistTarget, { type: 'svg', width: 110, margin: 1, color: { dark: '#0e1726', light: '#ffffff' } });
+    assistSvg = assistSvg.replace(/<?xml[^?]*?>/, '').replace(/width="d+"/, 'width="110"').replace(/height="d+"/, 'height="110"');
+  } catch { assistSvg = ''; }
+  const assistLabel = waHelpLink ? 'Falar com a Clube do Voo pelo WhatsApp' : 'Abrir o site da Clube do Voo';
+  const assistHint = waHelpLink
+    ? 'Dúvidas, alterações ou pedidos especiais — escaneie ou toque no QR para falar conosco no WhatsApp.'
+    : 'Dúvidas, alterações ou pedidos especiais — escaneie o QR ou fale conosco.';
 
   // Seção "Suas reservas" com N QRs (só quando há mais de 1 reserva distinta).
   const reservasSectionHtml = hasMultiGroups ? `
@@ -379,12 +396,14 @@ async function renderItinerarioPage({ voucherData, settings }) {
             <td valign="top" style="vertical-align:top;">
               <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#8a93a4;font-weight:600;">ASSISTÊNCIA</div>
               <div style="font-size:17px;font-weight:700;color:#0e1726;margin:4px 0 10px;">Estamos aqui para ajudar</div>
-              <div style="font-size:12.5px;color:#6c757d;line-height:1.55;margin-bottom:14px;">Dúvidas, alterações ou pedidos especiais — escaneie o QR ou fale conosco.</div>
+              <div style="font-size:12.5px;color:#6c757d;line-height:1.55;margin-bottom:14px;">${escapeHtml(assistHint)}</div>
               ${phoneRow}
               ${emailRow}
             </td>
             <td valign="top" align="right" width="120" class="support-right" style="vertical-align:top;text-align:right;width:120px;padding-left:16px;">
-              <div style="display:inline-block;background:#ffffff;padding:6px;border-radius:8px;border:1px solid #e9ecf2;line-height:0;">${qrSvg || '<div style="width:110px;height:110px;"></div>'}</div>
+              <a href="${escapeHtml(assistTarget)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(assistLabel)}" style="display:inline-block;text-decoration:none;">
+                <div style="display:inline-block;background:#ffffff;padding:6px;border-radius:8px;border:1px solid #e9ecf2;line-height:0;">${assistSvg || '<div style="width:110px;height:110px;"></div>'}</div>
+              </a>
             </td>
           </tr>
         </table>
