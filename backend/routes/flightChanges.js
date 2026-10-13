@@ -4,7 +4,7 @@ const fs = require('fs');
 const db = require('../database');
 const { validate } = require('../services/voucherSchema');
 const { normalize } = require('../services/voucherNormalizer');
-const { renderVoucher } = require('../services/voucherRenderer');
+const pdfStore = require('../services/voucherPdfStore');
 const { sendVoucherEmail, buildVoucherEmailHtml, AGENCY_LOGO_PATH, AGENCY_LOGO_CID } = require('../services/notifier');
 const { sendNoticeEmail, buildNoticeEmailHtml, SUBJECT: NOTICE_SUBJECT } = require('../services/flightChangeEmail');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
@@ -51,11 +51,28 @@ async function dropVoucher(id, userId, exceptCaseId = 0) {
     // Outro caso pode usar este voucher (ex.: como antigo): nesse caso não apaga nem a linha nem o arquivo.
     const emUso = await get(`SELECT 1 FROM flight_changes WHERE (old_voucher_id = ? OR new_voucher_id = ?) AND id != ?`, [id, id, exceptCaseId]);
     if (emUso) return;
+    pdfStore.purge(id);   // PDF guardado (PII dos passageiros) some junto com o voucher
     const v = await get(`SELECT source_file_path FROM vouchers WHERE id = ? AND user_id = ?`, [id, userId]);
     if (!v) return;
     await run(`DELETE FROM vouchers WHERE id = ? AND user_id = ?`, [id, userId]);
     String(v.source_file_path || '').split('|').filter(Boolean).forEach(p => fs.unlink(p, () => {}));
   } catch (e) { console.error('[FLIGHT-CHANGES] cleanup de voucher falhou', id, e.message); }
+}
+
+// Base interna usada pelo Playwright para abrir /voucher-preview (precisa alcançar este servidor).
+const renderBaseUrl = () => process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+
+/**
+ * Guarda o PDF da versão atual do voucher novo em segundo plano (fire-and-forget): é o arquivo que a página
+ * pública do itinerário oferece para download. Nunca atrasa nem quebra a resposta; falhas só vão para o log.
+ * O render precisa da sessão do operador (cookie), por isso é disparado dentro da requisição dele.
+ */
+function storePdfInBackground(req, voucherId, userId) {
+  (async () => {
+    const v = await get(`SELECT unified_json FROM vouchers WHERE id = ? AND user_id = ?`, [voucherId, userId]);
+    if (!v) return;
+    await pdfStore.ensure({ voucherId, unifiedJson: v.unified_json, cookieHeader: req.headers.cookie, baseUrl: renderBaseUrl() });
+  })().catch(e => console.error('[FLIGHT-CHANGES] pdf:', e && e.message));
 }
 
 // Base pública dos links do voucher novo: SOMENTE PUBLIC_BASE_URL (nunca o Host da requisição, que é forjável).
@@ -187,6 +204,7 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     if (row.new_voucher_id && row.new_voucher_id !== newId && row.new_voucher_id !== row.old_voucher_id) {
       await dropVoucher(row.new_voucher_id, userId, row.id);
     }
+    storePdfInBackground(req, newId, userId);
     res.json(await detailFor(req, await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
 });
@@ -225,6 +243,7 @@ router.put('/:id/new', async (req, res) => {
           [row.new_json, row.diff_json, row.id, userId]).catch(() => {});
         throw e;
       }
+      storePdfInBackground(req, row.new_voucher_id, userId);
     }
     res.json(await detailFor(req, await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
@@ -255,7 +274,6 @@ router.post('/:id/send-email', async (req, res) => {
   const kind = req.body && req.body.kind;
   if (kind !== 'aviso' && kind !== 'confirmacao') return res.status(400).json({ error: 'kind deve ser "aviso" ou "confirmacao"' });
 
-  let pdfPath = null;
   try {
     const userId = req.session.userId;
     const row = await own(req.params.id, userId);
@@ -275,8 +293,8 @@ router.post('/:id/send-email', async (req, res) => {
         [row.new_json, novo.layoutVersion || 'azul.confirmacao.v1', row.new_voucher_id, userId]);
       if (sync.changes === 0) return res.status(409).json({ error: 'voucher_novo_removido' });
       const settings = await loadSettings();
-      const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-      pdfPath = await renderVoucher({ voucherId: row.new_voucher_id, format: 'pdf', cookieHeader: req.headers.cookie, baseUrl });
+      // PDF guardado (mesmo arquivo do botão na página do itinerário): reaproveita se já existe para esta versão. NÃO apagar.
+      const pdfPath = await pdfStore.ensure({ voucherId: row.new_voucher_id, unifiedJson: row.new_json, cookieHeader: req.headers.cookie, baseUrl: renderBaseUrl() });
       const args = confirmationEmailArgs(novo, diff, settings, itinerarioUrlOf(row.new_voucher_id, publicBaseUrl()));
       result = await sendVoucherEmail({ to: emails, bcc, attachmentPath: pdfPath, ...args });
     }
@@ -287,7 +305,6 @@ router.post('/:id/send-email', async (req, res) => {
     console.log(`[FLIGHT-CHANGES] email enviado kind=${kind} caso=${row.id} user=${userId} destinos=${emails.length}`);
     res.json({ sent: emails.length, messageId: result.messageId, subject: result.subject });
   } catch (e) { fail(req, res, e); }
-  finally { if (pdfPath) fs.unlink(pdfPath, () => {}); }
 });
 
 // Logo do e-mail vai como anexo CID; no preview (navegador) troca por data URI para a imagem aparecer.

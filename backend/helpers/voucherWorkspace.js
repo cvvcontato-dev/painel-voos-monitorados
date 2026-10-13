@@ -8,6 +8,7 @@ function ensure(dir) { fs.mkdirSync(dir, { recursive: true }); return dir; }
 
 const uploadsDir = () => ensure(path.join(root(), 'voucher-uploads'));
 const exportsDir = () => ensure(path.join(root(), 'voucher-exports'));
+const pdfsDir = () => ensure(path.join(root(), 'voucher-pdfs'));
 const packageUploadsDir = () => ensure(path.join(root(), 'package-uploads'));
 
-module.exports = { uploadsDir, exportsDir, packageUploadsDir };
+module.exports = { uploadsDir, exportsDir, pdfsDir, packageUploadsDir };

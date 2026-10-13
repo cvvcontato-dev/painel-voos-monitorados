@@ -1,6 +1,7 @@
 const fs = require('fs');
 const cron = require('node-cron');
 const db = require('../database');
+const pdfStore = require('./voucherPdfStore');
 
 const RETENTION_DAYS = Number(process.env.VOUCHER_RETENTION_DAYS || 30);
 
@@ -27,6 +28,8 @@ async function processRow(r) {
     }
     fileExisted = false;
   }
+  // PDF guardado para o link do cliente (PII): expira junto com o arquivo de origem.
+  try { pdfStore.purge(r.id); } catch (e) { console.error('[voucherRetention] erro ao remover PDF guardado', r.id, e.message); }
   try {
     await dbRun(`UPDATE vouchers SET source_file_path = NULL WHERE id = ?`, [r.id]);
     await dbRun(

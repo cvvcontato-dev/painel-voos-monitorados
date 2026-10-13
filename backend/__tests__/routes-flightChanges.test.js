@@ -610,3 +610,98 @@ describe('revisão: link só com PUBLIC_BASE_URL, preview sem mudanças e escape
     expect(p.body.html).toContain('&lt;script&gt;');
   });
 });
+
+describe('PDF guardado para o link do cliente (voucher-pdfs)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { renderVoucher } = require('../services/voucherRenderer');
+  const { transporter } = require('../services/notifier');
+  const { pdfsDir } = require('../helpers/voucherWorkspace');
+  const stored = (vid) => fs.readdirSync(pdfsDir()).filter(f => f.startsWith(`voucher-${vid}-`));
+  const until = async (fn, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (await fn()) return true; await new Promise(r => setTimeout(r, 25)); }
+    return false;
+  };
+  const novoDe = async (agent, csrf) => {
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('novo-pdf');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    return { c, r };
+  };
+
+  const envSaved = {};
+  beforeAll(() => { envSaved.u = process.env.EMAIL_USER; envSaved.p = process.env.EMAIL_PASS; process.env.EMAIL_USER = 'u@test.com'; process.env.EMAIL_PASS = 'x'; });
+  afterAll(() => { for (const [k, v] of [['EMAIL_USER', envSaved.u], ['EMAIL_PASS', envSaved.p]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+  const spies = [];
+  const spy = (obj, m) => { const s = jest.spyOn(obj, m); spies.push(s); return s; };
+  afterEach(() => { spies.splice(0).forEach(s => s.mockRestore()); });   // não usar restoreAllMocks: zera o mock do renderVoucher
+
+  test('new-voucher guarda o PDF em segundo plano usando a sessão do operador', async () => {
+    const { agent, csrf } = await authed();
+    renderVoucher.mockClear();
+    const { r } = await novoDe(agent, csrf);
+    expect(r.status).toBe(200);
+    const vid = r.body.new_voucher_id;
+    expect(await until(() => stored(vid).length === 1)).toBe(true);
+    const call = renderVoucher.mock.calls.find(c => c[0].voucherId === vid)[0];
+    expect(call.format).toBe('pdf');
+    expect(call.cookieHeader).toMatch(/cvv\.sid=/);
+    const unified = (await voucherRow(vid)).unified_json;
+    expect(stored(vid)[0]).toBe(`voucher-${vid}-${require('../services/voucherPdfStore').hashOf(unified)}.pdf`);
+  });
+
+  test('new-voucher: não espera o render e responde 200 mesmo se ele falhar (só loga)', async () => {
+    const { agent, csrf } = await authed();
+    const err = spy(console, 'error').mockImplementation(() => {});
+    renderVoucher.mockImplementationOnce(() => new Promise((_, rej) => setTimeout(() => rej(new Error('chromium caiu')), 400)));
+    const t0 = Date.now();
+    const { r } = await novoDe(agent, csrf);
+    expect(r.status).toBe(200);
+    expect(Date.now() - t0).toBeLessThan(380);   // não aguardou os 400 ms do render
+    expect(await until(() => err.mock.calls.some(c => c[0] === '[FLIGHT-CHANGES] pdf:' && /chromium caiu/.test(c[1])), 3000)).toBe(true);
+    expect(stored(r.body.new_voucher_id)).toEqual([]);
+  });
+
+  test('PUT /new gera o PDF da nova versão e apaga o da anterior', async () => {
+    const { agent, csrf } = await authed();
+    const { c, r } = await novoDe(agent, csrf);
+    const vid = r.body.new_voucher_id;
+    expect(await until(() => stored(vid).length === 1)).toBe(true);
+    const antes = stored(vid)[0];
+    const novo = r.body.new;
+    novo.trips[0].departure.datetime = '2026-09-12T10:45:00-03:00';
+    expect((await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo })).status).toBe(200);
+    expect(await until(() => stored(vid).length === 1 && stored(vid)[0] !== antes)).toBe(true);
+  });
+
+  test('send-email confirmacao anexa o PDF guardado e NÃO o apaga', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const d = (await agent.get(`/api/flight-changes/${c.id}`)).body;
+    const sendMail = spy(transporter, 'sendMail').mockResolvedValue({ messageId: 'm1' });
+    const s = await agent.post(`/api/flight-changes/${c.id}/send-email`).set('X-CSRF-Token', csrf).send({ kind: 'confirmacao', emails: 'cli@x.com' });
+    expect(s.status).toBe(200);
+    const att = sendMail.mock.calls[0][0].attachments.find(a => /\.pdf$/.test(a.filename));
+    expect(path.dirname(att.path)).toBe(pdfsDir());
+    expect(path.basename(att.path)).toMatch(new RegExp(`^voucher-${d.new_voucher_id}-[0-9a-f]{12}\.pdf$`));
+    await new Promise(r => setTimeout(r, 50));
+    expect(fs.existsSync(att.path)).toBe(true);
+  });
+
+  test('DELETE do caso e re-upload do voucher novo purgam os PDFs guardados', async () => {
+    const { agent, csrf } = await authed();
+    const { c, r } = await novoDe(agent, csrf);
+    const v1 = r.body.new_voucher_id;
+    expect(await until(() => stored(v1).length === 1)).toBe(true);
+    // re-upload: o voucher novo anterior é descartado junto com o PDF
+    const f = pdf('novo-pdf-2');
+    const r2 = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const v2 = r2.body.new_voucher_id;
+    expect(v2).not.toBe(v1);
+    expect(stored(v1)).toEqual([]);
+    expect(await until(() => stored(v2).length === 1)).toBe(true);
+    expect((await agent.delete(`/api/flight-changes/${c.id}`).set('X-CSRF-Token', csrf)).status).toBe(204);
+    expect(stored(v2)).toEqual([]);
+  });
+});

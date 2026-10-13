@@ -13,6 +13,7 @@ backend/sessions.sqlite
 # Vouchers — runtime dirs (LGPD: uploads expiram via voucherRetention)
 backend/voucher-uploads/
 backend/voucher-exports/
+backend/voucher-pdfs/
 
 # Test artifacts
 backend/__tests__/.tmp/

@@ -22,6 +22,7 @@ describe('voucherRetention.runOnce', () => {
 
     const tmp = path.join(os.tmpdir(), `vr-${Date.now()}.pdf`);
     fs.writeFileSync(tmp, 'x');
+    const pdfStore = require('../services/voucherPdfStore');
 
     const voucherId = await new Promise((resolve, reject) => {
       db.run(
@@ -32,7 +33,15 @@ describe('voucherRetention.runOnce', () => {
       );
     });
 
+    // PDF guardado do voucher expirado (e de um voucher que não expira) em voucher-pdfs/
+    const pdfExpirado = pdfStore.filePath(voucherId, '{}');
+    const pdfOutro = pdfStore.filePath(voucherId + 100000, '{}');
+    fs.writeFileSync(pdfExpirado, 'pdf'); fs.writeFileSync(pdfOutro, 'pdf');
+
     const { cleaned, failed } = await runOnce();
+    expect(fs.existsSync(pdfExpirado)).toBe(false);
+    expect(fs.existsSync(pdfOutro)).toBe(true);
+    fs.unlinkSync(pdfOutro);
     expect(cleaned).toBeGreaterThanOrEqual(1);
     expect(failed).toBe(0);
     expect(fs.existsSync(tmp)).toBe(false);
