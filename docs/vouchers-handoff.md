@@ -230,3 +230,18 @@ Spec: `docs/superpowers/specs/2026-09-23-aba-cartoes-embarque-design.md` · Plan
 - **Backend estrito:** link preenchido e inválido → 422 (o frontend já mostra o erro inline).
 - **WhatsApp automático via API**: fora do escopo (evolução futura). Hoje é `wa.me` com texto pronto.
 - **Pendências conhecidas:** suítes `auth`/`users` já falhavam antes (403 CSRF no `makeAuthApp`), sem relação com esta aba.
+
+---
+
+## Aba Alterações de voo + fotos de fundo no backup (2026-10-13)
+
+Spec: `docs/superpowers/specs/2026-10-13-alteracao-de-voo-design.md` · Plano: `docs/superpowers/plans/2026-10-13-alteracao-de-voo.md`
+
+- **Fluxo em 2 momentos** (um caso por registro em `flight_changes`; status `aviso_pendente → aviso_enviado → confirmado`): (1) *Aviso* só com o voucher antigo — texto de WhatsApp e e-mail opcional avisando que a companhia alterou o voo, sem horários novos, com botão `wa.me` (mensagem pré-preenchida) para o suporte (`voucher_settings.contact_phone`); (2) *Confirmação* com o voucher novo — comparação automática, mensagem "antes → depois" só do que mudou e e-mail opcional com o novo voucher em PDF (o voucher novo também é salvo na aba Vouchers). Dá para pular o aviso.
+- **Comparação** (`helpers/flightChangeDiff.js`, pura): pareia trechos por direção (primeiro por voo+data de partida, depois por ordem); horários comparados como instante; classe só quando existe nos dois; nada mudou ⇒ confirmar é bloqueado (409 `nada_mudou`). Datetime sem offset é tratado como -03:00.
+- **Mensagens** (`helpers/flightChangeMessage.js`) e e-mail do aviso (`services/flightChangeEmail.js`). Telefone via `normalizePhone` de `boardingPassPayload.js`.
+- **Fonte de verdade:** `flight_changes.new_json`. O PDF do e-mail é renderizado depois de sobrescrever `vouchers.unified_json` com ele; o voucher ANTIGO da aba Vouchers nunca é alterado nem apagado. `old_json` é snapshot (a retenção de vouchers apaga o arquivo após 30 dias).
+- **Backup das fotos** (`services/backup.js`): `backups/fundos-<carimbo>/` por backup (hard link → cópia), montado em `.tmp` e renomeado no fim; rotação pareada ao `.sqlite`. Restauração manual.
+- **Limitações conhecidas:** passageiros homônimos contam como um; `confirm`/`send-email` podem correr com um `PUT /new` simultâneo (janela de ms, uso interno); `listBackups()` devolvendo `[]` por erro de leitura faria a rotação apagar as pastas `fundos-*`.
+- **Pendências:** suítes `auth`/`users` seguem falhando (19 testes, 403 CSRF no `makeAuthApp`) — pré-existentes. `POST /api/vouchers` deve migrar para `helpers/voucherStore.js`.
+
