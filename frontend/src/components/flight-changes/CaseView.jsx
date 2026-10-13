@@ -158,7 +158,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
-                label={hasNew ? 'Substituir o voucher novo — clique, arraste ou, com esta área selecionada, cole (Ctrl+V)' : 'Clique, arraste ou, com esta área selecionada, cole (Ctrl+V) o voucher novo — PDF ou imagem'}
+                label={hasNew ? 'Substituir o voucher novo — clique, arraste ou, com esta área selecionada, cole (Ctrl+V)' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros, bagagem e localizador são mantidos do voucher antigo; só os trechos que aparecerem na imagem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).'}
               />
             )}
             {hasNew && detail.diff && (
