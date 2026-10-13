@@ -1,3 +1,4 @@
+// TODO: POST /api/vouchers (routes/vouchers.js) ainda duplica esta lógica de extração/gravação; migrar para este módulo.
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');

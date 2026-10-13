@@ -303,12 +303,18 @@ function runMigrations() {
         diff_json TEXT,
         notice_sent_at TEXT,
         confirmed_at TEXT,
+        confirmation_email_sent_at TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
     )`, (err) => {
-        if (err) console.error('Error creating flight_changes table:', err.message);
-        else db.run(`CREATE INDEX IF NOT EXISTS idx_flight_changes_user ON flight_changes(user_id, status)`);
+        if (err) return console.error('Error creating flight_changes table:', err.message);
+        // Migração idempotente para bancos criados antes da coluna (erro 'duplicate column' é esperado e ignorado).
+        // Encadeada no callback do CREATE para garantir que a tabela já existe.
+        db.run(`ALTER TABLE flight_changes ADD COLUMN confirmation_email_sent_at TEXT`, (alterErr) => {
+            if (alterErr && !alterErr.message.includes('duplicate column name')) console.error('Migration error:', alterErr.message);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_flight_changes_user ON flight_changes(user_id, status)`);
+        });
     });
 
     db.run(`CREATE TABLE IF NOT EXISTS voucher_audit_log (

@@ -6,7 +6,37 @@ const db = require('../database');
 const { buildNoticeEmailHtml } = require('../services/flightChangeEmail');
 
 let app;
-beforeAll(async () => { app = makeFlightChangeApp(); await waitForDb(); await new Promise(r => setTimeout(r, 600)); });
+const q = {
+  get: (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => e ? rej(e) : res(r))),
+  all: (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => e ? rej(e) : res(r))),
+  run: (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }))
+};
+// Espera real: a tabela flight_changes é criada de forma assíncrona após as demais.
+async function waitForFlightChanges() {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const r = await q.get("SELECT name FROM sqlite_master WHERE type='table' AND name='flight_changes'").catch(() => null);
+    if (r) return;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  throw new Error('tabela flight_changes não apareceu');
+}
+beforeAll(async () => { app = makeFlightChangeApp(); await waitForDb(); await waitForFlightChanges(); });
+
+/** Simula corrida: a primeira leitura do caso devolve um status "velho" (o banco já mudou). */
+function staleCaseRead(override) {
+  const real = db.get.bind(db);
+  let used = false;
+  return jest.spyOn(db, 'get').mockImplementation((sql, p, cb) => {
+    if (!used && /FROM flight_changes WHERE id/.test(sql)) {
+      used = true;
+      return real(sql, p, (e, r) => cb(e, r && { ...r, ...override }));
+    }
+    return real(sql, p, cb);
+  });
+}
+const countVouchers = async () => (await q.get('SELECT COUNT(*) n FROM vouchers')).n;
+const voucherRow = (id) => q.get('SELECT * FROM vouchers WHERE id = ?', [id]);
 
 async function authed() {
   const agent = request.agent(app);
@@ -77,7 +107,7 @@ test('lista: pendentes antes dos confirmados', async () => {
   expect(res.status).toBe(200);
   const ordem = res.body.map(c => c.status === 'confirmado' ? 1 : 0);
   expect(ordem).toContain(1);
-  expect([...ordem].sort()).toEqual(ordem);
+  expect([...ordem].sort((a, b) => a - b)).toEqual(ordem);
 });
 
 test('notice-sent muda status e é idempotente', async () => {
@@ -195,7 +225,7 @@ test('GET e DELETE de caso inexistente: 404; delete remove', async () => {
 test('caso de outro usuário não é acessível (isolamento por user_id)', async () => {
   const { agent, csrf } = await authed();
   const outro = await new Promise((res, rej) =>
-    db.run(`INSERT INTO users (email, nome, password_hash, role, criado_em) VALUES ('outro@test.com', 'Outro', 'x', 'user', datetime('now'))`, function (e) { e ? rej(e) : res(this.lastID); }));
+    db.run(`INSERT INTO users (email, nome, password_hash, role, criado_em) VALUES ('outro-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com', 'Outro', 'x', 'user', datetime('now'))`, function (e) { e ? rej(e) : res(this.lastID); }));
   const id = await new Promise((res, rej) =>
     db.run(`INSERT INTO flight_changes (user_id, old_json) VALUES (?, '{}')`, [outro], function (e) { e ? rej(e) : res(this.lastID); }));
   expect((await agent.get(`/api/flight-changes/${id}`)).status).toBe(404);
@@ -206,6 +236,177 @@ test('caso de outro usuário não é acessível (isolamento por user_id)', async
   expect((await agent.put(`/api/flight-changes/${id}/new`).set('X-CSRF-Token', csrf).send({ unified: {} })).status).toBe(404);
   expect((await agent.post(`/api/flight-changes/${id}/confirm`).set('X-CSRF-Token', csrf)).status).toBe(404);
   expect((await agent.post(`/api/flight-changes/${id}/send-email`).set('X-CSRF-Token', csrf).send({ kind: 'aviso', emails: 'a@b.com' })).status).toBe(404);
+});
+
+describe('revisão de qualidade (Task 4)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('notice-sent nunca regride um caso confirmado (leitura velha)', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    staleCaseRead({ status: 'aviso_pendente' });
+    const r = await agent.post(`/api/flight-changes/${c.id}/notice-sent`).set('X-CSRF-Token', csrf);
+    expect(r.status).toBe(200);
+    expect((await q.get('SELECT status FROM flight_changes WHERE id=?', [c.id])).status).toBe('confirmado');
+  });
+
+  test('new-voucher em caso confirmado entre leitura e escrita: 409 e sem voucher órfão', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const antes = await countVouchers();
+    staleCaseRead({ status: 'aviso_enviado' });
+    const f = pdf('corrida');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    expect(r.status).toBe(409);
+    expect(await countVouchers()).toBe(antes);
+  });
+
+  test('PUT /new em caso confirmado entre leitura e escrita: 409 e nada alterado', async () => {
+    const { agent, csrf } = await authed();
+    const { c, novo } = await criarCasoConfirmado(agent, csrf);
+    const antes = (await q.get('SELECT new_json FROM flight_changes WHERE id=?', [c.id])).new_json;
+    staleCaseRead({ status: 'aviso_enviado' });
+    const alterado = JSON.parse(JSON.stringify(novo));
+    alterado.trips[0].departure.datetime = '2026-09-12T23:00:00-03:00';
+    const r = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: alterado });
+    expect(r.status).toBe(409);
+    expect((await q.get('SELECT new_json FROM flight_changes WHERE id=?', [c.id])).new_json).toBe(antes);
+  });
+
+  test('re-upload do voucher novo apaga o novo anterior, nunca o antigo', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f1 = pdf('novo-a'), f2 = pdf('novo-b');
+    const r1 = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f1.buf, f1.opts);
+    const id1 = r1.body.new_voucher_id;
+    const path1 = (await voucherRow(id1)).source_file_path;
+    const r2 = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f2.buf, f2.opts);
+    expect(r2.body.new_voucher_id).not.toBe(id1);
+    expect(await voucherRow(id1)).toBeUndefined();
+    expect(require('fs').existsSync(path1)).toBe(false);
+    expect(await voucherRow(c.old_voucher_id)).toBeDefined();
+    expect(await voucherRow(r2.body.new_voucher_id)).toBeDefined();
+  });
+
+  test('DELETE do caso remove o voucher novo e mantém o antigo', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('novo-del');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const newId = r.body.new_voucher_id;
+    const newPath = (await voucherRow(newId)).source_file_path;
+    expect((await agent.delete(`/api/flight-changes/${c.id}`).set('X-CSRF-Token', csrf)).status).toBe(204);
+    expect(await voucherRow(newId)).toBeUndefined();
+    expect(require('fs').existsSync(newPath)).toBe(false);
+    expect(await voucherRow(c.old_voucher_id)).toBeDefined();
+  });
+
+  test('voucher antigo reaproveitado da aba Vouchers fica inalterado (new-voucher, PUT /new, confirm, delete)', async () => {
+    const { agent, csrf } = await authed();
+    const f = pdf('aba-vouchers');
+    const v = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const antes = (await voucherRow(v.body.id)).unified_json;
+    const c = (await agent.post('/api/flight-changes').set('X-CSRF-Token', csrf).send({ voucher_id: v.body.id })).body;
+    const f2 = pdf('novo-aba');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f2.buf, f2.opts);
+    const novo = r.body.new;
+    novo.trips[0].departure.datetime = '2026-09-12T11:00:00-03:00';
+    expect((await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo })).status).toBe(200);
+    expect((await agent.post(`/api/flight-changes/${c.id}/confirm`).set('X-CSRF-Token', csrf)).status).toBe(200);
+    expect((await voucherRow(v.body.id)).unified_json).toBe(antes);
+    await agent.delete(`/api/flight-changes/${c.id}`).set('X-CSRF-Token', csrf);
+    expect((await voucherRow(v.body.id)).unified_json).toBe(antes);
+  });
+
+  test('PUT /new ignora meta do corpo (sourceFileHash falso não é gravado)', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('meta');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const hashReal = r.body.new.meta.sourceFileHash;
+    const novo = r.body.new;
+    novo.meta = { ...novo.meta, sourceFileHash: 'sha256:falso' };
+    const put = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo });
+    expect(put.status).toBe(200);
+    expect(put.body.new.meta.sourceFileHash).toBe(hashReal);
+  });
+
+  test('PUT /new com unified não-objeto: 422', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('str');
+    await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const put = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: 'texto' });
+    expect(put.status).toBe(422);
+  });
+
+  test('new_json corrompido: confirm devolve 500 voucher_corrompido e não confirma', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    await q.run("UPDATE flight_changes SET new_json='{lixo' WHERE id=?", [c.id]);
+    const r = await agent.post(`/api/flight-changes/${c.id}/confirm`).set('X-CSRF-Token', csrf);
+    expect(r.status).toBe(500);
+    expect(r.body.error).toBe('voucher_corrompido');
+    expect((await q.get('SELECT status FROM flight_changes WHERE id=?', [c.id])).status).not.toBe('confirmado');
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).status).toBe(200);
+  });
+
+  test('old_json corrompido: detalhe não lança e confirm devolve voucher_corrompido', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('corr-old');
+    await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    await q.run("UPDATE flight_changes SET old_json='{lixo' WHERE id=?", [c.id]);
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).status).toBe(200);
+    const r = await agent.post(`/api/flight-changes/${c.id}/confirm`).set('X-CSRF-Token', csrf);
+    expect(r.status).toBe(500); expect(r.body.error).toBe('voucher_corrompido');
+  });
+
+  test('send-email confirmacao: voucher novo removido da tabela vouchers: 409', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const row = await q.get('SELECT new_voucher_id FROM flight_changes WHERE id=?', [c.id]);
+    await q.run('DELETE FROM vouchers WHERE id=?', [row.new_voucher_id]);
+    const r = await agent.post(`/api/flight-changes/${c.id}/send-email`).set('X-CSRF-Token', csrf).send({ kind: 'confirmacao', emails: 'a@b.com' });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('voucher_novo_removido');
+  });
+
+  test('PUT /new mantém vouchers.unified_json em sincronia com o caso', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const row = await q.get('SELECT new_json, new_voucher_id FROM flight_changes WHERE id=?', [c.id]);
+    expect((await voucherRow(row.new_voucher_id)).unified_json).toBe(row.new_json);
+  });
+
+  test('confirmation_email_sent_at alimenta o texto; body.emailSent do cliente é ignorado', async () => {
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).toContain('Em instantes enviamos');
+    await q.run("UPDATE flight_changes SET confirmation_email_sent_at=datetime('now') WHERE id=?", [c.id]);
+    expect((await agent.get(`/api/flight-changes/${c.id}`)).body.messages.confirmation).toContain('Enviamos o novo voucher por e-mail');
+    const c2 = await criarCasoConfirmado(agent, csrf);
+    const r = await agent.post(`/api/flight-changes/${c2.c.id}/confirm`).set('X-CSRF-Token', csrf).send({ emailSent: true });
+    expect(r.body.messages.confirmation).toContain('Em instantes enviamos');
+  });
+
+  test('voucher_id de outro usuário: 404 (IDOR)', async () => {
+    const { agent, csrf } = await authed();
+    const outro = await q.run(`INSERT INTO users (email, nome, password_hash, role, criado_em) VALUES ('idor-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com', 'X', 'x', 'user', datetime('now'))`);
+    const vid = (await q.run("INSERT INTO vouchers (user_id, carrier, layout_version, unified_json) VALUES (?, 'azul', 'azul.confirmacao.v1', '{}')", [outro.lastID])).lastID;
+    const r = await agent.post('/api/flight-changes').set('X-CSRF-Token', csrf).send({ voucher_id: vid });
+    expect(r.status).toBe(404);
+  });
+
+  test('e-mail do aviso: telefone malicioso não gera link perigoso', () => {
+    const v = { reservation: { locator: 'A1' }, passengers: [{ name: 'Maria' }], trips: [] };
+    for (const phone of ['javascript:alert(1)', '"><script>alert(1)</script>', "48999991234' onclick='x"]) {
+      const html = buildNoticeEmailHtml(v, { supportPhone: phone });
+      expect(html).not.toMatch(/href="javascript:/i);
+      expect(html).not.toContain('<script>');
+      expect(html).not.toContain("onclick='");
+    }
+  });
 });
 
 describe('e-mail do aviso', () => {
