@@ -7,7 +7,24 @@
 //  (b) os sobrantes são pareados por ordem (índice entre os sobrantes).
 // Saída: trechos antigos na ordem original (cada um com seu par/estado), depois os `novo`.
 //
-// Limitação conhecida: passageiros homônimos são tratados como um só.
+// Passageiros: duas etapas. (1) chave EXATA = tokens do nome ordenados (sem acentos/pontuação; '/', ',', '.', '-'
+// separam; preposições e títulos GDS MR MRS MS MSTR MISS CHD INF ignorados; iniciais de 1 letra CONTAM), então
+// "BRITO, ALCIMARA" == "ALCIMARA BRITO" == "SILVA/JOSE MR" == "JOSE SILVA", mas "J SILVA" != "A SILVA". Sem
+// tokens úteis, a chave é o nome normalizado inteiro (nunca some das listas). (2) Pareamento FLEXÍVEL dos
+// sobrantes, ignorando iniciais: nome igual ou subconjunto estrito do outro (a cia às vezes omite nome do meio)
+// com o menor tendo >= 2 tokens e os tokens extras do maior fora de {JUNIOR JR FILHO FILHA NETO NETA SOBRINHO
+// SEGUNDO TERCEIRO II III}. Relatórios mostram o nome original.
+// Limitações: homônimos são um só; pai/filho sem sufixo e "JOSE SILVA" vs "JOSE CARLOS SILVA" são tratados
+// como a mesma pessoa.
+//
+// Bagagem: cada item vira {tipo, kg, qty}. tipo = 'mao' se label/weightText casa
+// /m[aã]o|cabine|carry|hand|mochila|item pessoal/i, senão 'despachada'. kg EXIGE unidade (`N kg`, em weightText
+// ou label); número solto só vale se o weightText inteiro for um número. 'N mala(s)/peça(s)/volume(s)' alimenta
+// qty (nunca kg); senão qty = Number(quantity), padrão 1. Soma qty de itens iguais (tipo|kg) DENTRO da direção
+// (sem direção = direção '*'), depois toma o MÁXIMO entre as direções (ida+volta 1×23kg == uma entrada 1×23kg;
+// duas entradas 23kg na mesma direção == 2×). kg desconhecido ('?') num lado é curinga para o mesmo tipo quando
+// há exatamente um item do tipo em cada lado. baggageChanged só é true quando AMBOS os lados trazem bagagem e
+// os mapas diferem (lado sem bagagem = desconhecido). baggageDetail lista antes/depois.
 
 const ISO_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
@@ -64,23 +81,36 @@ function groupByDirection(trips) {
   return map;
 }
 
-const NAME_STOP = new Set(['DA', 'DE', 'DO', 'DAS', 'DOS', 'E']);
+// Títulos/tratamentos do formato GDS ("SILVA/JOSE MR") e preposições: nunca fazem parte da identidade.
+const NAME_STOP = new Set(['DA', 'DE', 'DO', 'DAS', 'DOS', 'E', 'MR', 'MRS', 'MS', 'MSTR', 'MISS', 'CHD', 'INF']);
+// Sufixos de geração: se o token extra do nome maior é um destes, NÃO é "o mesmo passageiro abreviado".
+const NAME_SUFFIX = new Set(['JUNIOR', 'JR', 'FILHO', 'FILHA', 'NETO', 'NETA', 'SOBRINHO', 'SEGUNDO', 'TERCEIRO', 'II', 'III']);
+const normName = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 function nameTokens(s) {
-  const toks = String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
-    .replace(/[,.\-]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !NAME_STOP.has(t));
+  const toks = normName(s).replace(/[,.\-/]/g, ' ').split(/\s+/).filter(t => t && !NAME_STOP.has(t));
   return [...new Set(toks)].sort();
 }
 const isSubset = (small, big) => small.every(t => big.includes(t));
 
-/** Lista de {tokens, key, show} (sem duplicatas pela chave canônica). */
+/** Lista de {tokens (chave exata, com iniciais), core (sem iniciais), key, show}, sem duplicatas pela chave. */
 function namesOf(list) {
   const map = new Map();
   (list || []).filter(Boolean).forEach(p => {
+    const show = squash(p.name);
+    if (!show) return;
     const tokens = nameTokens(p.name);
-    const key = tokens.join(' ');
-    if (key && !map.has(key)) map.set(key, { tokens, key, show: squash(p.name) });
+    const key = tokens.length ? tokens.join(' ') : normName(show).replace(/\s+/g, ' ');
+    if (!map.has(key)) map.set(key, { tokens, core: tokens.filter(t => t.length > 1), key, show });
   });
   return [...map.values()];
+}
+
+// Pareamento flexível (2º passe): ignora iniciais; igual ou subconjunto estrito (menor com >= 2 tokens)
+// cujos tokens extras não sejam sufixos de geração.
+function flexMatch(a, b) {
+  const [small, big] = a.core.length <= b.core.length ? [a.core, b.core] : [b.core, a.core];
+  if (small.length < 2 || !isSubset(small, big)) return false;
+  return big.filter(t => !small.includes(t)).every(t => !NAME_SUFFIX.has(t));
 }
 
 function diffPassengers(oldList, newList) {
@@ -92,11 +122,7 @@ function diffPassengers(oldList, newList) {
   });
   olds.forEach((o, i) => {
     if (usedOld.has(i)) return;
-    const j = news.findIndex((n, idx) => {
-      if (usedNew.has(idx)) return false;
-      const [small, big] = o.tokens.length <= n.tokens.length ? [o.tokens, n.tokens] : [n.tokens, o.tokens];
-      return small.length >= 2 && small.length < big.length && isSubset(small, big);
-    });
+    const j = news.findIndex((n, idx) => !usedNew.has(idx) && flexMatch(o, n));
     if (j >= 0) { usedOld.add(i); usedNew.add(j); }
   });
   return {
@@ -106,30 +132,53 @@ function diffPassengers(oldList, newList) {
 }
 
 const HAND_RE = /m[aã]o|cabine|carry|hand|mochila|item pessoal/i;
-const KG_RE = /(\d+(?:[.,]\d+)?)/;
+const KG_RE = /(\d+(?:[.,]\d+)?)\s*kg\b/i;
+const BARE_NUM_RE = /^\s*(\d+(?:[.,]\d+)?)\s*$/;
+const COUNT_RE = /(\d+)\s*(?:malas?|pe[cç]as?|volumes?)\b/i;
+const toNum = (s) => String(Number(String(s).replace(',', '.')));
+
+/** Mapa `tipo|kg` -> qty por direção (soma dentro da direção), depois MÁXIMO entre as direções. */
 function baggageMap(list) {
   const items = (list || []).filter(Boolean);
-  const map = new Map();
+  const byDir = new Map();
   for (const b of items) {
-    const tipo = HAND_RE.test(`${b.label || ''} ${b.weightText || ''}`) ? 'mao' : 'despachada';
-    const m = KG_RE.exec(String(b.weightText || '')) || KG_RE.exec(String(b.label || ''));
-    const kg = m ? String(Number(m[1].replace(',', '.'))) : null;
+    const wt = String(b.weightText || ''), lb = String(b.label || '');
+    const tipo = HAND_RE.test(`${lb} ${wt}`) ? 'mao' : 'despachada';
+    const m = KG_RE.exec(wt) || BARE_NUM_RE.exec(wt) || KG_RE.exec(lb);
+    const kg = m ? toNum(m[1]) : null;
+    const c = COUNT_RE.exec(wt) || COUNT_RE.exec(lb);
     const q = Number(b.quantity);
-    const qty = b.quantity == null || b.quantity === '' || !Number.isFinite(q) ? 1 : q;
-    const key = `${tipo}|${kg ?? '?'}`;
-    map.set(key, Math.max(map.get(key) || 0, qty));
+    const qty = c ? Number(c[1]) : (b.quantity == null || b.quantity === '' || !Number.isFinite(q) ? 1 : q);
+    const dir = b.direction || '*';
+    if (!byDir.has(dir)) byDir.set(dir, new Map());
+    const key = `${tipo}|${kg ?? '?'}`, m2 = byDir.get(dir);
+    m2.set(key, (m2.get(key) || 0) + qty);
   }
+  const map = new Map();
+  for (const m2 of byDir.values()) for (const [k, q] of m2) map.set(k, Math.max(map.get(k) || 0, q));
   return { count: items.length, map };
 }
 const baggageLines = (map) => [...map].sort().map(([k, q]) => {
   const [tipo, kg] = k.split('|');
   return `${q}× ${tipo === 'mao' ? 'mão' : 'despachada'}${kg !== '?' ? ` ${kg}kg` : ''}`;
 });
+// kg desconhecido ('?') num lado é curinga para o mesmo tipo quando há exatamente um item desse tipo em cada lado.
+function applyKgWildcard(a, b) {
+  const out = new Map(b);
+  for (const tipo of ['mao', 'despachada']) {
+    const ka = [...a.keys()].filter(k => k.startsWith(tipo + '|'));
+    const kb = [...b.keys()].filter(k => k.startsWith(tipo + '|'));
+    if (ka.length === 1 && kb.length === 1 && ka[0] !== kb[0] && (ka[0].endsWith('|?') || kb[0].endsWith('|?'))) {
+      out.set(ka[0], out.get(kb[0])); out.delete(kb[0]);
+    }
+  }
+  return out;
+}
 function diffBaggage(oldList, newList) {
   const a = baggageMap(oldList), b = baggageMap(newList);
   if (!a.count || !b.count) return { changed: false, detail: null };
   const sig = (m) => [...m].sort().map(([k, q]) => `${k}=${q}`).join(';');
-  if (sig(a.map) === sig(b.map)) return { changed: false, detail: null };
+  if (sig(a.map) === sig(applyKgWildcard(a.map, b.map))) return { changed: false, detail: null };
   return { changed: true, detail: { antes: baggageLines(a.map), depois: baggageLines(b.map) } };
 }
 

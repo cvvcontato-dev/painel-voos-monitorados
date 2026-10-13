@@ -223,3 +223,58 @@ describe('bagagem: normalização por tipo/kg/qty', () => {
     same({ direction: 'ida', weightText: '23,0 kg', quantity: 1 });
   });
 });
+
+describe('revisão: nomes (iniciais, GDS, sufixos) e bagagem (unidade, qty, direção)', () => {
+  const pax = (...names) => names.map(name => ({ name }));
+  const dp = (a, b) => diffVouchers(v({ passengers: pax(...a) }), v({ passengers: pax(...b) })).passengers;
+  const NONE = { adicionados: [], removidos: [] };
+
+  test('iniciais contam na chave exata: J SILVA != A SILVA; "J S" não some das listas', () => {
+    expect(dp(['J SILVA'], ['A SILVA'])).toEqual({ adicionados: ['A SILVA'], removidos: ['J SILVA'] });
+    expect(dp(['J S'], ['A B'])).toEqual({ adicionados: ['A B'], removidos: ['J S'] });
+    expect(dp(['J S'], ['J S'])).toEqual(NONE);
+  });
+  test('iniciais só ajudam no pareamento flexível', () => {
+    expect(dp(['JOAO P SOUZA'], ['SOUZA, JOAO'])).toEqual(NONE);
+    expect(dp(['JOAO P SOUZA'], ['SOUZA, JOAO R'])).toEqual(NONE);
+  });
+  test('formato GDS com "/" e títulos', () => {
+    expect(dp(['SILVA/JOSE MR'], ['JOSE SILVA'])).toEqual(NONE);
+    expect(dp(['SANTOS/ANA MRS', 'LIMA/BIA MISS'], ['Ana Santos', 'Bia Lima'])).toEqual(NONE);
+    expect(dp(['SOUZA/LEO CHD'], ['LEO SOUZA'])).toEqual(NONE);
+  });
+  test('subconjunto não vale se o token extra é sufixo (JUNIOR, FILHO...)', () => {
+    expect(dp(['JOSE SILVA'], ['JOSE SILVA JUNIOR'])).toEqual({ adicionados: ['JOSE SILVA JUNIOR'], removidos: ['JOSE SILVA'] });
+    expect(dp(['JOSE SILVA'], ['JOSE SILVA FILHO']).adicionados).toEqual(['JOSE SILVA FILHO']);
+    expect(dp(['JOSE SILVA'], ['JOSE CARLOS SILVA'])).toEqual(NONE);   // limitação documentada
+  });
+
+  const bag = (a, b) => diffVouchers(v({ baggage: a }), v({ baggage: b }));
+  const item = (weightText, o = {}) => ({ direction: 'ida', weightText, ...o });
+
+  test('"1 mala despachada" vs "2 malas despachadas": mudou por quantidade, não por kg', () => {
+    const d = bag([item('1 mala despachada')], [item('2 malas despachadas')]);
+    expect(d.baggageChanged).toBe(true);
+    expect(d.baggageDetail).toEqual({ antes: ['1× despachada'], depois: ['2× despachada'] });
+  });
+  test('"23kg" vs "1 peça de 23kg" igual; "1 mala" dos dois lados igual; 23kg→32kg mudou', () => {
+    expect(bag([item('23kg', { quantity: 1 })], [item('1 peça de 23kg')]).baggageChanged).toBe(false);
+    expect(bag([item('1 mala')], [item('1 mala', { direction: 'volta' })]).baggageChanged).toBe(false);
+    expect(bag([item('23kg')], [item('32kg')]).baggageChanged).toBe(true);
+  });
+  test('número solto só vale se weightText inteiro for um número', () => {
+    expect(bag([item('23')], [item('23 kg')]).baggageChanged).toBe(false);
+    expect(bag([item('23')], [item('32')]).baggageChanged).toBe(true);
+  });
+  test('kg desconhecido em um lado é curinga quando há um único item do tipo em cada lado', () => {
+    expect(bag([item('', { label: 'Bagagem despachada', quantity: 1 })], [item('23kg')]).baggageChanged).toBe(false);
+    expect(bag([item('', { label: 'Bagagem despachada', quantity: 1 })], [item('23kg', { quantity: 2 })]).baggageChanged).toBe(true);
+    // dois itens do tipo em um lado: sem curinga
+    expect(bag([item('', { label: 'Bagagem despachada' })], [item('23kg'), item('32kg')]).baggageChanged).toBe(true);
+  });
+  test('soma dentro da direção, máximo entre direções', () => {
+    expect(bag([item('23kg')], [item('23kg'), item('23kg')]).baggageChanged).toBe(true);
+    expect(bag([item('23kg')], [item('23kg'), item('23kg', { direction: 'volta' })]).baggageChanged).toBe(false);
+    expect(bag([item('23kg'), item('23kg', { direction: 'volta' })], [item('23kg', { direction: undefined })]).baggageChanged).toBe(false);
+  });
+});

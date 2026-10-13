@@ -543,3 +543,70 @@ describe('link do voucher novo e preview do e-mail', () => {
     expect(r.status).toBe(500); expect(r.body.error).toBe('voucher_corrompido');
   });
 });
+
+describe('revisão: link só com PUBLIC_BASE_URL, preview sem mudanças e escape', () => {
+  const { transporter } = require('../services/notifier');
+  let saved;
+  beforeEach(() => { saved = { b: process.env.PUBLIC_BASE_URL, u: process.env.EMAIL_USER, p: process.env.EMAIL_PASS }; process.env.EMAIL_USER = 'u@test.com'; process.env.EMAIL_PASS = 'x'; });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    for (const [k, v] of [['PUBLIC_BASE_URL', saved.b], ['EMAIL_USER', saved.u], ['EMAIL_PASS', saved.p]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  });
+
+  test('sem PUBLIC_BASE_URL: new_voucher_url null (Host forjado ignorado), mensagem e e-mail sem link', async () => {
+    delete process.env.PUBLIC_BASE_URL;
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const d = (await agent.get(`/api/flight-changes/${c.id}`).set('Host', 'evil.example')).body;
+    expect(d.new_voucher_url).toBeNull();
+    expect(d.messages.confirmation).not.toContain('já está disponível');
+    expect(d.messages.confirmation).not.toContain('evil.example');
+    const sendMail = jest.spyOn(transporter, 'sendMail').mockResolvedValue({ messageId: 'm' });
+    const s = await agent.post(`/api/flight-changes/${c.id}/send-email`).set('X-CSRF-Token', csrf).set('Host', 'evil.example').send({ kind: 'confirmacao', emails: 'a@b.com' });
+    expect(s.status).toBe(200);
+    expect(sendMail.mock.calls[0][0].html).not.toContain('evil.example');
+    expect(sendMail.mock.calls[0][0].html).not.toContain('/itinerario/');
+  });
+
+  test('com PUBLIC_BASE_URL (espaços e barra final removidos): usa a variável mesmo com Host forjado', async () => {
+    process.env.PUBLIC_BASE_URL = '  https://app.test//  ';
+    const { agent, csrf } = await authed();
+    const { c } = await criarCasoConfirmado(agent, csrf);
+    const d = (await agent.get(`/api/flight-changes/${c.id}`).set('Host', 'evil.example')).body;
+    expect(d.new_voucher_url).toMatch(/^https:\/\/app\.test\/itinerario\/[^/]+$/);
+  });
+
+  test('aviso de boot em produção sem PUBLIC_BASE_URL', () => {
+    delete process.env.PUBLIC_BASE_URL;
+    const envOld = process.env.NODE_ENV; process.env.NODE_ENV = 'production';
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try { jest.isolateModules(() => { require('../routes/flightChanges'); }); }
+    finally { process.env.NODE_ENV = envOld; }
+    expect(warn.mock.calls.filter(c => /PUBLIC_BASE_URL ausente: links de voucher novo desativados/.test(c[0]))).toHaveLength(1);
+  });
+
+  test('preview da confirmação sem mudanças: 409 nada_mudou', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('novo-igual');
+    await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const r = await agent.get(`/api/flight-changes/${c.id}/email-preview?kind=confirmacao`);
+    expect(r.status).toBe(409); expect(r.body.error).toBe('nada_mudou');
+  });
+
+  test('preview da confirmação escapa HTML vindo dos dados do voucher', async () => {
+    const { agent, csrf } = await authed();
+    const c = await criarCaso(agent, csrf);
+    const f = pdf('novo-xss');
+    const r = await agent.post(`/api/flight-changes/${c.id}/new-voucher`).set('X-CSRF-Token', csrf).attach('file', f.buf, f.opts);
+    const novo = r.body.new;
+    novo.passengers[0].name = '<script>alert(1)</script> Silva';
+    novo.trips[0].flightNumber = '<script>alert(2)</script>';
+    const put = await agent.put(`/api/flight-changes/${c.id}/new`).set('X-CSRF-Token', csrf).send({ unified: novo });
+    expect(put.status).toBe(200);
+    const p = await agent.get(`/api/flight-changes/${c.id}/email-preview?kind=confirmacao`);
+    expect(p.status).toBe(200);
+    expect(p.body.html).not.toContain('<script>');
+    expect(p.body.html).toContain('&lt;script&gt;');
+  });
+});

@@ -58,11 +58,13 @@ async function dropVoucher(id, userId, exceptCaseId = 0) {
   } catch (e) { console.error('[FLIGHT-CHANGES] cleanup de voucher falhou', id, e.message); }
 }
 
-// Base pública (links do voucher): PUBLIC_BASE_URL ou o host da própria requisição.
-const publicBaseUrl = (req) => (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+// Base pública dos links do voucher novo: SOMENTE PUBLIC_BASE_URL (nunca o Host da requisição, que é forjável).
+// Sem a variável, o link é desativado (new_voucher_url = null; mensagem e e-mail seguem sem ele).
+const publicBaseUrl = () => String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+if (process.env.NODE_ENV === 'production' && !publicBaseUrl()) console.warn('[FLIGHT-CHANGES] PUBLIC_BASE_URL ausente: links de voucher novo desativados');
 // Link público assinado da página do itinerário do voucher novo (mesmo padrão da aba Vouchers).
 const itinerarioUrlOf = (voucherId, baseUrl) => (voucherId && baseUrl ? `${baseUrl}/itinerario/${signVoucherToken(voucherId)}` : '');
-const detailFor = (req, row, opts) => detail(row, { ...opts, baseUrl: publicBaseUrl(req) });
+const detailFor = (req, row, opts) => detail(row, { ...opts, baseUrl: publicBaseUrl() });
 
 /**
  * Fonte ÚNICA do e-mail de confirmação: usada pelo envio e pelo preview (sem divergência).
@@ -275,7 +277,7 @@ router.post('/:id/send-email', async (req, res) => {
       const settings = await loadSettings();
       const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
       pdfPath = await renderVoucher({ voucherId: row.new_voucher_id, format: 'pdf', cookieHeader: req.headers.cookie, baseUrl });
-      const args = confirmationEmailArgs(novo, diff, settings, itinerarioUrlOf(row.new_voucher_id, publicBaseUrl(req)));
+      const args = confirmationEmailArgs(novo, diff, settings, itinerarioUrlOf(row.new_voucher_id, publicBaseUrl()));
       result = await sendVoucherEmail({ to: emails, bcc, attachmentPath: pdfPath, ...args });
     }
     if (!result.sucesso) return res.status(500).json({ error: 'falha ao enviar e-mail', details: result.erro });
@@ -309,7 +311,9 @@ router.get('/:id/email-preview', async (req, res) => {
     if (!row.new_json || !row.new_voucher_id) return res.status(409).json({ error: 'sem_voucher_novo' });
     const old = parse(row.old_json), novo = parse(row.new_json);
     if (!old || !novo) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
-    const args = confirmationEmailArgs(novo, diffVouchers(old, novo), await loadSettings(), itinerarioUrlOf(row.new_voucher_id, publicBaseUrl(req)));
+    const diff = diffVouchers(old, novo);
+    if (!diff.hasChanges) return res.status(409).json({ error: 'nada_mudou' });
+    const args = confirmationEmailArgs(novo, diff, await loadSettings(), itinerarioUrlOf(row.new_voucher_id, publicBaseUrl()));
     const html = await buildVoucherEmailHtml({ voucherData: args.voucherData, settings: args.settings, customMessage: args.customMessage, itinerarioUrl: args.itinerarioUrl });
     res.json({ subject: args.subject, html: inlineLogo(html) });
   } catch (e) { fail(req, res, e); }
