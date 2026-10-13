@@ -85,7 +85,7 @@ export default function BackupsPanel({ onToast }) {
                   {i === 0 && <span className="ml-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">mais recente</span>}
                 </div>
                 <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono truncate">
-                  {b.arquivo} · {fmtBytes(b.bytes)}
+                  {b.arquivo} · {fmtBytes(b.bytes)}{b.fotos > 0 && ` · ${b.fotos} foto(s) de fundo`}
                 </div>
               </div>
               <a

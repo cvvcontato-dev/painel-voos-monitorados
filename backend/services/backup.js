@@ -12,6 +12,12 @@ const SUFFIX = '.sqlite';
 // -NN quando duas cópias caem no mesmo segundo.
 const FILE_RE = /^database-\d{8}-\d{6}(-\d{2})?\.sqlite$/;
 
+// Fotos do banco de fundos: <dataDir>/promo-backgrounds → backups/fundos-<carimbo>/
+const BG_SRC = path.join(dataDir, 'promo-backgrounds');
+const BG_PREFIX = 'fundos-';
+const BG_RE = /^fundos-\d{8}-\d{6}(-\d{2})?$/;
+const BG_FILE_RE = /^[a-z0-9][a-z0-9-]*\.(jpg|png|webp)$/;
+
 function keepCount() {
   const n = parseInt(process.env.BACKUP_KEEP, 10);
   return Number.isFinite(n) && n > 0 ? Math.min(n, 365) : 14;
@@ -33,6 +39,11 @@ function ensureDir() {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
 
+function fotosDoBackup(arquivo) {
+  const pasta = path.join(BACKUP_DIR, BG_PREFIX + arquivo.slice(PREFIX.length, -SUFFIX.length));
+  try { return fs.readdirSync(pasta).length; } catch { return 0; }
+}
+
 /** Lista os backups existentes, mais recentes primeiro. */
 function listBackups() {
   try {
@@ -41,13 +52,47 @@ function listBackups() {
       .filter(f => FILE_RE.test(f))
       .map(f => {
         const st = fs.statSync(path.join(BACKUP_DIR, f));
-        return { arquivo: f, bytes: st.size, criado_em: st.mtime.toISOString() };
+        return { arquivo: f, bytes: st.size, criado_em: st.mtime.toISOString(), fotos: fotosDoBackup(f) };
       })
       .sort((a, b) => b.criado_em.localeCompare(a.criado_em));
   } catch (err) {
     console.error('[BACKUP] Falha ao listar:', err.message);
     return [];
   }
+}
+
+/** Copia as fotos de fundo para backups/fundos-<carimbo>/ (hard link; cópia como fallback). */
+function backupBackgrounds(carimbo) {
+  try {
+    if (!fs.existsSync(BG_SRC)) return { ok: true, arquivos: 0, pasta: null };
+    const arquivos = fs.readdirSync(BG_SRC).filter(f => BG_FILE_RE.test(f));
+    if (!arquivos.length) return { ok: true, arquivos: 0, pasta: null };
+    ensureDir();
+    const pasta = path.join(BACKUP_DIR, BG_PREFIX + carimbo);
+    fs.mkdirSync(pasta, { recursive: true });
+    for (const f of arquivos) {
+      const origem = path.join(BG_SRC, f);
+      const destino = path.join(pasta, f);
+      if (fs.existsSync(destino)) continue;
+      try { fs.linkSync(origem, destino); }
+      catch { fs.copyFileSync(origem, destino); }
+    }
+    return { ok: true, arquivos: arquivos.length, pasta: path.basename(pasta) };
+  } catch (err) {
+    console.error('[BACKUP] Falha ao copiar as fotos de fundo:', err.message);
+    return { ok: false, arquivos: 0, erro: err.message };
+  }
+}
+
+function rotateBackgrounds() {
+  const keep = keepCount();
+  try {
+    const pastas = fs.readdirSync(BACKUP_DIR).filter(f => BG_RE.test(f)).sort().reverse();
+    for (const p of pastas.slice(keep)) {
+      try { fs.rmSync(path.join(BACKUP_DIR, p), { recursive: true, force: true }); }
+      catch (err) { console.error(`[BACKUP] Não consegui apagar ${p}:`, err.message); }
+    }
+  } catch { /* diretório ainda não existe */ }
 }
 
 /** Remove os backups além do limite de retenção. Retorna quantos apagou. */
@@ -60,6 +105,7 @@ function rotate() {
     try { fs.unlinkSync(path.join(BACKUP_DIR, b.arquivo)); apagados++; }
     catch (err) { console.error(`[BACKUP] Não consegui apagar ${b.arquivo}:`, err.message); }
   }
+  rotateBackgrounds();
   return apagados;
 }
 
@@ -83,11 +129,11 @@ function executarBackup() {
   return new Promise((resolve) => {
     if (!isEnabled()) return resolve({ ok: false, motivo: 'desativado' });
 
-    let destino;
+    let destino, base;
     try {
       ensureDir();
       // VACUUM INTO recusa arquivo existente: procura um nome livre no mesmo segundo.
-      const base = `${PREFIX}${stamp()}`;
+      base = `${PREFIX}${stamp()}`;
       destino = path.join(BACKUP_DIR, `${base}${SUFFIX}`);
       for (let i = 1; fs.existsSync(destino) && i <= 99; i++) {
         destino = path.join(BACKUP_DIR, `${base}-${String(i).padStart(2, '0')}${SUFFIX}`);
@@ -107,11 +153,13 @@ function executarBackup() {
       }
       let bytes = 0;
       try { bytes = fs.statSync(destino).size; } catch { /* ignore */ }
+      const fotos = backupBackgrounds(base.slice(PREFIX.length));
       const apagados = rotate();
       const ms = Date.now() - inicio;
       console.log(`[BACKUP] ${path.basename(destino)} — ${(bytes / 1024).toFixed(0)} KB em ${ms}ms`
+                + `${fotos.arquivos ? ` | ${fotos.arquivos} foto(s) de fundo` : ''}`
                 + `${apagados ? ` | ${apagados} antigo(s) removido(s)` : ''}`);
-      resolve({ ok: true, arquivo: path.basename(destino), bytes, duracao_ms: ms, removidos: apagados });
+      resolve({ ok: true, arquivo: path.basename(destino), bytes, duracao_ms: ms, removidos: apagados, fotos });
     });
   });
 }
@@ -157,4 +205,4 @@ function resolveBackupPath(nome) {
   return fs.existsSync(alvo) ? alvo : null;
 }
 
-module.exports = { runBackup, listBackups, rotate, startBackupScheduler, resolveBackupPath, BACKUP_DIR };
+module.exports = { runBackup, listBackups, rotate, startBackupScheduler, resolveBackupPath, BACKUP_DIR, backupBackgrounds, BG_RE };
