@@ -56,21 +56,93 @@ test('runBackup inclui as fotos e listBackups informa quantas', async () => {
 test('falha ao copiar as fotos não derruba o backup do banco', async () => {
   fs.mkdirSync(SRC, { recursive: true });
   fs.writeFileSync(path.join(SRC, 'x-eeeeeeeeee.jpg'), 'J');
-  const origCopy = fs.copyFileSync; const origLink = fs.linkSync;
-  fs.linkSync = () => { throw new Error('sem link'); };
-  fs.copyFileSync = () => { throw new Error('disco cheio'); };
+  const l = jest.spyOn(fs, 'linkSync').mockImplementation(() => { const e = new Error('sem link'); e.code = 'EXDEV'; throw e; });
+  const c = jest.spyOn(fs, 'copyFileSync').mockImplementation(() => { throw new Error('disco cheio'); });
   try {
     const r = await backup.runBackup();
     expect(r.ok).toBe(true);                    // o banco foi salvo
     expect(r.fotos.ok).toBe(false);             // só as fotos falharam
     expect(r.fotos.erro).toMatch(/disco cheio/);
-  } finally { fs.copyFileSync = origCopy; fs.linkSync = origLink; }
+  } finally { l.mockRestore(); c.mockRestore(); }
 });
 
-test('rotação mantém só as BACKUP_KEEP pastas de fotos mais recentes', () => {
+test('fallback: hard link falha com EXDEV e a cópia funciona', () => {
+  fs.mkdirSync(SRC, { recursive: true });
+  fs.writeFileSync(path.join(SRC, 'bh-1111111111.jpg'), 'BH');
+  const l = jest.spyOn(fs, 'linkSync').mockImplementation(() => { const e = new Error('x'); e.code = 'EXDEV'; throw e; });
+  try {
+    const r = backup.backupBackgrounds('20260101-000000');
+    expect(r).toMatchObject({ ok: true, arquivos: 1 });
+    expect(fs.readFileSync(path.join(backup.BACKUP_DIR, 'fundos-20260101-000000', 'bh-1111111111.jpg'), 'utf8')).toBe('BH');
+  } finally { l.mockRestore(); }
+});
+
+test('foto removida durante a cópia (ENOENT) é pulada e as demais seguem', () => {
+  fs.mkdirSync(SRC, { recursive: true });
+  fs.writeFileSync(path.join(SRC, 'a-2222222222.jpg'), 'A');
+  fs.writeFileSync(path.join(SRC, 'b-3333333333.jpg'), 'B');
+  const orig = fs.linkSync;
+  const l = jest.spyOn(fs, 'linkSync').mockImplementation((o, d) => {
+    if (o.includes('a-2222222222')) { const e = new Error('sumiu'); e.code = 'ENOENT'; throw e; }
+    return orig(o, d);
+  });
+  try {
+    const r = backup.backupBackgrounds('20260101-000000');
+    expect(r).toMatchObject({ ok: true, arquivos: 1 });
+    expect(fs.readdirSync(path.join(backup.BACKUP_DIR, 'fundos-20260101-000000'))).toEqual(['b-3333333333.jpg']);
+  } finally { l.mockRestore(); }
+});
+
+test('falha no meio não deixa pasta parcial nem .tmp', () => {
+  fs.mkdirSync(SRC, { recursive: true });
+  fs.writeFileSync(path.join(SRC, 'a-4444444444.jpg'), 'A');
+  fs.writeFileSync(path.join(SRC, 'b-5555555555.jpg'), 'B');
+  const orig = fs.linkSync; let n = 0;
+  const l = jest.spyOn(fs, 'linkSync').mockImplementation((o, d) => {
+    if (++n === 2) throw new Error('falha de E/S');
+    return orig(o, d);
+  });
+  try {
+    const r = backup.backupBackgrounds('20260101-000000');
+    expect(r.ok).toBe(false);
+    expect(fs.readdirSync(backup.BACKUP_DIR)).toEqual([]);
+  } finally { l.mockRestore(); }
+});
+
+test('varre .tmp órfão e listBackups conta só imagens válidas', () => {
+  fs.mkdirSync(backup.BACKUP_DIR, { recursive: true });
+  fs.mkdirSync(path.join(backup.BACKUP_DIR, 'fundos-20250101-000000.tmp'));
+  fs.mkdirSync(SRC, { recursive: true });
+  fs.writeFileSync(path.join(SRC, 'z-7777777777.jpg'), 'Z');
+  backup.backupBackgrounds('20260101-000000');
+  expect(fs.existsSync(path.join(backup.BACKUP_DIR, 'fundos-20250101-000000.tmp'))).toBe(false);
+  fs.writeFileSync(path.join(backup.BACKUP_DIR, 'database-20260202-000000.sqlite'), 'db');
+  const pasta = path.join(backup.BACKUP_DIR, 'fundos-20260202-000000');
+  fs.mkdirSync(pasta);
+  fs.writeFileSync(path.join(pasta, 'ok-6666666666.jpg'), 'J');
+  fs.writeFileSync(path.join(pasta, 'lixo.txt'), 'x');
+  expect(backup.listBackups()[0].fotos).toBe(1);
+});
+
+test('rotação apaga as pastas de fotos cujo .sqlite foi removido', () => {
   fs.mkdirSync(SRC, { recursive: true });
   fs.writeFileSync(path.join(SRC, 'a-ffffffffff.jpg'), 'J');
-  ['20260101-000001', '20260101-000002', '20260101-000003'].forEach(s => backup.backupBackgrounds(s));
+  fs.mkdirSync(backup.BACKUP_DIR, { recursive: true });
+  ['20260101-000001', '20260101-000002', '20260101-000003'].forEach((s, i) => {
+    const f = path.join(backup.BACKUP_DIR, `database-${s}.sqlite`);
+    fs.writeFileSync(f, 'db');
+    const t = new Date(2026, 0, 1, 0, 0, i + 1);
+    fs.utimesSync(f, t, t);
+    backup.backupBackgrounds(s);
+  });
   backup.rotate();
-  expect(bgBackups()).toEqual(['fundos-20260101-000002', 'fundos-20260101-000003']);
+  expect(fs.readdirSync(backup.BACKUP_DIR).filter(f => backup.BG_RE.test(f)).sort())
+    .toEqual(['fundos-20260101-000002', 'fundos-20260101-000003']);
+});
+
+test('pasta que não casa BG_RE nunca é apagada pela rotação', () => {
+  const lixo = path.join(backup.BACKUP_DIR, 'fundos-lixo');
+  fs.mkdirSync(lixo, { recursive: true });
+  backup.rotate();
+  expect(fs.existsSync(lixo)).toBe(true);
 });

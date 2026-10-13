@@ -16,6 +16,7 @@ const FILE_RE = /^database-\d{8}-\d{6}(-\d{2})?\.sqlite$/;
 const BG_SRC = path.join(dataDir, 'promo-backgrounds');
 const BG_PREFIX = 'fundos-';
 const BG_RE = /^fundos-\d{8}-\d{6}(-\d{2})?$/;
+const BG_TMP_RE = /^fundos-\d{8}-\d{6}(-\d{2})?\.tmp$/;
 const BG_FILE_RE = /^[a-z0-9][a-z0-9-]*\.(jpg|png|webp)$/;
 
 function keepCount() {
@@ -41,7 +42,7 @@ function ensureDir() {
 
 function fotosDoBackup(arquivo) {
   const pasta = path.join(BACKUP_DIR, BG_PREFIX + arquivo.slice(PREFIX.length, -SUFFIX.length));
-  try { return fs.readdirSync(pasta).length; } catch { return 0; }
+  try { return fs.readdirSync(pasta).filter(f => BG_FILE_RE.test(f)).length; } catch { return 0; }
 }
 
 /** Lista os backups existentes, mais recentes primeiro. */
@@ -61,34 +62,67 @@ function listBackups() {
   }
 }
 
-/** Copia as fotos de fundo para backups/fundos-<carimbo>/ (hard link; cópia como fallback). */
+// Erros de hard link que justificam cair para cópia (outro FS, permissão, limite de links).
+const LINK_FALLBACK = new Set(['EXDEV', 'EPERM', 'EMLINK', 'ENOTSUP', 'EACCES']);
+
+/**
+ * Copia as fotos de fundo para backups/fundos-<carimbo>/ (hard link; cópia como fallback).
+ * As fotos são imutáveis (nome aleatório, gravadas uma só vez), por isso o hard link é seguro.
+ * Monta em .tmp e só renomeia no fim, para uma falha no meio não deixar pasta parcial.
+ * Síncrono de propósito, como o restante do módulo (poucas fotos pequenas).
+ */
 function backupBackgrounds(carimbo) {
+  const tmp = path.join(BACKUP_DIR, `${BG_PREFIX}${carimbo}.tmp`);
   try {
+    // Sobras de uma execução interrompida.
+    try {
+      for (const f of fs.readdirSync(BACKUP_DIR).filter(f => BG_TMP_RE.test(f))) {
+        fs.rmSync(path.join(BACKUP_DIR, f), { recursive: true, force: true });
+      }
+    } catch { /* diretório ainda não existe */ }
+
     if (!fs.existsSync(BG_SRC)) return { ok: true, arquivos: 0, pasta: null };
     const arquivos = fs.readdirSync(BG_SRC).filter(f => BG_FILE_RE.test(f));
     if (!arquivos.length) return { ok: true, arquivos: 0, pasta: null };
     ensureDir();
-    const pasta = path.join(BACKUP_DIR, BG_PREFIX + carimbo);
-    fs.mkdirSync(pasta, { recursive: true });
+    fs.mkdirSync(tmp, { recursive: true });
+    let copiados = 0;
     for (const f of arquivos) {
       const origem = path.join(BG_SRC, f);
-      const destino = path.join(pasta, f);
-      if (fs.existsSync(destino)) continue;
-      try { fs.linkSync(origem, destino); }
-      catch { fs.copyFileSync(origem, destino); }
+      const destino = path.join(tmp, f);
+      try {
+        try { fs.linkSync(origem, destino); }
+        catch (err) {
+          if (!LINK_FALLBACK.has(err.code)) throw err;
+          fs.copyFileSync(origem, destino);
+        }
+        copiados++;
+      } catch (err) {
+        if (err.code === 'ENOENT') continue; // foto removida entre a listagem e a cópia
+        throw err;
+      }
     }
-    return { ok: true, arquivos: arquivos.length, pasta: path.basename(pasta) };
+    if (!copiados) {
+      fs.rmSync(tmp, { recursive: true, force: true });
+      return { ok: true, arquivos: 0, pasta: null };
+    }
+    const pasta = path.join(BACKUP_DIR, BG_PREFIX + carimbo);
+    fs.rmSync(pasta, { recursive: true, force: true });
+    fs.renameSync(tmp, pasta);
+    return { ok: true, arquivos: copiados, pasta: path.basename(pasta) };
   } catch (err) {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
     console.error('[BACKUP] Falha ao copiar as fotos de fundo:', err.message);
     return { ok: false, arquivos: 0, erro: err.message };
   }
 }
 
+/** Apaga as pastas de fotos cujo backup do banco (mesmo carimbo) não existe mais. */
 function rotateBackgrounds() {
-  const keep = keepCount();
   try {
-    const pastas = fs.readdirSync(BACKUP_DIR).filter(f => BG_RE.test(f)).sort().reverse();
-    for (const p of pastas.slice(keep)) {
+    const vivos = new Set(listBackups().map(b => b.arquivo.slice(PREFIX.length, -SUFFIX.length)));
+    for (const p of fs.readdirSync(BACKUP_DIR).filter(f => BG_RE.test(f))) {
+      if (vivos.has(p.slice(BG_PREFIX.length))) continue;
       try { fs.rmSync(path.join(BACKUP_DIR, p), { recursive: true, force: true }); }
       catch (err) { console.error(`[BACKUP] Não consegui apagar ${p}:`, err.message); }
     }
@@ -158,6 +192,7 @@ function executarBackup() {
       const ms = Date.now() - inicio;
       console.log(`[BACKUP] ${path.basename(destino)} — ${(bytes / 1024).toFixed(0)} KB em ${ms}ms`
                 + `${fotos.arquivos ? ` | ${fotos.arquivos} foto(s) de fundo` : ''}`
+                + `${fotos.ok ? '' : ` | FALHA nas fotos: ${fotos.erro}`}`
                 + `${apagados ? ` | ${apagados} antigo(s) removido(s)` : ''}`);
       resolve({ ok: true, arquivo: path.basename(destino), bytes, duracao_ms: ms, removidos: apagados, fotos });
     });
