@@ -64,8 +64,73 @@ function groupByDirection(trips) {
   return map;
 }
 
-function baggageSignature(list) {
-  return (list || []).filter(Boolean).map(b => `${b.direction}|${String(b.quantity)}|${compact(b.weightText)}`).sort().join(';');
+const NAME_STOP = new Set(['DA', 'DE', 'DO', 'DAS', 'DOS', 'E']);
+function nameTokens(s) {
+  const toks = String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+    .replace(/[,.\-]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !NAME_STOP.has(t));
+  return [...new Set(toks)].sort();
+}
+const isSubset = (small, big) => small.every(t => big.includes(t));
+
+/** Lista de {tokens, key, show} (sem duplicatas pela chave canônica). */
+function namesOf(list) {
+  const map = new Map();
+  (list || []).filter(Boolean).forEach(p => {
+    const tokens = nameTokens(p.name);
+    const key = tokens.join(' ');
+    if (key && !map.has(key)) map.set(key, { tokens, key, show: squash(p.name) });
+  });
+  return [...map.values()];
+}
+
+function diffPassengers(oldList, newList) {
+  const olds = namesOf(oldList), news = namesOf(newList);
+  const usedNew = new Set(), usedOld = new Set();
+  olds.forEach((o, i) => {
+    const j = news.findIndex((n, idx) => !usedNew.has(idx) && n.key === o.key);
+    if (j >= 0) { usedOld.add(i); usedNew.add(j); }
+  });
+  olds.forEach((o, i) => {
+    if (usedOld.has(i)) return;
+    const j = news.findIndex((n, idx) => {
+      if (usedNew.has(idx)) return false;
+      const [small, big] = o.tokens.length <= n.tokens.length ? [o.tokens, n.tokens] : [n.tokens, o.tokens];
+      return small.length >= 2 && small.length < big.length && isSubset(small, big);
+    });
+    if (j >= 0) { usedOld.add(i); usedNew.add(j); }
+  });
+  return {
+    adicionados: news.filter((_, j) => !usedNew.has(j)).map(n => n.show),
+    removidos: olds.filter((_, i) => !usedOld.has(i)).map(o => o.show)
+  };
+}
+
+const HAND_RE = /m[aã]o|cabine|carry|hand|mochila|item pessoal/i;
+const KG_RE = /(\d+(?:[.,]\d+)?)/;
+function baggageMap(list) {
+  const items = (list || []).filter(Boolean);
+  const map = new Map();
+  for (const b of items) {
+    const tipo = HAND_RE.test(`${b.label || ''} ${b.weightText || ''}`) ? 'mao' : 'despachada';
+    const m = KG_RE.exec(String(b.weightText || '')) || KG_RE.exec(String(b.label || ''));
+    const kg = m ? String(Number(m[1].replace(',', '.'))) : null;
+    const q = Number(b.quantity);
+    const qty = b.quantity == null || b.quantity === '' || !Number.isFinite(q) ? 1 : q;
+    const key = `${tipo}|${kg ?? '?'}`;
+    map.set(key, Math.max(map.get(key) || 0, qty));
+  }
+  return { count: items.length, map };
+}
+const baggageLines = (map) => [...map].sort().map(([k, q]) => {
+  const [tipo, kg] = k.split('|');
+  return `${q}× ${tipo === 'mao' ? 'mão' : 'despachada'}${kg !== '?' ? ` ${kg}kg` : ''}`;
+});
+function diffBaggage(oldList, newList) {
+  const a = baggageMap(oldList), b = baggageMap(newList);
+  if (!a.count || !b.count) return { changed: false, detail: null };
+  const sig = (m) => [...m].sort().map(([k, q]) => `${k}=${q}`).join(';');
+  if (sig(a.map) === sig(b.map)) return { changed: false, detail: null };
+  return { changed: true, detail: { antes: baggageLines(a.map), depois: baggageLines(b.map) } };
 }
 
 function diffVouchers(oldV, newV) {
@@ -104,18 +169,13 @@ function diffVouchers(oldV, newV) {
   const la = squash(o.reservation?.locator), lb = squash(n.reservation?.locator);
   const locatorChanged = la && lb && la.toUpperCase() !== lb.toUpperCase() ? { antes: la, depois: lb } : null;
 
-  const oldNames = new Map((o.passengers || []).filter(Boolean).map(p => [nameKey(p.name), squash(p.name)]).filter(([k]) => k));
-  const newNames = new Map((n.passengers || []).filter(Boolean).map(p => [nameKey(p.name), squash(p.name)]).filter(([k]) => k));
-  const passengers = {
-    adicionados: [...newNames].filter(([k]) => !oldNames.has(k)).map(([, v]) => v),
-    removidos: [...oldNames].filter(([k]) => !newNames.has(k)).map(([, v]) => v)
-  };
-
-  const baggageChanged = baggageSignature(o.baggage) !== baggageSignature(n.baggage);
+  const passengers = diffPassengers(o.passengers, n.passengers);
+  const bag = diffBaggage(o.baggage, n.baggage);
+  const baggageChanged = bag.changed;
   const hasChanges = trips.some(t => t.status !== 'igual') || !!locatorChanged
     || passengers.adicionados.length > 0 || passengers.removidos.length > 0 || baggageChanged;
 
-  return { trips, locatorChanged, passengers, baggageChanged, hasChanges };
+  return { trips, locatorChanged, passengers, baggageChanged, baggageDetail: bag.detail, hasChanges };
 }
 
 module.exports = { diffVouchers, formatLocal };

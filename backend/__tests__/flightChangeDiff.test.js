@@ -156,3 +156,70 @@ test('voo "G3 1234" vs "G31234" => igual; quantity "1" vs 1 => sem mudança', ()
   const c = v({ baggage: [{ direction: 'ida', weightText: '23kg', quantity: '1' }] });
   expect(diffVouchers(v(), c).baggageChanged).toBe(false);
 });
+
+describe('nomes de passageiros: conjunto de tokens', () => {
+  const pax = (...names) => names.map(name => ({ name }));
+  const dp = (a, b) => diffVouchers(v({ passengers: pax(...a) }), v({ passengers: pax(...b) })).passengers;
+
+  test('caso real: 4 pessoas em formato "SOBRENOME, NOME" vs "NOME SOBRENOME" não mudam', () => {
+    const a = ['BRITO, ALCIMARA', 'GONZAGA, TIELE', 'SILVA, JOSE', 'LIMA, ANA'];
+    const b = ['ALCIMARA BRITO', 'TIELE GONZAGA', 'Jose  Silva', 'Ana Lima'];
+    expect(dp(a, b)).toEqual({ adicionados: [], removidos: [] });
+    expect(dp(b, a)).toEqual({ adicionados: [], removidos: [] });
+  });
+  test('acentos, pontuação, iniciais e preposições são ignorados', () => {
+    expect(dp(['JOÃO P. DE SOUZA'], ['Souza, Joao'])).toEqual({ adicionados: [], removidos: [] });
+    expect(dp(['MARIA-CLARA DOS SANTOS'], ['SANTOS MARIA CLARA'])).toEqual({ adicionados: [], removidos: [] });
+  });
+  test('subconjunto estrito (menor com ≥2 tokens) é o mesmo passageiro', () => {
+    expect(dp(['MARIA SILVA'], ['MARIA DE FATIMA SILVA'])).toEqual({ adicionados: [], removidos: [] });
+    expect(dp(['MARIA DE FATIMA SILVA'], ['SILVA, MARIA'])).toEqual({ adicionados: [], removidos: [] });
+  });
+  test('homônimo parcial de 1 token NÃO casa', () => {
+    expect(dp(['MARIA'], ['MARIA SILVA'])).toEqual({ adicionados: ['MARIA SILVA'], removidos: ['MARIA'] });
+  });
+  test('pessoa realmente diferente continua detectada (nome original exibido)', () => {
+    expect(dp(['BRITO, ALCIMARA', 'LIMA, ANA'], ['ALCIMARA BRITO', 'Pedro Costa']))
+      .toEqual({ adicionados: ['Pedro Costa'], removidos: ['LIMA, ANA'] });
+  });
+  test('mesmo sobrenome, nome diferente não casa', () => {
+    expect(dp(['ANA SILVA'], ['BIA SILVA'])).toEqual({ adicionados: ['BIA SILVA'], removidos: ['ANA SILVA'] });
+  });
+});
+
+describe('bagagem: normalização por tipo/kg/qty', () => {
+  const bag = (...b) => diffVouchers(v({ baggage: [{ direction: 'ida', weightText: '23kg', quantity: 1 }] }), v({ baggage: b }));
+  const same = (...b) => expect(bag(...b).baggageChanged).toBe(false);
+
+  test('23kg, 23 KG e "Até 23 kg" são iguais; label diferente com mesmo conteúdo também', () => {
+    same({ direction: 'ida', weightText: '23 KG', quantity: 1 });
+    same({ direction: 'ida', weightText: 'Até 23 kg', quantity: 1 });
+    same({ direction: 'ida', label: 'Bagagem de porão', weightText: '23kg', quantity: 1 });
+    same({ direction: 'ida', label: 'Despachada 23 kg', quantity: 1 });
+  });
+  test('ida+volta vs uma entrada: igual (maior qty por chave, ignora direction)', () => {
+    same({ direction: 'ida', weightText: '23kg', quantity: 1 }, { direction: 'volta', weightText: '23kg', quantity: 1 });
+  });
+  test('um lado sem bagagem é desconhecido: sem mudança', () => {
+    expect(bag().baggageChanged).toBe(false);
+    expect(bag().baggageDetail).toBeNull();
+    const d = diffVouchers(v({ baggage: [] }), v());
+    expect(d.baggageChanged).toBe(false);
+  });
+  test('23kg → 32kg mudou, com detalhe', () => {
+    const d = bag({ direction: 'ida', weightText: '32kg', quantity: 1 });
+    expect(d.baggageChanged).toBe(true); expect(d.hasChanges).toBe(true);
+    expect(d.baggageDetail).toEqual({ antes: ['1× despachada 23kg'], depois: ['1× despachada 32kg'] });
+  });
+  test('qty 1 → 2 mudou', () => {
+    expect(bag({ direction: 'ida', weightText: '23kg', quantity: 2 }).baggageChanged).toBe(true);
+  });
+  test('item de mão adicionado mudou', () => {
+    const d = bag({ direction: 'ida', weightText: '23kg', quantity: 1 }, { direction: 'ida', label: 'Bagagem de mão', weightText: '10kg', quantity: 1 });
+    expect(d.baggageChanged).toBe(true);
+    expect(d.baggageDetail.depois).toContain('1× mão 10kg');
+  });
+  test('kg decimal com vírgula', () => {
+    same({ direction: 'ida', weightText: '23,0 kg', quantity: 1 });
+  });
+});
