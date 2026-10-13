@@ -18,13 +18,16 @@ function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
     return () => { alive.current = false; };
   }, []);
 
+  const [vErr, setVErr] = useState(false);
+  const [vTry, setVTry] = useState(0);
+
   useEffect(() => {
     let cancel = false;
     api.voucherList()
-      .then(v => { if (!cancel) setVouchers(Array.isArray(v) ? v : []); })
-      .catch(() => { if (!cancel) setVouchers([]); });
+      .then(v => { if (!cancel) { setVErr(false); setVouchers(Array.isArray(v) ? v : []); } })
+      .catch(() => { if (!cancel) { setVErr(true); setVouchers([]); } });
     return () => { cancel = true; };
-  }, []);
+  }, [vTry]);
 
   async function create(fn) {
     if (lock.current) return;
@@ -52,6 +55,11 @@ function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
         <label className={labelCls} htmlFor="fc-voucher">Usar um voucher salvo</label>
         {vouchers === null ? (
           <div className="text-xs text-slate-500">Carregando vouchers…</div>
+        ) : vErr ? (
+          <div className="text-xs text-red-600 dark:text-red-300 flex items-center gap-2">
+            Não consegui carregar os vouchers salvos.
+            <button type="button" className={btnGhost} onClick={() => { setVouchers(null); setVTry(n => n + 1); }}>Tentar de novo</button>
+          </div>
         ) : vouchers.length === 0 ? (
           <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum voucher salvo — envie o arquivo abaixo.</div>
         ) : (
@@ -71,8 +79,7 @@ function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
         onFile={file => create(() => api.createFromFile(file))}
         loading={busy}
         showToast={showToast}
-        label="Clique, arraste ou cole (Ctrl+V) o voucher — PDF ou imagem"
-      />
+              />
     </div>
   );
 }
@@ -83,9 +90,21 @@ export default function FlightChangesTab({ showToast }) {
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState(null);
 
+  const [listError, setListError] = useState(false);
+  const reqSeq = useRef(0);
+
   const reload = useCallback(async () => {
-    try { setItems(await api.list()); }
-    catch (e) { setItems(prev => prev || []); showToast(errorMessage(e, 'Erro ao carregar alterações'), 'error'); }
+    const n = ++reqSeq.current;
+    try {
+      const r = await api.list();
+      if (n !== reqSeq.current) return; // resposta fora de ordem
+      setItems(r);
+      setListError(false);
+    } catch (e) {
+      if (n !== reqSeq.current) return;
+      setListError(true);
+      showToast(errorMessage(e, 'Erro ao carregar alterações'), 'error');
+    }
   }, [showToast]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -124,7 +143,12 @@ export default function FlightChangesTab({ showToast }) {
           <Plus className="w-4 h-4" /> Nova alteração
         </button>
         <div className={`${sectionCls} max-h-[70vh] overflow-y-auto p-2`} aria-busy={items === null}>
-          {items === null ? (
+          {listError && items === null ? (
+            <div className="p-3 text-sm text-red-600 dark:text-red-300 space-y-2">
+              <p>Não consegui carregar a lista.</p>
+              <button type="button" className={btnGhost} onClick={() => { setListError(false); reload(); }}>Tentar de novo</button>
+            </div>
+          ) : items === null ? (
             <div className="p-3 text-sm text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
           ) : items.length === 0 ? (
             <div className="p-4 text-sm text-slate-600 dark:text-slate-400 space-y-2">
@@ -139,7 +163,7 @@ export default function FlightChangesTab({ showToast }) {
                 const active = selected?.id === it.id;
                 return (
                   <li key={it.id} className={`flex items-center gap-1 rounded-lg ${active ? 'bg-indigo-50 dark:bg-indigo-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
-                    <button type="button" onClick={() => open(it.id)} className="flex-1 text-left p-2 min-w-0 cursor-pointer">
+                    <button type="button" onClick={() => open(it.id)} aria-current={active ? 'true' : undefined} className="flex-1 text-left p-2 min-w-0 cursor-pointer">
                       <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate pii">{it.client_name || 'Cliente'}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400"><span className="pii">{it.locator || '—'}</span> · {fmtDateTime(it.created_at)}</div>
                       <span className={`inline-block mt-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>

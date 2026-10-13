@@ -7,7 +7,7 @@ export const STATUS = {
   confirmado: { label: 'Confirmado', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300' }
 };
 
-export const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 
 export function validEmails(raw) {
   const list = String(raw || '').split(/[,;\s]+/).filter(Boolean);

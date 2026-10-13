@@ -18,7 +18,7 @@ export default function UploadZone({ onFile, loading = false, disabled = false, 
       return;
     }
     setName(file.name || 'imagem colada');
-    onFile(file);
+    Promise.resolve(onFile(file)).finally(() => setName(''));
   }
 
   function open() {
@@ -36,7 +36,7 @@ export default function UploadZone({ onFile, loading = false, disabled = false, 
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); open(); } }}
       onPaste={e => { const f = e.clipboardData?.files?.[0]; if (f) { e.preventDefault(); take(f); } }}
       onDragOver={e => { e.preventDefault(); if (!blocked) setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDrag(false); }}
       onDrop={e => { e.preventDefault(); setDrag(false); take(e.dataTransfer?.files?.[0]); }}
       className={`rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
         blocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
@@ -58,7 +58,7 @@ export default function UploadZone({ onFile, loading = false, disabled = false, 
       ) : (
         <>
           <UploadCloud className="w-6 h-6 mx-auto mb-2 text-slate-400" />
-          <div>{label || 'Clique, arraste ou cole (Ctrl+V) o voucher — PDF ou imagem'}</div>
+          <div>{label || 'Clique, arraste ou, com esta área selecionada, cole (Ctrl+V) o voucher — PDF ou imagem'}</div>
         </>
       )}
       {name && <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 break-all">Arquivo: {name}</div>}

@@ -19,6 +19,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   const [editing, setEditing] = useState(false);
   const alive = useRef(true);
   const lock = useRef(false);
+  const ver = useRef(0); // versão do detalhe: descarta respostas antigas
 
   useEffect(() => {
     alive.current = true;
@@ -28,20 +29,27 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   useEffect(() => {
     if (initial) return;
     let cancel = false;
+    const v = ++ver.current;
     api.get(id)
-      .then(d => { if (!cancel) setDetail(d); })
+      .then(d => { if (!cancel && v === ver.current) setDetail(d); })
       .catch(e => { if (!cancel) { setLoadError(true); showToast(errorMessage(e, 'Erro ao abrir o caso'), 'error'); } });
     return () => { cancel = true; };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Executa uma ação com trava de duplo clique; ignora o resultado se o caso já foi trocado.
+  // Atualiza o detalhe só se for a versão mais recente e o caso ainda estiver aberto.
+  function commit(d, v) {
+    if (alive.current && v === ver.current) setDetail(d);
+  }
+
+  // Executa uma ação com trava de duplo clique. O onOk roda mesmo se o caso foi
+  // trocado (lista + toast); só o estado local depende de alive/versão.
   async function run(kind, fn, onOk) {
     if (lock.current) return;
     lock.current = true;
     setBusy(kind);
     try {
       const r = await fn();
-      if (alive.current) onOk?.(r);
+      await onOk?.(r);
     } catch (e) {
       showToast(errorMessage(e), 'error');
     } finally {
@@ -59,15 +67,22 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   const step2 = done || hasNew || skip || detail.status !== 'aviso_pendente';
   const st = STATUS[detail.status] || STATUS.aviso_pendente;
   const old = detail.old || {};
-  const apply = (d) => { setDetail(d); onChanged?.(); };
+  const apply = (d) => { commit(d, ++ver.current); onChanged?.(); };
+  const stopEditing = () => { if (alive.current) setEditing(false); };
 
   const markNotice = () => run('notice', () => api.markNoticeSent(id), d => { apply(d); showToast('Aviso marcado como enviado', 'success'); });
-  const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); setEditing(false); showToast('Voucher novo lido', 'success'); });
-  const saveEdits = (unified) => run('save', () => api.saveNew(id, unified), d => { apply(d); setEditing(false); showToast('Correções salvas', 'success'); });
+  const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); stopEditing(); showToast('Voucher novo lido', 'success'); });
+  const saveEdits = (unified) => run('save', () => api.saveNew(id, unified), d => { apply(d); stopEditing(); showToast('Correções salvas', 'success'); });
   const sendEmail = (kind) => (emails) => run('email', () => api.sendEmail(id, kind, emails), async () => {
     showToast('E-mail enviado', 'success');
-    try { const d = await api.get(id); if (alive.current) { setDetail(d); onChanged?.(); } }
-    catch { /* mantém o detalhe atual */ }
+    const v = ++ver.current;
+    try {
+      const d = await api.get(id);
+      commit(d, v);
+      onChanged?.();
+    } catch {
+      showToast('E-mail enviado, mas não consegui atualizar o caso — recarregue', 'warning');
+    }
   });
   function confirmCase() {
     if (!window.confirm('Confirmar a alteração? O caso será marcado como concluído.')) return;
@@ -103,7 +118,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
           text={detail.messages?.notice}
           busy={busy}
           readOnly={done}
-          emailBlocked={editing}
+          blocked={editing}
           emailLabel="Enviar e-mail do aviso"
           onSendEmail={sendEmail('aviso')}
           showToast={showToast}
@@ -132,7 +147,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
-                label={hasNew ? 'Substituir o voucher novo — clique, arraste ou cole (Ctrl+V)' : 'Clique, arraste ou cole (Ctrl+V) o voucher novo — PDF ou imagem'}
+                label={hasNew ? 'Substituir o voucher novo — clique, arraste ou, com esta área selecionada, cole (Ctrl+V)' : 'Clique, arraste ou, com esta área selecionada, cole (Ctrl+V) o voucher novo — PDF ou imagem'}
               />
             )}
             {hasNew && detail.diff && (
@@ -149,7 +164,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                   </button>
                 )}
                 {!done && editing && (
-                  <CorrectionForm unified={detail.new} saving={busy === 'save'} onSave={saveEdits} onCancel={() => setEditing(false)} showToast={showToast} />
+                  <CorrectionForm unified={detail.new} saving={busy === 'save'} onSave={saveEdits} onNoChange={() => { setEditing(false); showToast('Nada foi alterado', 'info'); }} onCancel={() => setEditing(false)} showToast={showToast} />
                 )}
                 {(hasChanges || done) && detail.messages?.confirmation && (
                   <MessageBox
@@ -158,7 +173,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                     text={detail.messages.confirmation}
                     busy={busy}
                     readOnly={done}
-                    emailBlocked={editing}
+                    blocked={editing}
                     emailLabel="Enviar e-mail com novo voucher (opcional)"
                     onSendEmail={sendEmail('confirmacao')}
                     showToast={showToast}
