@@ -59,7 +59,10 @@ router.post('/render-image', async (req, res) => {
   try {
     const out = await renderImage(promotion.promo_id, stripInternal(normalize(promotion)), { backgroundUrl: background_choice || null });
     return res.json(out);
-  } catch (err) { return res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('[PROMO-RENDER] Falha ao gerar arte:', err.message);
+    return res.status(500).json({ error: 'Não foi possível gerar a arte da promoção. Tente novamente; se o erro persistir, consulte os logs do servidor.' });
+  }
 });
 
 router.get('/backgrounds', async (req, res) => {

@@ -59,3 +59,19 @@ test('validate returns structured result', async () => {
   expect(res.body).toHaveProperty('valid');
   expect(res.body).toHaveProperty('warnings');
 });
+
+test('falha do Chromium fica nos logs sem expor detalhes técnicos ao painel', async () => {
+  const { agent, csrf } = await authed();
+  const { promo_id } = require('../helpers/promoWorkspace').create();
+  const { chromium } = require('playwright');
+  const launch = jest.spyOn(chromium, 'launch').mockRejectedValue(new Error('Target page closed: detalhes internos do Chromium'));
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const res = await agent.post('/api/promotions/render-image').set('X-CSRF-Token', csrf)
+      .send({ promotion: { promo_id, origin_city: 'Salvador', destination_city: 'Maceió', total_price: 1000, installments: 10 } });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toContain('Não foi possível gerar a arte');
+    expect(res.body.error).not.toContain('Target page');
+    expect(log).toHaveBeenCalledWith('[PROMO-RENDER] Falha ao gerar arte:', expect.stringContaining('Target page'));
+  } finally { launch.mockRestore(); log.mockRestore(); }
+});

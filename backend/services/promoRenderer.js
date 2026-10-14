@@ -102,7 +102,7 @@ async function renderImage(promo_id, rawPromo, { backgroundUrl } = {}) {
   // e os args --no-sandbox são necessários ao rodar como root no container.
   const launchOptions = {
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   };
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
     launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;

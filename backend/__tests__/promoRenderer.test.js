@@ -58,7 +58,13 @@ test('fillTemplate ignores internal _meta fields entirely', () => {
 
 test('renders a PNG with fixed dimensions', async () => {
   const { promo_id } = ws.create();
-  const out = await renderImage(promo_id, promo, { backgroundUrl: null });
+  const { chromium } = require('playwright');
+  const launch = jest.spyOn(chromium, 'launch');
+  let out;
+  try {
+    out = await renderImage(promo_id, promo, { backgroundUrl: null });
+    expect(launch.mock.calls[0][0].args).not.toContain('--single-process');
+  } finally { launch.mockRestore(); }
   expect(out.image_width).toBe(1080);
   expect(out.image_height).toBe(1620);
   expect(fs.existsSync(ws.resolveFile(promo_id, 'promocao_final.png'))).toBe(true);
