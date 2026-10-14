@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../hooks/useApi';
 import {
   Plane, Plus, Edit2, Trash2, ExternalLink, CheckCircle2, Circle,
@@ -56,6 +56,10 @@ export default function PrecosTab({ showToast }) {
     catch { return new Set(); }
   });
   const [draggedIndex, setDraggedIndex] = useState(null);
+  const [priceJob, setPriceJob] = useState(null);
+  const [startingAll, setStartingAll] = useState(false);
+  const [queueError, setQueueError] = useState(false);
+  const lastJob = useRef(null);
   const [checkingId, setCheckingId] = useState(null);
   const [testingNotifId, setTestingNotifId] = useState(null);
   // Histórico de preços: quais cards estão expandidos + cache por voo
@@ -76,6 +80,41 @@ export default function PrecosTab({ showToast }) {
   }, []);
 
   useEffect(() => { fetchFlights(); }, [fetchFlights]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    const poll = async () => {
+      try {
+        const { data } = await api.get(`${API_URL}/check-all/status`);
+        if (cancelled) return;
+        setQueueError(false);
+        setPriceJob(data);
+        const previous = lastJob.current;
+        lastJob.current = data;
+        if (data && previous?.id === data.id && previous.running && !data.running) {
+          fetchFlights();
+          setHistoryData({});
+          setExpandedCharts(new Set());
+          if (data.error) showToast(data.error, 'error');
+          else showToast(`Atualização concluída: ${data.success} sucesso(s), ${data.failed} falha(s), ${data.skipped} ignorado(s).`, data.failed ? 'warning' : 'success');
+        }
+      } catch { if (!cancelled) setQueueError(true); }
+      if (!cancelled) timer = setTimeout(poll, 3000);
+    };
+    poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [fetchFlights, showToast]);
+
+  const checkAll = async () => {
+    setStartingAll(true);
+    try {
+      const { data } = await api.post(`${API_URL}/check-all`);
+      setPriceJob(data);
+      lastJob.current = data;
+    } catch (e) { showToast(e.response?.data?.error || 'Não foi possível iniciar a atualização.', 'error'); }
+    finally { setStartingAll(false); }
+  };
 
   const carregarPriceStats = async (flightId) => {
     try {
@@ -184,7 +223,7 @@ export default function PrecosTab({ showToast }) {
       // O check gera um novo ponto no histórico: recarrega se aberto, senão descarta o cache.
       if (expandedCharts.has(id)) loadHistory(id);
       else setHistoryData(d => { const n = { ...d }; delete n[id]; return n; });
-    } catch (e) { showToast('Erro ao verificar preço', 'error'); }
+    } catch (e) { showToast(e.response?.data?.error || 'Erro ao verificar preço', 'error'); }
     finally { setCheckingId(null); }
   };
 
@@ -338,7 +377,14 @@ export default function PrecosTab({ showToast }) {
   return (
     <>
       {/* ── Toolbar ── */}
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end gap-3 flex-wrap mb-4">
+        <button onClick={checkAll}
+          disabled={startingAll || checkingId !== null || priceJob?.running || !flights.some(f => f.status === 'ativo')}
+          className="flex items-center gap-2 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Atualiza todos os voos ativos, um por vez. Os alertas seguem as regras habituais.">
+          <RefreshCw className={`w-4 h-4 ${priceJob?.running || startingAll ? 'animate-spin' : ''}`} />
+          {priceJob?.running ? `Atualizando ${priceJob.completed}/${priceJob.total}` : 'Atualizar todos'}
+        </button>
         <button
           onClick={() => openModal()}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
@@ -347,6 +393,9 @@ export default function PrecosTab({ showToast }) {
         </button>
       </div>
 
+      {priceJob?.running && <p role="status" className="text-sm text-indigo-600 dark:text-indigo-300 mb-4">Atualização em andamento: {priceJob.completed} de {priceJob.total} voos processados. Você pode continuar usando o painel.</p>}
+      {priceJob && !priceJob.running && priceJob.source !== 'individual' && <p role="status" className="text-sm text-slate-600 dark:text-slate-300 mb-4">{priceJob.error || `Última atualização: ${priceJob.success} sucesso(s), ${priceJob.failed} falha(s), ${priceJob.skipped} ignorado(s).`}</p>}
+      {queueError && <p role="status" className="text-sm text-amber-600 mb-4">Não foi possível consultar o progresso. Tentando novamente…</p>}
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {/* Total */}
@@ -691,7 +740,7 @@ export default function PrecosTab({ showToast }) {
                   </button>
                   <button
                     onClick={() => checkNow(flight.id)}
-                    disabled={checkingId === flight.id}
+                    disabled={checkingId !== null || startingAll || priceJob?.running}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:text-amber-400 dark:hover:bg-amber-500/10 transition-colors disabled:opacity-40 cursor-pointer"
                     title="Verificar agora"
                   >

@@ -4,6 +4,7 @@ const { scrapeFlightPrice } = require('./flightScraper');
 const { sendTelegram, sendEmail } = require('./notifier');
 const { checkDueFlights } = require('./statusMonitor');
 
+const priceQueue = require('./priceQueue');
 let currentJob = null;
 
 /**
@@ -30,7 +31,7 @@ function registrarFalha(flightId, motivo) {
     });
 }
 
-async function processFlight(flight) {
+async function updateFlight(flight) {
     const result = await scrapeFlightPrice(flight.link_voo);
 
     // Blocked by captcha
@@ -52,10 +53,7 @@ async function processFlight(flight) {
 
     const preco = result.preco;
 
-    // Persist UPDATE then INSERT sequentially. No explicit BEGIN/COMMIT here:
-    // processBatch runs multiple processFlight concurrently, and SQLite cannot
-    // nest BEGIN on the same connection — that previously crashed the process
-    // with "cannot start a transaction within a transaction".
+    // Persiste preço e histórico em sequência na conexão SQLite compartilhada.
     await new Promise((resolve, reject) => {
         db.run(
             `UPDATE flights
@@ -122,51 +120,39 @@ async function processFlight(flight) {
     return { id: flight.id, status: 'sucesso', preco, alertaDisparado };
 }
 
-/**
- * Process flights in batches of concurrent scrapers.
- */
-async function processBatch(flights, concurrency) {
-    const results = [];
-    for (let i = 0; i < flights.length; i += concurrency) {
-        const batch = flights.slice(i, i + concurrency);
-        const batchResults = await Promise.allSettled(
-            batch.map(flight => processFlight(flight))
-        );
-        results.push(...batchResults);
-    }
-    return results;
-}
-
-/**
- * Run a full check cycle on all active flights.
- */
-async function runCheckCycle() {
-    const startTime = new Date();
-    console.log(`\n[SCHEDULER] ═══════════════════════════════════════════`);
-    console.log(`[SCHEDULER] Ciclo iniciado em ${startTime.toISOString()}`);
-
-    const flights = await new Promise((resolve, reject) => {
-        db.all("SELECT * FROM flights WHERE status = 'ativo'", [], (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
-        });
+// Uma única fila compartilhada por atualização individual, em lote e cron.
+function activeFlights() {
+    return new Promise((resolve, reject) => {
+        db.all("SELECT * FROM flights WHERE status = 'ativo' ORDER BY posicao ASC, id ASC", [],
+            (err, rows) => err ? reject(err) : resolve(rows || []));
     });
-
-    if (flights.length === 0) {
-        console.log('[SCHEDULER] Nenhum voo ativo para verificar.');
-        return;
+}
+async function refreshQueuedFlight(flight) {
+    const fresh = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM flights WHERE id = ?', [flight.id],
+            (err, row) => err ? reject(err) : resolve(row));
+    });
+    if (!fresh || fresh.status !== 'ativo') return { id: flight.id, status: 'ignorado' };
+    return updateFlight(fresh);
+}
+function startPriceCheck(source = 'manual') {
+    return priceQueue.start({ source, load: activeFlights, process: refreshQueuedFlight });
+}
+async function processFlight(flight) {
+    const job = priceQueue.start({ source: 'individual', load: async () => [flight], process: refreshQueuedFlight });
+    const results = await job.done;
+    return results[0];
+}
+async function runCheckCycle() {
+    try {
+        const job = startPriceCheck('agendado');
+        console.log('[SCHEDULER] Atualização de preços iniciada em fila.');
+        await job.done;
+        console.log('[SCHEDULER] Atualização de preços finalizada:', priceQueue.snapshot());
+    } catch (error) {
+        if (error.code !== 'PRICE_CHECK_BUSY') throw error;
+        console.log('[SCHEDULER] Atualização já em andamento; ciclo sobreposto ignorado.');
     }
-
-    console.log(`[SCHEDULER] ${flights.length} voo(s) ativo(s) para verificar.`);
-
-    const concurrency = parseInt(process.env.MAX_CONCURRENT_SCRAPERS || '3', 10);
-    await processBatch(flights, concurrency);
-
-    const endTime = new Date();
-    const durationMs = endTime - startTime;
-    console.log(`[SCHEDULER] Ciclo finalizado em ${endTime.toISOString()} (${(durationMs / 1000).toFixed(1)}s)`);
-    console.log(`[SCHEDULER] Total de voos processados: ${flights.length}`);
-    console.log(`[SCHEDULER] ═══════════════════════════════════════════\n`);
 }
 
 /**
@@ -214,4 +200,4 @@ function startStatusScheduler() {
   return statusCronJob;
 }
 
-module.exports = { startScheduler, runCheckCycle, processFlight, startStatusScheduler };
+module.exports = { startScheduler, runCheckCycle, processFlight, startStatusScheduler, startPriceCheck, getPriceCheckStatus: priceQueue.snapshot };

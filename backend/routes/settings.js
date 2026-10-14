@@ -13,7 +13,7 @@ router.get('/', (req, res) => {
         email_host: process.env.EMAIL_HOST || 'smtp.gmail.com',
         email_port: parseInt(process.env.EMAIL_PORT || '465', 10),
         check_interval_hours: parseInt(process.env.CHECK_INTERVAL_HOURS || '6', 10),
-        max_concurrent_scrapers: parseInt(process.env.MAX_CONCURRENT_SCRAPERS || '3', 10),
+        max_concurrent_scrapers: 1,
         alert_reset_threshold: parseFloat(process.env.ALERT_RESET_THRESHOLD || '1.10')
     });
 });

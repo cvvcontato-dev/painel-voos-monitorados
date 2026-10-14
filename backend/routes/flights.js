@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const { processFlight } = require('../services/scheduler');
+const { processFlight, startPriceCheck, getPriceCheckStatus } = require('../services/scheduler');
 const { sendEmail, sendTelegram } = require('../services/notifier');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,6 +15,16 @@ router.get('/', (req, res) => {
         }
         res.json(rows);
     });
+});
+
+// Responde imediatamente; a fila continua no servidor mesmo ao fechar a aba.
+router.get('/check-all/status', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(getPriceCheckStatus());
+});
+router.post('/check-all', (req, res) => {
+    try { res.status(202).json(startPriceCheck().status); }
+    catch (error) { res.status(error.code === 'PRICE_CHECK_BUSY' ? 409 : 500).json({ error: error.message }); }
 });
 
 // Bulk check/uncheck all flights
@@ -231,6 +241,8 @@ router.post('/:id/check-now', async (req, res) => {
 
         const result = await processFlight(flight);
 
+        if (result.status === 'ignorado') return res.status(409).json({ error: 'Este voo não está ativo.' });
+
         if (result.status === 'bloqueado') {
             return res.json({ sucesso: false, preco_encontrado: null, bloqueado: true, alerta_disparado: false, erro: null });
         }
@@ -256,6 +268,7 @@ router.post('/:id/check-now', async (req, res) => {
             flight: updatedFlight
         });
     } catch (error) {
+        if (error.code === 'PRICE_CHECK_BUSY') return res.status(409).json({ error: error.message });
         console.error(`[CHECK-NOW] Erro no voo #${id}:`, error.message);
         return res.status(500).json({ sucesso: false, preco_encontrado: null, bloqueado: false, alerta_disparado: false, erro: error.message });
     }

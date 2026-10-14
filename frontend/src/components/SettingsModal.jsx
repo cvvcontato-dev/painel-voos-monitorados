@@ -41,7 +41,6 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
     try {
       const payload = {};
       if (form.check_interval_hours) payload.check_interval_hours = parseInt(form.check_interval_hours);
-      if (form.max_concurrent_scrapers) payload.max_concurrent_scrapers = parseInt(form.max_concurrent_scrapers);
       if (form.alert_reset_threshold) payload.alert_reset_threshold = parseFloat(form.alert_reset_threshold);
       if (form.telegram_bot_token) payload.telegram_bot_token = form.telegram_bot_token;
       if (form.email_host) payload.email_host = form.email_host;
@@ -111,8 +110,8 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                   <div className="grid grid-cols-3 gap-3">
                     <div><label className={labelCls}>Intervalo (h)</label>
                       <input type="number" min="1" value={form.check_interval_hours || ''} onChange={e => setForm({...form, check_interval_hours: e.target.value})} className={inputCls} /></div>
-                    <div><label className={labelCls}>Scrapers</label>
-                      <input type="number" min="1" max="10" value={form.max_concurrent_scrapers || ''} onChange={e => setForm({...form, max_concurrent_scrapers: e.target.value})} className={inputCls} /></div>
+                    <div><label className={labelCls}>Consultas simultâneas</label>
+                      <input type="number" min="1" max="10" value={1} readOnly title="Os preços são consultados um por vez para reduzir a carga e evitar sobreposição." className={inputCls} /></div>
                     <div><label className={labelCls}>Reset %</label>
                       <input type="number" step="0.01" value={form.alert_reset_threshold || ''} onChange={e => setForm({...form, alert_reset_threshold: e.target.value})} className={inputCls} /></div>
                   </div>

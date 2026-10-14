@@ -1,0 +1,41 @@
+jest.mock('../database',()=>({all:jest.fn(),get:jest.fn(),run:jest.fn()}));
+jest.mock('../services/flightScraper',()=>({scrapeFlightPrice:jest.fn()}));
+jest.mock('../services/notifier',()=>({sendEmail:jest.fn(),sendTelegram:jest.fn()}));
+jest.mock('../services/statusMonitor',()=>({checkDueFlights:jest.fn()}));
+const request=require('supertest'),express=require('express');
+const db=require('../database'),{scrapeFlightPrice}=require('../services/flightScraper');
+const scheduler=require('../services/scheduler');
+const app=express();app.use(express.json());app.use(require('cookie-parser')());
+app.use((req,res,next)=>{req.session=req.get('X-Test-User')?{userId:1}:{};next()});
+app.use('/api',require('../middleware/csrf'));app.use('/api',require('../middleware/requireAuth'));
+app.use('/api/flights',require('../routes/flights'));
+const auth=req=>req.set('X-Test-User','1');
+const csrf=req=>auth(req).set('Cookie','csrf=token').set('X-CSRF-Token','token');
+test('API exige sessão e CSRF',async()=>{
+ expect((await request(app).get('/api/flights/check-all/status')).status).toBe(401);
+ expect((await auth(request(app).post('/api/flights/check-all'))).status).toBe(403);
+});
+test('reserva lote antes de responder e protege consultas individuais e cron',async()=>{
+ const active=[{id:1,status:'ativo',link_voo:'flight1',preco_esperado:1},{id:2,status:'ativo',link_voo:'flight2',preco_esperado:1}];
+ db.all.mockImplementation((sql,params,cb)=>{expect(sql).toContain("status = 'ativo'");cb(null,active)});
+ db.get.mockImplementation((sql,params,cb)=>cb(null,active.find(f=>f.id===Number(params[0]))));
+ db.run.mockImplementation((sql,params,cb)=>{if(cb)cb.call({changes:1},null)});
+ let release;const pending=new Promise(r=>{release=r});
+ scrapeFlightPrice.mockImplementationOnce(()=>pending).mockResolvedValue({preco:null,bloqueado:true});
+ const started=await csrf(request(app).post('/api/flights/check-all'));
+ expect(started.status).toBe(202);expect(started.body.running).toBe(true);
+ expect((await csrf(request(app).post('/api/flights/check-all'))).status).toBe(409);
+ expect((await csrf(request(app).post('/api/flights/1/check-now'))).status).toBe(409);
+ await scheduler.runCheckCycle();expect(scrapeFlightPrice).toHaveBeenCalledTimes(1);
+ expect((await auth(request(app).get('/api/flights/check-all/status'))).body).toMatchObject({running:true,total:2,completed:0});
+ release({preco:100,bloqueado:false});
+ for(let i=0;i<20&&scheduler.getPriceCheckStatus().running;i++)await new Promise(r=>setImmediate(r));
+ expect(scheduler.getPriceCheckStatus()).toMatchObject({running:false,completed:2,success:1,failed:1});
+});
+test('voo encerrado enquanto aguardava é ignorado',async()=>{
+ db.all.mockImplementation((sql,p,cb)=>cb(null,[{id:3,status:'ativo'}]));
+ db.get.mockImplementation((sql,p,cb)=>cb(null,{id:3,status:'encerrado'}));
+ const before=scrapeFlightPrice.mock.calls.length;await scheduler.startPriceCheck().done;
+ expect(scrapeFlightPrice.mock.calls.length).toBe(before);
+ expect(scheduler.getPriceCheckStatus()).toMatchObject({running:false,completed:1,skipped:1});
+});
