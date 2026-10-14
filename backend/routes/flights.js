@@ -236,7 +236,7 @@ router.post('/:id/check-now', async (req, res) => {
         }
 
         if (result.status === 'falha') {
-            return res.json({ sucesso: false, preco_encontrado: null, bloqueado: false, alerta_disparado: false, erro: 'Não foi possível obter o preço' });
+            return res.json({ sucesso: false, preco_encontrado: null, bloqueado: false, alerta_disparado: false, erro: result.motivo || 'Não foi possível obter o preço' });
         }
 
         // Get the updated flight data

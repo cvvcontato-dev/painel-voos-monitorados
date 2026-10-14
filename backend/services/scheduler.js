@@ -45,8 +45,9 @@ async function processFlight(flight) {
     // Scraping failed
     if (result.preco === null) {
         console.log(`[SCHEDULER] Voo #${flight.id} — falha no scraping. Preço não obtido.`);
-        await registrarFalha(flight.id, 'Preço não encontrado na página do Google Voos');
-        return { id: flight.id, status: 'falha' };
+        const motivo = result.motivo || 'Preço não encontrado na página do Google Voos';
+        await registrarFalha(flight.id, motivo);
+        return { id: flight.id, status: 'falha', motivo };
     }
 
     const preco = result.preco;

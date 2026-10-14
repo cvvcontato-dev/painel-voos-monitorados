@@ -186,8 +186,10 @@ async function extractPrices(page) {
  * @returns {Promise<{preco: number|null, bloqueado: boolean, motivo?: string}>}
  */
 async function scrapeFlightPrice(url) {
+    let motivo = 'Preço não encontrado na página do Google Voos';
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         let browser = null;
+        let etapa = 'iniciar o navegador';
         try {
             console.log(`[SCRAPER] Tentativa ${attempt}/${MAX_RETRIES} para: ${url.substring(0, 80)}...`);
 
@@ -197,8 +199,7 @@ async function scrapeFlightPrice(url) {
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--single-process'
+                    '--disable-gpu'
                 ]
             };
 
@@ -219,8 +220,10 @@ async function scrapeFlightPrice(url) {
             const page = await context.newPage();
             page.setDefaultTimeout(NAVIGATION_TIMEOUT);
 
+            etapa = 'abrir a página do Google Voos';
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUT });
 
+            etapa = 'ler os preços do Google Voos';
             // Wait until the first R$ price appears in the DOM, up to PRICE_APPEAR_TIMEOUT_MS.
             // This is far more reliable than a flat sleep: it advances the moment prices render
             // (usually 2-5 s) and only gives up after 30 s if nothing appears.
@@ -233,7 +236,7 @@ async function scrapeFlightPrice(url) {
                         if (t.length < 25 && /R\$\s*[\d.,]+/.test(t)) return true;
                     }
                     return false;
-                }, { timeout: PRICE_APPEAR_TIMEOUT_MS });
+                }, undefined, { timeout: PRICE_APPEAR_TIMEOUT_MS });
                 priceDetected = true;
                 console.log('[SCRAPER] Preço detectado no DOM — aguardando estabilização...');
                 // Give the rest of the results a moment to finish rendering
@@ -257,13 +260,14 @@ async function scrapeFlightPrice(url) {
             const prices = await extractPrices(page);
 
             if (prices.length === 0) {
+                motivo = 'Preço não encontrado na página do Google Voos';
                 console.log(`[SCRAPER] Nenhum preço encontrado na tentativa ${attempt}`);
                 if (attempt < MAX_RETRIES) {
                     console.log(`[SCRAPER] Aguardando ${RETRY_DELAY_MS}ms antes de tentar novamente...`);
                     await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
                     continue;
                 }
-                return { preco: null, bloqueado: false };
+                return { preco: null, bloqueado: false, motivo };
             }
 
             // Sort and get the lowest price
@@ -276,6 +280,9 @@ async function scrapeFlightPrice(url) {
             return { preco: lowest.value, bloqueado: false };
 
         } catch (error) {
+            motivo = etapa === 'iniciar o navegador'
+                ? 'Falha ao iniciar o Chromium no servidor'
+                : `Falha ao ${etapa}`;
             console.error(`[SCRAPER] Erro na tentativa ${attempt}:`, error.message);
             if (attempt < MAX_RETRIES) {
                 console.log(`[SCRAPER] Aguardando ${RETRY_DELAY_MS}ms antes de tentar novamente...`);
@@ -288,7 +295,7 @@ async function scrapeFlightPrice(url) {
         }
     }
 
-    return { preco: null, bloqueado: false };
+    return { preco: null, bloqueado: false, motivo };
 }
 
 module.exports = { scrapeFlightPrice };
