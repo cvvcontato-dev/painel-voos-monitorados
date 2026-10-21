@@ -103,7 +103,9 @@ Specs/planos: `docs/superpowers/specs/2026-10-13-alteracao-de-voo-design.md`, `d
 
 **Modelo de e-mail:** botão "Ver modelo do e-mail" (rota `GET /api/flight-changes/:id/email-preview?kind=aviso|confirmacao` → `{subject, html}`, mesmo construtor do envio). Aviso: visual de Cartões de Embarque. Confirmação: **mesmo template da aba Vouchers** (`buildVoucherEmailHtml`) com caixa "O que mudou".
 
-**Contrato da API** (todas atrás de `requireAuth`+CSRF, escopo por `user_id`): `GET/POST /api/flight-changes`, `GET/DELETE /:id`, `POST /:id/notice-sent`, `POST /:id/new-voucher` (multipart `file`), `PUT /:id/new`, `POST /:id/confirm`, `POST /:id/send-email` (`kind`), `GET /:id/email-preview`.
+**Contrato da API** (todas atrás de `requireAuth`+CSRF, escopo por `user_id`): `GET/POST /api/flight-changes`, `GET/DELETE /:id`, `POST /:id/notice-sent`, `POST /:id/new-voucher` (multipart `file`), `PUT /:id/new`, `POST /:id/confirm`, `POST /:id/send-email` (`kind`), `GET /:id/email-preview`, `PUT /:id/affected`.
+
+**Trechos afetados / reservas separadas (2026-10-21; spec `docs/superpowers/specs/2026-10-21-alteracao-trechos-afetados-design.md`):** quando o voucher antigo é combinado (≥2 localizadores entre os trechos), a usuária marca **qual(is) trecho(s) mudou(aram)** antes do aviso e do voucher novo. `flight_changes.affected_json` guarda os índices em `old_json.trips` (NULL = todos; casos legados seguem assim) e `extracted_json` guarda a saída do `extractFlights` para **refazer o merge sem nova chamada à IA** quando a marcação muda (`PUT /:id/affected`). Merge, diff, aviso, confirmação e e-mail respeitam a marcação (`helpers/flightChangeReservations.js`, `flightChangeMerge/Diff/Message`): só os trechos marcados são trocados; o novo localizador/cia vale só para a reserva afetada; o aviso cita só o trecho/reserva afetados; o cliente recebe sempre o voucher **completo**. Enquanto `needs_affected`, `new-voucher`, `notice-sent` e o aviso por e-mail devolvem 409 `escolha_trechos`. O detalhe do caso traz `affected`, `needs_affected` e `reservation_groups` (a UI do CaseView é outra etapa). Colunas criadas por migração idempotente (`helpers/dbColumns.js`).
 
 ---
 
