@@ -23,4 +23,9 @@ module.exports = async function globalSetup() {
   for (const f of filesToDelete) {
     try { fs.unlinkSync(f); } catch (_) { /* not found or locked — OK */ }
   }
+
+  // PDFs guardados de execuções anteriores: os ids de voucher se repetem a cada banco novo e um arquivo velho
+  // (mesmo id + mesmo hash) faz testes de "nenhum PDF guardado" falharem de forma intermitente.
+  const pdfDir = path.join(tmpDir, 'voucher-pdfs');
+  try { for (const f of fs.readdirSync(pdfDir)) { try { fs.unlinkSync(path.join(pdfDir, f)); } catch (_) { /* ignora */ } } } catch (_) { /* pasta ausente */ }
 };
