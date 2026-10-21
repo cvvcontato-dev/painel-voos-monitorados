@@ -264,7 +264,7 @@ describe('merge e diff restritos nas rotas', () => {
     expect(await q.get('SELECT new_json n, diff_json d, affected_json a FROM flight_changes WHERE id=?', [c.id])).toEqual(antes);
   });
 
-  test('voucher novo sem extracted_json (caso anterior à migração): só recalcula o diff com a nova marcação', async () => {
+  test('I3: voucher novo sem extracted_json (anterior à migração): 409 sem_extracao e nada gravado', async () => {
     const { agent, csrf } = await authed();
     const c = await casoCombinado(agent, csrf);
     await marcar(agent, csrf, c.id, [0, 1]);
@@ -272,10 +272,84 @@ describe('merge e diff restritos nas rotas', () => {
     const r1 = await novoVoucher(agent, csrf, c.id);
     expect(statusOf(r1.body)).toEqual(['ida:alterado', 'volta:alterado']);
     await q.run('UPDATE flight_changes SET extracted_json=NULL WHERE id=?', [c.id]);
+    const antes = await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id]);
     const r2 = await marcar(agent, csrf, c.id, [1]);
-    expect(r2.status).toBe(200);
-    expect(r2.body.new).toEqual(r1.body.new);              // voucher intacto
-    expect(statusOf(r2.body)).toEqual(['ida:igual', 'volta:alterado']);
+    expect(r2.status).toBe(409);
+    expect(r2.body.error).toBe('sem_extracao');
+    expect(r2.body.message).toBe('Este voucher novo foi lido antes desta versão. Envie o voucher novo de novo para aplicar a nova marcação.');
+    expect(await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id])).toEqual(antes);
+  });
+
+  test('M1: PUT /affected devolve remerged (true com voucher novo, false sem)', async () => {
+    const { agent, csrf } = await authed();
+    const c = await casoCombinado(agent, csrf);
+    expect((await marcar(agent, csrf, c.id, [1])).body.remerged).toBe(false);
+    extractFlights.mockResolvedValueOnce(printVolta());
+    await novoVoucher(agent, csrf, c.id);
+    expect((await marcar(agent, csrf, c.id, [1])).body.remerged).toBe(true);
+  });
+
+  test('marcação explícita com TODOS os trechos num voucher combinado usa o merge restrito (new-voucher)', async () => {
+    const { agent, csrf } = await authed();
+    const c = await casoCombinado(agent, csrf);
+    await marcar(agent, csrf, c.id, [0, 1]);
+    extractFlights.mockResolvedValueOnce({ carrier: 'azul', locator: 'NEW456', trips: [F.printTrip('volta')] });
+    const r = await novoVoucher(agent, csrf, c.id);
+    expect(r.status).toBe(200);
+    expect(r.body.new.reservation.locator).toBe('ABC123');     // não vazou para a reserva da ida
+    expect(r.body.new.trips.map(t => t.locator)).toEqual(['ABC123', 'XYZ789']);
+    expect(r.body.warnings.some(w => w.includes('reservas diferentes'))).toBe(true);
+  });
+
+  /** Corrida: a 1ª leitura do caso devolve valores "velhos" (o banco já mudou). */
+  const staleCaseRead = (override) => {
+    const real = db.get.bind(db);
+    let used = false;
+    return jest.spyOn(db, 'get').mockImplementation((sql, p, cb) => {
+      if (!used && /FROM flight_changes WHERE id/.test(sql)) {
+        used = true;
+        return real(sql, p, (e, r) => cb(e, r && { ...r, ...override }));
+      }
+      return real(sql, p, cb);
+    });
+  };
+
+  test('I2: new-voucher × PUT /affected — marcação mudou entre a leitura e a escrita: 409 marcacao_alterada e sem voucher órfão', async () => {
+    const { agent, csrf } = await authed();
+    const c = await casoCombinado(agent, csrf);
+    await marcar(agent, csrf, c.id, [1]);
+    const vouchers = async () => (await q.get('SELECT COUNT(*) n FROM vouchers')).n;
+    const antes = await vouchers();
+    staleCaseRead({ affected_json: '[0,1]' });        // a leitura viu [0,1]; no banco está [1]
+    extractFlights.mockResolvedValueOnce(printVolta());
+    const r = await novoVoucher(agent, csrf, c.id);
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('marcacao_alterada');
+    expect(r.body.message).toBe('A marcação dos trechos mudou enquanto o voucher era lido. Envie o voucher novamente.');
+    expect(await vouchers()).toBe(antes);
+    const row = await q.get('SELECT new_json n, affected_json a FROM flight_changes WHERE id=?', [c.id]);
+    expect(row.n).toBeNull(); expect(row.a).toBe('[1]');
+  });
+
+  test('I2: PUT /affected — caso mudou entre a leitura e a escrita: 409 caso_alterado e nada alterado (sem e com voucher novo)', async () => {
+    const { agent, csrf } = await authed();
+    const c = await casoCombinado(agent, csrf);
+    // sem voucher novo na leitura, mas o banco já tem new_json
+    await marcar(agent, csrf, c.id, [1]);
+    extractFlights.mockResolvedValueOnce(printVolta());
+    await novoVoucher(agent, csrf, c.id);
+    const antes = await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id]);
+    staleCaseRead({ new_json: null });
+    let r = await marcar(agent, csrf, c.id, [0, 1]);
+    expect(r.status).toBe(409); expect(r.body.error).toBe('caso_alterado');
+    expect(r.body.message).toBe('O caso mudou enquanto a marcação era salva. Recarregue e tente de novo.');
+    expect(await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id])).toEqual(antes);
+    jest.restoreAllMocks();
+    // com voucher novo na leitura, mas o new_json do banco é outro
+    staleCaseRead({ new_json: antes.new_json.replace('AD 4001', 'AD 4999') });
+    r = await marcar(agent, csrf, c.id, [0, 1]);
+    expect(r.status).toBe(409); expect(r.body.error).toBe('caso_alterado');
+    expect(await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id])).toEqual(antes);
   });
 
   test('PUT /new respeita a marcação: mexer num trecho NÃO marcado não conta como mudança', async () => {

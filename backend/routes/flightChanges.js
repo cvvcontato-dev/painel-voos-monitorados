@@ -203,18 +203,23 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     const restr = Res.restrictionOf(row, oldVoucher);
     // A extração normalizada é guardada (extracted_json) para refazer o merge sem nova chamada à IA se a marcação mudar.
     const extracted = await extractFlightsRaw(req.file, oldVoucher);
-    const unified = mergeNewFlights(oldVoucher, extracted, { affected: restr });   // lança { status: 422, body } se inválido
+    // Marcação explícita (mesmo cobrindo todos) restringe o merge de voucher com >=2 reservas.
+    const unified = mergeNewFlights(oldVoucher, extracted, { affected: Res.storedAffected(row, oldVoucher) });   // lança { status: 422, body } se inválido
     unified.meta.sourceFileHash = hashOf(req.file);
     const newId = await saveVoucher({ userId, file: req.file, unified });
     const diff = diffVouchers(oldVoucher, unified, { affected: restr });
     let upd;
     try {
       upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, extracted_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
-                         WHERE id=? AND user_id=? AND status != 'confirmado'`,
-        [newId, JSON.stringify(unified), JSON.stringify(diff), JSON.stringify(extracted), row.id, userId]);
+                         WHERE id=? AND user_id=? AND status != 'confirmado' AND affected_json IS ?`,
+        [newId, JSON.stringify(unified), JSON.stringify(diff), JSON.stringify(extracted), row.id, userId, row.affected_json]);
     } catch (e) { await dropVoucher(newId, userId, row.id); throw e; }
-    if (upd.changes === 0) {   // confirmado por outra requisição entre a leitura e a escrita
+    if (upd.changes === 0) {   // confirmado, ou marcação alterada, por outra requisição entre a leitura e a escrita
       await dropVoucher(newId, userId, row.id);
+      const atual = await own(row.id, userId);
+      if (atual && atual.status !== 'confirmado') {
+        return res.status(409).json({ error: 'marcacao_alterada', message: 'A marcação dos trechos mudou enquanto o voucher era lido. Envie o voucher novamente.' });
+      }
       return res.status(409).json({ error: 'caso já confirmado' });
     }
     // Re-upload: o voucher NOVO anterior fica órfão. Nunca apagar o antigo (old_voucher_id).
@@ -247,25 +252,33 @@ router.put('/:id/affected', async (req, res) => {
     const affected = [...list].sort((a, b) => a - b);
     const restr = Res.restrictTo(affected, n);
     const atual = parse(row.new_json), extracted = parse(row.extracted_json);
+    // Escrita condicionada ao que foi lido: se o caso mudou no meio (confirmado, outro upload, outra marcação), 409.
+    const conflito = async () => {
+      const cur = await own(row.id, userId);
+      return cur && cur.status !== 'confirmado'
+        ? res.status(409).json({ error: 'caso_alterado', message: 'O caso mudou enquanto a marcação era salva. Recarregue e tente de novo.' })
+        : res.status(409).json({ error: 'caso já confirmado' });
+    };
 
-    if (!atual) {   // ainda sem voucher novo: só grava a marcação
-      const upd = await run(`UPDATE flight_changes SET affected_json=?, updated_at=datetime('now') WHERE id=? AND user_id=? AND status != 'confirmado'`,
+    if (!row.new_json) {   // ainda sem voucher novo: só grava a marcação
+      const upd = await run(`UPDATE flight_changes SET affected_json=?, updated_at=datetime('now') WHERE id=? AND user_id=? AND status != 'confirmado' AND new_json IS NULL`,
         [JSON.stringify(affected), row.id, userId]);
-      if (upd.changes === 0) return res.status(409).json({ error: 'caso já confirmado' });
-      return res.json(await detailFor(req, await own(row.id, userId)));
+      if (upd.changes === 0) return conflito();
+      return res.json({ ...(await detailFor(req, await own(row.id, userId))), remerged: false });
+    }
+    if (!atual) return res.status(500).json({ error: 'voucher_novo_corrompido' });
+    if (!extracted) {   // voucher novo lido antes desta versão: sem a extração não dá para refazer o merge
+      return res.status(409).json({ error: 'sem_extracao', message: 'Este voucher novo foi lido antes desta versão. Envie o voucher novo de novo para aplicar a nova marcação.' });
     }
 
     // Com voucher novo: refaz o merge (a partir da extração guardada) ANTES de gravar qualquer coisa — 422 não altera o caso.
-    let unified = atual;
-    if (extracted) {
-      unified = mergeNewFlights(old, extracted, { affected: restr });
-      if (atual.meta && atual.meta.sourceFileHash) unified.meta.sourceFileHash = atual.meta.sourceFileHash;
-    }
+    const unified = mergeNewFlights(old, extracted, { affected });   // lista completa: marcação explícita
+    if (atual.meta && atual.meta.sourceFileHash) unified.meta.sourceFileHash = atual.meta.sourceFileHash;
     const diff = diffVouchers(old, unified, { affected: restr });
     const json = JSON.stringify(unified);
     const upd = await run(`UPDATE flight_changes SET affected_json=?, new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
-                            WHERE id=? AND user_id=? AND status != 'confirmado'`, [JSON.stringify(affected), json, JSON.stringify(diff), row.id, userId]);
-    if (upd.changes === 0) return res.status(409).json({ error: 'caso já confirmado' });
+                            WHERE id=? AND user_id=? AND status != 'confirmado' AND new_json IS ?`, [JSON.stringify(affected), json, JSON.stringify(diff), row.id, userId, row.new_json]);
+    if (upd.changes === 0) return conflito();
     if (row.new_voucher_id) {
       try {
         await run(`UPDATE vouchers SET unified_json=?, layout_version=?, updated_at=datetime('now') WHERE id=? AND user_id=?`,
@@ -277,7 +290,7 @@ router.put('/:id/affected', async (req, res) => {
       }
       storePdfInBackground(req, row.new_voucher_id, userId);
     }
-    res.json(await detailFor(req, await own(row.id, userId)));
+    res.json({ ...(await detailFor(req, await own(row.id, userId))), remerged: true });   // correções manuais do voucher novo foram descartadas
   } catch (e) { fail(req, res, e); }
 });
 

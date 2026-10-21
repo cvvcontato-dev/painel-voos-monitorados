@@ -107,6 +107,6 @@ function needsAffected(row, oldVoucher) {
 }
 
 module.exports = {
-  locatorOf, reservationCount, reservationGroups, restrictTo, validIndexes,
+  locatorOf, reservationCount, reservationGroups, tripLabel, restrictTo, validIndexes,
   storedAffected, effectiveAffected, restrictionOf, needsAffected, DIRECTION_LABEL
 };

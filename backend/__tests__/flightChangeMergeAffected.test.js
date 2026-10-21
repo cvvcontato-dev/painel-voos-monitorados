@@ -166,14 +166,79 @@ describe('mergeNewFlights restrito aos trechos afetados', () => {
     expect(m.route).toEqual({ origin: 'GRU', destination: 'REC' });
   });
 
-  test('todos os trechos marcados (ou nenhum) = comportamento atual, byte a byte', () => {
-    const old = F.combinado();
+  const mesmaReserva = () => {
+    const v = F.ida();
+    v.trips.push({ ...clone(v.trips[0]), direction: 'volta', flightNumber: 'AD 4002', departure: { airport: 'REC', datetime: '2026-09-19T13:00:00-03:00' }, arrival: { airport: 'GRU', datetime: '2026-09-19T16:30:00-03:00' }, dateLabel: '19 SET 2026' });
+    return v;
+  };
+
+  test('sem marcação, ou voucher de UMA reserva com todos marcados = comportamento atual, byte a byte', () => {
     const ext = { carrier: 'azul', locator: 'zzz111', trips: [F.printIda({ flightNumber: 'AD 4003' }), voltaNova()] };
+    const simples = mesmaReserva();
+    const baseS = semMeta(mergeNewFlights(simples, clone(ext)));
+    expect(semMeta(mergeNewFlights(simples, clone(ext), { affected: [0, 1] }))).toEqual(baseS);
+    const old = F.combinado();
     const base = semMeta(mergeNewFlights(old, clone(ext)));
-    expect(semMeta(mergeNewFlights(old, clone(ext), { affected: [0, 1] }))).toEqual(base);
-    expect(semMeta(mergeNewFlights(old, clone(ext), { affected: undefined }))).toEqual(base);
-    expect(semMeta(mergeNewFlights(old, clone(ext), { affected: [] }))).toEqual(base);
-    expect(semMeta(mergeNewFlights(old, clone(ext), null))).toEqual(base);
+    for (const opts of [{ affected: undefined }, { affected: [] }, null]) {
+      expect(semMeta(mergeNewFlights(old, clone(ext), opts))).toEqual(base);
+    }
+  });
+
+  test('voucher combinado com TODOS marcados (marcação explícita): localizador do print não vai para a reserva errada', () => {
+    const old = F.combinado();
+    // print só da volta + localizador novo: nada aplicado + avisos
+    const m = mergeNewFlights(old, { locator: 'NEW456', trips: [voltaNova()] }, { affected: [0, 1] });
+    expect(m.reservation).toEqual(old.reservation);
+    expect(m.trips.map(t => t.locator)).toEqual(['ABC123', 'XYZ789']);
+    expect(m.trips[1].flightNumber).toBe('AD 4010');
+    expect(warns(m).some(w => /NEW456 lido da imagem não foi aplicado \(os trechos marcados são de reservas diferentes\)/.test(w))).toBe(true);
+    expect(warns(m).some(w => /^Não encontrei no print o trecho marcado: Ida · GRU → REC · 12 SET 2026$/.test(w))).toBe(true);
+    // print com ida e volta e um só localizador: idem
+    const m2 = mergeNewFlights(old, { locator: 'NEW456', trips: [F.printIda({ flightNumber: 'AD 4003' }), voltaNova()] }, { affected: [0, 1] });
+    expect(m2.reservation).toEqual(old.reservation);
+    expect(m2.trips.map(t => [t.flightNumber, t.locator])).toEqual([['AD 4003', 'ABC123'], ['AD 4010', 'XYZ789']]);
+    expect(warns(m2).some(w => /reservas diferentes/.test(w))).toBe(true);
+    // ambos marcados, 2 trechos, sem localizador: troca os dois mantendo cada localizador
+    const m3 = mergeNewFlights(old, { trips: [F.printIda({ flightNumber: 'AD 4003' }), voltaNova()] }, { affected: [0, 1] });
+    expect(m3.trips.map(t => [t.flightNumber, t.locator])).toEqual([['AD 4003', 'ABC123'], ['AD 4010', 'XYZ789']]);
+    expect(m3.reservation).toEqual(old.reservation);
+    expect(warns(m3)).toEqual([]);
+  });
+
+  test('trecho novo recebe o localizador da reserva também quando o antigo só o tinha via reservations[] (voucher combinado legado)', () => {
+    const old = F.combinado();
+    old.trips.forEach(t => { delete t.locator; });
+    const m = mergeNewFlights(old, { trips: [voltaNova()] }, { affected: [1] });
+    expect(m.trips[1].locator).toBe('XYZ789');
+  });
+
+  test('M3: localizador do print sem reserva afetada com localizador => avisa que não aplicou', () => {
+    const v = F.combinado();
+    v.trips.forEach(t => { delete t.locator; });
+    v.reservation.locator = ' '; delete v.reservation.secondaryLocator; delete v.reservation.reservations;
+    const m = mergeNewFlights(v, { locator: 'NEW456', trips: [voltaNova()] }, { affected: [1] });
+    expect(warns(m).some(w => /NEW456 lido da imagem não foi aplicado \(a reserva afetada não tem localizador\)/.test(w))).toBe(true);
+  });
+
+  test('M2: trecho marcado que não aparece no print gera aviso com o rótulo', () => {
+    const m = mergeNewFlights(F.combinado3(), { trips: [voltaNova()] }, { affected: [1, 2] });
+    expect(warns(m)).toContain('Não encontrei no print o trecho marcado: Trecho interno · REC → FOR · 14 SET 2026');
+  });
+
+  test('M4: prefixo desconhecido prefere a cia do trecho substituído à dica do modelo', () => {
+    const m = mergeNewFlights(F.combinadoMulti(), { carrier: 'latam', trips: [voltaNova({ flightNumber: 'ZZ 123' })] }, { affected: [1] });
+    expect(m.trips[1].airlineDisplayName).toBe('Gol Linhas Aéreas');
+  });
+
+  test('print com ida IGUAL ao voucher antigo (não marcada): descarte silencioso, sem aviso de ignorados', () => {
+    const m = mergeNewFlights(F.combinado(), { trips: [F.printIda(), voltaNova()] }, { affected: [1] });
+    expect(warns(m)).toEqual([]);
+    expect(m.trips[0]).toEqual(F.combinado().trips[0]);
+  });
+
+  test('print com ida DIFERENTE e só a volta marcada: avisa que ignorou a ida e sugere marcar', () => {
+    const m = mergeNewFlights(F.combinado(), { trips: [F.printIda({ flightNumber: 'AD 9999' }), voltaNova()] }, { affected: [1] });
+    expect(warns(m).some(w => /^Ignorei trechos do print que não estavam marcados: AD 9999 \(GRU → REC\)\. .*marque o trecho se ele mudou$/.test(w))).toBe(true);
   });
 
   test('marcação inválida (fora do intervalo) é ignorada: vira "todos"', () => {

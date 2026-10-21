@@ -56,3 +56,10 @@ Merge restrito (rotulado, sem rótulo, extras ignorados, localizador só da rese
 
 ## Fora do escopo
 Atalho para abrir novo caso a partir do anterior; mudar a regra "o merge parte do voucher antigo"; leitura real do Gemini (continua só validável em produção).
+
+## Revisão (2026-10-21) — regras acrescentadas
+- **Localizador novo vale para todos os trechos da MESMA reserva, inclusive os não marcados** (ex.: ida e volta no mesmo localizador, só a volta marcada: o localizador novo troca a reserva toda; só `trips[].locator`/`reservations[]`/`reservation.locator` mudam, os demais campos do trecho não marcado ficam intactos).
+- **Marcação explícita cobrindo todos os trechos** (`affected_json` gravado) em voucher com ≥2 reservas usa o merge restrito: o localizador do print só é aplicado se os marcados são de UMA reserva; senão não é aplicado e há aviso. Trechos novos recebem sempre `trips[].locator` da sua reserva. Sem marcação (NULL) ou voucher de 1 reserva ⇒ comportamento antigo idêntico.
+- Trecho do print igual (voo + data de partida) a um trecho não marcado é descartado em silêncio, mesmo de direção sem afetado; só trecho realmente diferente gera o aviso "Ignorei trechos…". Trecho marcado sem substituto gera "Não encontrei no print o trecho marcado: …". Prefixo desconhecido: cia do trecho substituído (dica do modelo só em último caso).
+- `reservationChanges` também aparece sem marcação em vouchers combinados (diff sem restrição compara cada reserva).
+- Concorrência: `new-voucher` grava só se `affected_json` não mudou (409 `marcacao_alterada`); `PUT /affected` grava só se `new_json` não mudou (409 `caso_alterado`); voucher novo sem `extracted_json` ⇒ 409 `sem_extracao`; o PUT devolve `remerged`.

@@ -10,7 +10,7 @@
 // ao do antigo (por posição) — senão 422 pedindo os rótulos.
 const { validate, DIRECTIONS } = require('../services/voucherSchema');
 const { carrierDisplayName, carrierShortName, tripCarrier } = require('./voucherCarrier');
-const { locatorOf, restrictTo } = require('./flightChangeReservations');
+const { locatorOf, reservationCount, validIndexes, tripLabel } = require('./flightChangeReservations');
 
 const PREFIX_CARRIER = { AD: 'azul', G3: 'gol', GLO: 'gol', LA: 'latam', JJ: 'latam', LATAM: 'latam', AZU: 'azul', TAM: 'latam', LAN: 'latam' };
 const KNOWN = ['azul', 'gol', 'latam'];
@@ -143,7 +143,10 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     });
   } else {
     for (const t of extTrips) {
-      if (!affOfDir(t.direction).length) { ignored.push(t); continue; }                  // direção sem trecho marcado
+      if (!affOfDir(t.direction).length) {                                                 // direção sem trecho marcado
+        if (!unmarkedKeys().has(flightKey(t))) ignored.push(t);                            // igual a um não marcado: descarte silencioso
+        continue;
+      }
       if (unmarkedKeys(t.direction).has(flightKey(t))) continue;                          // é um trecho não marcado da mesma direção
       if (!repl.has(t.direction)) repl.set(t.direction, []);
       repl.get(t.direction).push(t);
@@ -177,7 +180,9 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     const c = carrierFromFlight(t.flightNumber);
     if (c) return c;
     warn(`O voo ${t.flightNumber} tem prefixo desconhecido: mantive a companhia do trecho substituído. Confira.`);
-    return hint || oldTripCarrier(replaced.get(t));
+    const o = replaced.get(t);
+    const doAntigo = tripCarrier(o, '-');   // '-' = a cia do trecho antigo não é identificável
+    return KNOWN.includes(doAntigo) ? doAntigo : (hint || oldTripCarrier(o));
   };
   const tripCarriers = trips.map(t => (replaced.has(t) ? carrierOfNew(t) : oldTripCarrier(t)));
   trips.forEach((t, i) => { if (replaced.has(t)) t.airlineDisplayName = carrierDisplayName(tripCarriers[i]); });
@@ -223,11 +228,16 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
   if (rawLoc) {
     if (!LOCATOR_RE.test(rawLoc)) warn('Localizador lido da imagem ignorado (formato inválido)');
     else if (S.length > 1) warn(`Localizador ${rawLoc} lido da imagem não foi aplicado (os trechos marcados são de reservas diferentes): confira`);
+    else if (S.length === 0) warn(`Localizador ${rawLoc} lido da imagem não foi aplicado (a reserva afetada não tem localizador): confira`);
     else if (S.length === 1 && rawLoc !== S[0]) { applied = { from: S[0], to: rawLoc }; warn(`Localizador alterado de ${S[0]} para ${rawLoc}: confira`); }
   }
   const swap = (v) => (applied && up(v) === applied.from ? applied.to : v);
   trips.forEach(t => {
-    if (replaced.has(t)) { const ol = replaced.get(t).locator; if (ol) t.locator = swap(ol); }
+    if (replaced.has(t)) {
+      const o = replaced.get(t);
+      const ol = o.locator || (reservationCount(old) >= 2 ? oldKeyOf(o) : '');   // voucher combinado: sempre carimba a reserva
+      if (ol) t.locator = swap(ol);
+    }
     else if (t.locator) t.locator = swap(t.locator);
   });
   if (applied) {
@@ -248,7 +258,16 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     });
   }
 
-  if (ignored.length) warn(`Ignorei trechos do print que não estavam marcados: ${ignored.map(describeTrip).join(', ')}`);
+  // Trecho marcado que não ganhou substituto no print (a direção não veio, ou veio com menos trechos).
+  const semSubstituto = [];
+  const vistos = new Map();
+  affTrips.forEach(a => {
+    const k = vistos.get(a.direction) || 0;
+    vistos.set(a.direction, k + 1);
+    if (k >= (repl.get(a.direction) || []).length) semSubstituto.push(a);
+  });
+  semSubstituto.forEach(a => warn(`Não encontrei no print o trecho marcado: ${tripLabel(a)}`));
+  if (ignored.length) warn(`Ignorei trechos do print que não estavam marcados: ${ignored.map(describeTrip).join(', ')}. Eles diferem do voucher antigo: marque o trecho se ele mudou`);
 
   const idas = trips.filter(t => t.direction === 'ida');
   const lastDest = (idas.length ? idas : trips).slice(-1)[0];
@@ -282,8 +301,11 @@ function mergeNewFlights(oldVoucher, extracted, opts) {
   const merged = clone(old) || {};
   const oldTrips = Array.isArray(merged.trips) ? merged.trips.filter(Boolean) : [];
   // Os índices de `affected` valem para a lista original; se ela tinha buracos, a marcação não é confiável.
-  const A = oldTrips.length === (Array.isArray(merged.trips) ? merged.trips.length : 0)
-    ? restrictTo(opts && opts.affected, oldTrips.length) : null;
+  // Marcação explícita (affected passado) restringe o merge. Cobrindo TODOS os trechos só vale se o voucher tem
+  // >=2 reservas (o localizador do print não pode ir para a reserva errada); com 1 reserva = comportamento antigo.
+  const marcados = oldTrips.length === (Array.isArray(merged.trips) ? merged.trips.length : 0)
+    ? validIndexes(opts && opts.affected, oldTrips.length) : null;
+  const A = marcados && (marcados.length < oldTrips.length || reservationCount(old) >= 2) ? marcados : null;
   if (A) return mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings, warn });
   const positional = assignDirections(extTrips, oldTrips);   // voucher antigo multi/interno: troca por posição
 
