@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { hash: hashPassword, compare: comparePassword } = require('./helpers/password');
+const { ensureColumns } = require('./helpers/dbColumns');
 
 // Use /data volume in production (Docker), fallback to local dir
 const dbDir = process.env.DB_PATH || __dirname;
@@ -304,15 +305,20 @@ function runMigrations() {
         notice_sent_at TEXT,
         confirmed_at TEXT,
         confirmation_email_sent_at TEXT,
+        affected_json TEXT,
+        extracted_json TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
     )`, (err) => {
         if (err) return console.error('Error creating flight_changes table:', err.message);
-        // Migração idempotente para bancos criados antes da coluna (erro 'duplicate column' é esperado e ignorado).
+        // Migração idempotente para bancos criados antes das colunas (erro 'duplicate column' é esperado e ignorado).
         // Encadeada no callback do CREATE para garantir que a tabela já existe.
-        db.run(`ALTER TABLE flight_changes ADD COLUMN confirmation_email_sent_at TEXT`, (alterErr) => {
-            if (alterErr && !alterErr.message.includes('duplicate column name')) console.error('Migration error:', alterErr.message);
+        //   affected_json  = índices (em old_json.trips) dos trechos alterados; NULL = todos.
+        //   extracted_json = saída normalizada do extractFlights do último voucher novo (re-merge sem IA).
+        ensureColumns(db, 'flight_changes', [
+            ['confirmation_email_sent_at', 'TEXT'], ['affected_json', 'TEXT'], ['extracted_json', 'TEXT']
+        ], () => {
             db.run(`CREATE INDEX IF NOT EXISTS idx_flight_changes_user ON flight_changes(user_id, status)`);
         });
     });
