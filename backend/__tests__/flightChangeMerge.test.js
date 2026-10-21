@@ -106,7 +106,8 @@ describe('mergeNewFlights', () => {
       expect(m.trips[0].flightNumber).toBe('G3 1922');
     });
     test('só direções que não existem no antigo => 422', () => {
-      expect(erro(() => mergeNewFlights(oldVoucher(), { trips: [{ ...idaNova(), direction: 'interno' }] })).status).toBe(422);
+      const outraRota = trip('interno', 'FOR', 'BSB', '2026-11-17T14:45:00-03:00', '2026-11-17T16:05:00-03:00', 'G3 1922');
+      expect(erro(() => mergeNewFlights(oldVoucher(), { trips: [outraRota] })).status).toBe(422);
     });
     test('antigo multi/interno: substitui por posição (inclusive com quantidade diferente)', () => {
       const o = oldVoucher();

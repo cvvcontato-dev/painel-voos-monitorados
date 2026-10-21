@@ -222,7 +222,7 @@ describe('merge e diff restritos nas rotas', () => {
     extractFlights.mockResolvedValueOnce({ carrier: 'azul', locator: null, trips: [F.printIda({ flightNumber: 'AD 9999' })] });
     const r = await novoVoucher(agent, csrf, c.id);
     expect(r.status).toBe(422);
-    expect(r.body.error).toMatch(/qual trecho do print corresponde ao que foi marcado/);
+    expect(r.body.error).toBe('O print mostra 1 trecho(s) e você marcou 1. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.');
     expect((await q.get('SELECT new_json n FROM flight_changes WHERE id=?', [c.id])).n).toBeNull();
   });
 

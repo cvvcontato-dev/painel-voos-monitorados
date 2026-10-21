@@ -4,7 +4,7 @@ const F = require('./fixtures/flightChangeCombined');
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const erro = (fn) => { try { fn(); } catch (e) { return e; } throw new Error('não lançou'); };
-const MSG_AMBIGUO = 'Não consegui identificar qual trecho do print corresponde ao que foi marcado. Envie um print com os rótulos ou só o trecho alterado.';
+const msgAmbiguo = (n, m) => `O print mostra ${n} trecho(s) e você marcou ${m}. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.`;
 const warns = (m) => m.meta.mergeWarnings;
 const semMeta = (m) => { const c = clone(m); delete c.meta.parsedAt; return c; };
 
@@ -48,23 +48,41 @@ describe('mergeNewFlights restrito aos trechos afetados', () => {
     expect(warns(m)).toEqual([]);
   });
 
-  test('ambíguo: sem rótulo, mais trechos que afetados e nenhum casa com o não marcado => 422', () => {
+  test('ambíguo: dois trechos da mesma rota (não é conexão) e só 1 marcado => 422 com a mensagem informativa e log', () => {
+    const log = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const e = erro(() => mergeNewFlights(F.combinado(), {
       trips: [voltaNova({ direction: 'multi', flightNumber: 'AD 1' }), voltaNova({ direction: 'multi', flightNumber: 'AD 2' })]
     }, { affected: [1] }));
     expect(e.status).toBe(422);
-    expect(e.body.error).toBe(MSG_AMBIGUO);
+    expect(e.body.error).toBe(msgAmbiguo(2, 1));
+    expect(log).toHaveBeenCalledWith('[FLIGHT-CHANGES] merge ambíguo: marcados=volta:AD 4002:REC-GRU print=volta:AD 1:REC-GRU,volta:AD 2:REC-GRU');
+    log.mockRestore();
   });
 
-  test('ambíguo: menos trechos sem rótulo que afetados, rótulos misturados, ou nada casa com o marcado => 422', () => {
-    const tres = F.combinado3();
-    // 2 afetados ([1,2]) e 1 trecho sem rótulo
-    expect(erro(() => mergeNewFlights(tres, { trips: [voltaNova({ direction: 'multi' })] }, { affected: [1, 2] })).body.error).toBe(MSG_AMBIGUO);
-    // rótulos misturados
-    expect(erro(() => mergeNewFlights(F.combinado(), { trips: [voltaNova(), voltaNova({ direction: 'multi' })] }, { affected: [1] })).status).toBe(422);
-    // print só com a ida, mas só a volta está marcada
+  test('(d) print com 2 trechos sem relação com a marcação (rotas e voos desconhecidos) => 422 N=2 M=1', () => {
+    const log = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const outro = (n, a, b) => F.printTrip('multi', { flightNumber: n, departure: { airport: a, airportName: null, datetime: '2026-09-19T15:10:00-03:00' }, arrival: { airport: b, airportName: null, datetime: '2026-09-19T18:40:00-03:00' } });
+    const e = erro(() => mergeNewFlights(F.combinado(), { trips: [outro('AD 1', 'SSA', 'FOR'), outro('AD 2', 'BSB', 'CWB')] }, { affected: [1] }));
+    expect(e.body.error).toBe(msgAmbiguo(2, 1));
+    expect(log.mock.calls[0][0]).toMatch(/^\[FLIGHT-CHANGES\] merge ambíguo: marcados=volta:AD 4002:REC-GRU print=-:AD 1:SSA-FOR,-:AD 2:BSB-CWB$/);
+    log.mockRestore();
+  });
+
+  test('ambíguo: menos trechos que marcados e nada casa por rota/direção; print só de trecho não marcado; 422 claro', () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const interno = F.printTrip('interno', { flightNumber: 'AD 5001', departure: { airport: 'REC', airportName: null, datetime: '2026-09-14T10:00:00-03:00' }, arrival: { airport: 'FOR', airportName: null, datetime: '2026-09-14T12:00:00-03:00' } });
+    // 2 marcados ([1,2]); 1 trecho com rota desconhecida: não dá para saber qual
+    const desconhecido = F.printTrip('multi', { flightNumber: 'AD 1', departure: { airport: 'SSA', airportName: null, datetime: '2026-09-19T15:10:00-03:00' }, arrival: { airport: 'BSB', airportName: null, datetime: '2026-09-19T18:40:00-03:00' } });
+    expect(erro(() => mergeNewFlights(F.combinado3(), { trips: [desconhecido] }, { affected: [1, 2] })).body.error).toBe(msgAmbiguo(1, 2));
+    // print só com a ida (rota da ida NÃO marcada, horário/voo diferentes): não pode virar a volta
     const e = erro(() => mergeNewFlights(F.combinado(), { trips: [F.printIda({ flightNumber: 'AD 9999' })] }, { affected: [1] }));
-    expect(e.status).toBe(422); expect(e.body.error).toBe(MSG_AMBIGUO);
+    expect(e.status).toBe(422); expect(e.body.error).toBe(msgAmbiguo(1, 1));
+    jest.restoreAllMocks();
+  });
+
+  test('rótulos repetidos/misturados do mesmo voo: duplicata é descartada e o resto segue', () => {
+    const m = mergeNewFlights(F.combinado(), { trips: [voltaNova(), voltaNova({ direction: 'multi' })] }, { affected: [1] });
+    expect(m.trips.map(t => t.flightNumber)).toEqual(['AD 4001', 'AD 4010']);
   });
 
   test('2 afetados sem rótulo: pareia por ordem e cada novo herda a direção do afetado', () => {
@@ -104,7 +122,7 @@ describe('mergeNewFlights restrito aos trechos afetados', () => {
     expect(inv.reservation).toEqual(old.reservation);
     expect(warns(inv)).toContain('Localizador lido da imagem ignorado (formato inválido)');
     const tres = F.combinado3();
-    const dois = mergeNewFlights(tres, { locator: 'ZZZ999', trips: [F.printTrip('interno', { flightNumber: 'AD 5001' }), voltaNova()] }, { affected: [1, 2] });
+    const dois = mergeNewFlights(tres, { locator: 'ZZZ999', trips: [F.printTrip('interno', { flightNumber: 'AD 5001', departure: { airport: 'REC', airportName: null, datetime: '2026-09-14T10:00:00-03:00' }, arrival: { airport: 'FOR', airportName: null, datetime: '2026-09-14T12:00:00-03:00' } }), voltaNova()] }, { affected: [1, 2] });
     expect(dois.trips.map(t => t.locator)).toEqual(['ABC123', 'INT111', 'XYZ789']);
     expect(warns(dois).some(w => /ZZZ999 lido da imagem não foi aplicado \(os trechos marcados são de reservas diferentes\)/.test(w))).toBe(true);
   });
