@@ -8,8 +8,10 @@ const pdfStore = require('../services/voucherPdfStore');
 const { sendVoucherEmail, buildVoucherEmailHtml, AGENCY_LOGO_PATH, AGENCY_LOGO_CID } = require('../services/notifier');
 const { sendNoticeEmail, buildNoticeEmailHtml, SUBJECT: NOTICE_SUBJECT } = require('../services/flightChangeEmail');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
-const { extractAndValidate, extractFlightsMerged, saveVoucher } = require('../helpers/voucherStore');
+const { extractAndValidate, extractFlightsRaw, saveVoucher, hashOf } = require('../helpers/voucherStore');
 const { diffVouchers } = require('../helpers/flightChangeDiff');
+const { mergeNewFlights } = require('../helpers/flightChangeMerge');
+const Res = require('../helpers/flightChangeReservations');
 const { buildNoticeText, buildConfirmationText, buildChangeSummaryLines } = require('../helpers/flightChangeMessage');
 
 const router = express.Router();
@@ -40,6 +42,9 @@ async function supportPhone() {
 }
 
 function parse(json) { try { return json ? JSON.parse(json) : null; } catch { return null; } }
+
+// Voucher antigo de ≥2 reservas sem marcação: o operador precisa escolher o(s) trecho(s) alterado(s) antes de seguir.
+const escolhaTrechos = (res) => res.status(409).json({ error: 'escolha_trechos', message: 'Marque os trechos alterados antes de continuar' });
 
 /**
  * Remove um voucher (linha + arquivo) de forma best-effort. Escopo por user_id.
@@ -101,7 +106,9 @@ const loadSettings = async () => (await get(`SELECT contact_phone, contact_email
 /** Monta a resposta de detalhe (inclui diff e as mensagens prontas). */
 async function detail(row, { emailSent = false, baseUrl = '' } = {}) {
   const old = parse(row.old_json), novo = parse(row.new_json);
-  const diff = old && novo ? diffVouchers(old, novo) : null;
+  const restr = Res.restrictionOf(row, old);   // null = todos os trechos
+  const needsAffected = Res.needsAffected(row, old);
+  const diff = old && novo ? diffVouchers(old, novo, { affected: restr }) : null;
   const phone = await supportPhone();
   emailSent = emailSent || !!row.confirmation_email_sent_at;
   const voucherUrl = itinerarioUrlOf(row.new_voucher_id, baseUrl);
@@ -111,9 +118,11 @@ async function detail(row, { emailSent = false, baseUrl = '' } = {}) {
     notice_sent_at: row.notice_sent_at, confirmed_at: row.confirmed_at, created_at: row.created_at,
     confirmation_email_sent_at: row.confirmation_email_sent_at,
     old, new: novo, diff, support_phone: phone,
+    affected: Res.effectiveAffected(row, old), needs_affected: needsAffected,
+    reservation_groups: old ? Res.reservationGroups(old) : [],
     warnings: Array.isArray(novo && novo.meta && novo.meta.mergeWarnings) ? novo.meta.mergeWarnings : [],
     messages: {
-      notice: old ? buildNoticeText(old, { supportPhone: phone }) : null,
+      notice: old && !needsAffected ? buildNoticeText(old, { supportPhone: phone, affected: restr }) : null,
       confirmation: novo && diff ? buildConfirmationText(novo, diff, { emailSent, voucherUrl }) : null
     }
   };
@@ -174,6 +183,7 @@ router.post('/:id/notice-sent', async (req, res) => {
   try {
     const row = await own(req.params.id, req.session.userId);
     if (!row) return res.status(404).json({ error: 'não encontrado' });
+    if (Res.needsAffected(row, parse(row.old_json))) return escolhaTrechos(res);
     if (row.status === 'aviso_pendente') {
       await run(`UPDATE flight_changes SET status='aviso_enviado', notice_sent_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND status='aviso_pendente'`, [row.id]);
     }
@@ -187,16 +197,21 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
     const row = await own(req.params.id, userId);
     if (!row) return res.status(404).json({ error: 'não encontrado' });
     if (row.status === 'confirmado') return res.status(409).json({ error: 'caso já confirmado' });
-    if (!req.file) return res.status(400).json({ error: 'arquivo obrigatório (campo "file")' });
     const oldVoucher = parse(row.old_json);
-    const unified = await extractFlightsMerged(req.file, oldVoucher);
+    if (Res.needsAffected(row, oldVoucher)) return escolhaTrechos(res);
+    if (!req.file) return res.status(400).json({ error: 'arquivo obrigatório (campo "file")' });
+    const restr = Res.restrictionOf(row, oldVoucher);
+    // A extração normalizada é guardada (extracted_json) para refazer o merge sem nova chamada à IA se a marcação mudar.
+    const extracted = await extractFlightsRaw(req.file, oldVoucher);
+    const unified = mergeNewFlights(oldVoucher, extracted, { affected: restr });   // lança { status: 422, body } se inválido
+    unified.meta.sourceFileHash = hashOf(req.file);
     const newId = await saveVoucher({ userId, file: req.file, unified });
-    const diff = diffVouchers(oldVoucher, unified);
+    const diff = diffVouchers(oldVoucher, unified, { affected: restr });
     let upd;
     try {
-      upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
+      upd = await run(`UPDATE flight_changes SET new_voucher_id=?, new_json=?, diff_json=?, extracted_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
                          WHERE id=? AND user_id=? AND status != 'confirmado'`,
-        [newId, JSON.stringify(unified), JSON.stringify(diff), row.id, userId]);
+        [newId, JSON.stringify(unified), JSON.stringify(diff), JSON.stringify(extracted), row.id, userId]);
     } catch (e) { await dropVoucher(newId, userId, row.id); throw e; }
     if (upd.changes === 0) {   // confirmado por outra requisição entre a leitura e a escrita
       await dropVoucher(newId, userId, row.id);
@@ -207,6 +222,61 @@ router.post('/:id/new-voucher', upload.single('file'), async (req, res) => {
       await dropVoucher(row.new_voucher_id, userId, row.id);
     }
     storePdfInBackground(req, newId, userId);
+    res.json(await detailFor(req, await own(row.id, userId)));
+  } catch (e) { fail(req, res, e); }
+});
+
+/**
+ * Marca o(s) trecho(s) alterado(s) do caso. Se já existe voucher novo extraído, refaz o merge a partir de
+ * extracted_json (sem nova chamada à IA), recalcula diff/mensagens, sincroniza `vouchers` e refaz o PDF.
+ */
+router.put('/:id/affected', async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const row = await own(req.params.id, userId);
+    if (!row) return res.status(404).json({ error: 'não encontrado' });
+    if (row.status === 'confirmado') return res.status(409).json({ error: 'caso já confirmado' });
+    const old = parse(row.old_json);
+    if (!old) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
+    const n = Array.isArray(old.trips) ? old.trips.length : 0;
+    const list = req.body && req.body.affected;
+    if (!Array.isArray(list) || !list.length || list.length > n || new Set(list).size !== list.length
+        || list.some(i => !Number.isInteger(i) || i < 0 || i >= n)) {
+      return res.status(400).json({ error: 'trechos_invalidos', message: 'Marque ao menos um trecho válido do voucher.' });
+    }
+    const affected = [...list].sort((a, b) => a - b);
+    const restr = Res.restrictTo(affected, n);
+    const atual = parse(row.new_json), extracted = parse(row.extracted_json);
+
+    if (!atual) {   // ainda sem voucher novo: só grava a marcação
+      const upd = await run(`UPDATE flight_changes SET affected_json=?, updated_at=datetime('now') WHERE id=? AND user_id=? AND status != 'confirmado'`,
+        [JSON.stringify(affected), row.id, userId]);
+      if (upd.changes === 0) return res.status(409).json({ error: 'caso já confirmado' });
+      return res.json(await detailFor(req, await own(row.id, userId)));
+    }
+
+    // Com voucher novo: refaz o merge (a partir da extração guardada) ANTES de gravar qualquer coisa — 422 não altera o caso.
+    let unified = atual;
+    if (extracted) {
+      unified = mergeNewFlights(old, extracted, { affected: restr });
+      if (atual.meta && atual.meta.sourceFileHash) unified.meta.sourceFileHash = atual.meta.sourceFileHash;
+    }
+    const diff = diffVouchers(old, unified, { affected: restr });
+    const json = JSON.stringify(unified);
+    const upd = await run(`UPDATE flight_changes SET affected_json=?, new_json=?, diff_json=?, confirmation_email_sent_at=NULL, updated_at=datetime('now')
+                            WHERE id=? AND user_id=? AND status != 'confirmado'`, [JSON.stringify(affected), json, JSON.stringify(diff), row.id, userId]);
+    if (upd.changes === 0) return res.status(409).json({ error: 'caso já confirmado' });
+    if (row.new_voucher_id) {
+      try {
+        await run(`UPDATE vouchers SET unified_json=?, layout_version=?, updated_at=datetime('now') WHERE id=? AND user_id=?`,
+          [json, unified.layoutVersion, row.new_voucher_id, userId]);
+      } catch (e) {
+        await run(`UPDATE flight_changes SET affected_json=?, new_json=?, diff_json=?, confirmation_email_sent_at=? WHERE id=? AND user_id=?`,
+          [row.affected_json, row.new_json, row.diff_json, row.confirmation_email_sent_at, row.id, userId]).catch(() => {});
+        throw e;
+      }
+      storePdfInBackground(req, row.new_voucher_id, userId);
+    }
     res.json(await detailFor(req, await own(row.id, userId)));
   } catch (e) { fail(req, res, e); }
 });
@@ -227,7 +297,8 @@ router.put('/:id/new', async (req, res) => {
     unified.meta = atual.meta;
     const v = validate(unified);
     if (!v.ok) return res.status(422).json({ error: 'dados inválidos', details: v.errors });
-    const diff = diffVouchers(parse(row.old_json), unified);
+    const oldV = parse(row.old_json);
+    const diff = diffVouchers(oldV, unified, { affected: Res.restrictionOf(row, oldV) });
     const json = JSON.stringify(unified);
     // Duas escritas sem transação explícita (uma única conexão sqlite3 compartilhada com o resto do app:
     // BEGIN/COMMIT poderia englobar queries de outras requisições). Em vez disso: caso primeiro (com guarda de
@@ -258,7 +329,7 @@ router.post('/:id/confirm', async (req, res) => {
     if (!row.new_json) return res.status(409).json({ error: 'sem_voucher_novo' });
     const old = parse(row.old_json), novo = parse(row.new_json);
     if (!old || !novo) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
-    const diff = diffVouchers(old, novo);
+    const diff = diffVouchers(old, novo, { affected: Res.restrictionOf(row, old) });
     if (!diff.hasChanges) return res.status(409).json({ error: 'nada_mudou' });
     if (row.status !== 'confirmado') {
       await run(`UPDATE flight_changes SET status='confirmado', confirmed_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND user_id=?`, [row.id, req.session.userId]);
@@ -283,12 +354,14 @@ router.post('/:id/send-email', async (req, res) => {
     const bcc = process.env.EMAIL_USER || null;
     let result;
     if (kind === 'aviso') {
-      result = await sendNoticeEmail({ to: emails, bcc, voucher: parse(row.old_json), supportPhone: await supportPhone() });
+      const oldV = parse(row.old_json);
+      if (Res.needsAffected(row, oldV)) return escolhaTrechos(res);
+      result = await sendNoticeEmail({ to: emails, bcc, voucher: oldV, supportPhone: await supportPhone(), affected: Res.restrictionOf(row, oldV) });
     } else {
       if (!row.new_json || !row.new_voucher_id) return res.status(409).json({ error: 'sem_voucher_novo' });
       const old = parse(row.old_json), novo = parse(row.new_json);
       if (!old || !novo) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
-      const diff = diffVouchers(old, novo);
+      const diff = diffVouchers(old, novo, { affected: Res.restrictionOf(row, old) });
       if (!diff.hasChanges) return res.status(409).json({ error: 'nada_mudou' });
       // Fonte única = new_json do caso: o PDF é renderizado a partir de `vouchers`, então sobrescreve com ele.
       const sync = await run(`UPDATE vouchers SET unified_json=?, layout_version=?, updated_at=datetime('now') WHERE id=? AND user_id=?`,
@@ -325,12 +398,13 @@ router.get('/:id/email-preview', async (req, res) => {
     if (kind === 'aviso') {
       const old = parse(row.old_json);
       if (!old) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
-      return res.json({ subject: NOTICE_SUBJECT, html: inlineLogo(buildNoticeEmailHtml(old, { supportPhone: await supportPhone() })) });
+      if (Res.needsAffected(row, old)) return escolhaTrechos(res);
+      return res.json({ subject: NOTICE_SUBJECT, html: inlineLogo(buildNoticeEmailHtml(old, { supportPhone: await supportPhone(), affected: Res.restrictionOf(row, old) })) });
     }
     if (!row.new_json || !row.new_voucher_id) return res.status(409).json({ error: 'sem_voucher_novo' });
     const old = parse(row.old_json), novo = parse(row.new_json);
     if (!old || !novo) return res.status(500).json({ error: 'voucher_corrompido', message: 'Os dados do voucher deste caso estão corrompidos.' });
-    const diff = diffVouchers(old, novo);
+    const diff = diffVouchers(old, novo, { affected: Res.restrictionOf(row, old) });
     if (!diff.hasChanges) return res.status(409).json({ error: 'nada_mudou' });
     const args = confirmationEmailArgs(novo, diff, await loadSettings(), itinerarioUrlOf(row.new_voucher_id, publicBaseUrl()));
     const html = await buildVoucherEmailHtml({ voucherData: args.voucherData, settings: args.settings, customMessage: args.customMessage, itinerarioUrl: args.itinerarioUrl });

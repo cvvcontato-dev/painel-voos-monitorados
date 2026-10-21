@@ -52,15 +52,22 @@ function referenceOf(v) {
   return m ? { referenceYear: Number(m[1]), referenceDate: `${m[3]}/${m[2]}/${m[1]}` } : {};
 }
 
-/** Print/PDF só com voos: extrai os trechos e mescla com o voucher ANTIGO (passageiros etc. ficam dele). */
-async function extractFlightsMerged(file, oldVoucher) {
-  let extracted;
+/** Print/PDF só com voos: extrai e normaliza os trechos ({ carrier, locator, trips }), ainda sem mesclar. */
+async function extractFlightsRaw(file, oldVoucher) {
   try {
-    extracted = await extractFlights(file.buffer, file.mimetype, referenceOf(oldVoucher));
+    return await extractFlights(file.buffer, file.mimetype, referenceOf(oldVoucher));
   } catch (err) {
     throw mapExtractionError(err);
   }
-  const unified = mergeNewFlights(oldVoucher, extracted);   // lança { status: 422, body } se inválido
+}
+
+/**
+ * Extrai os voos e mescla com o voucher ANTIGO (passageiros etc. ficam dele). `opts.affected` restringe a
+ * troca aos trechos marcados (ver helpers/flightChangeMerge.js).
+ */
+async function extractFlightsMerged(file, oldVoucher, opts) {
+  const extracted = await extractFlightsRaw(file, oldVoucher);
+  const unified = mergeNewFlights(oldVoucher, extracted, opts);   // lança { status: 422, body } se inválido
   unified.meta.sourceFileHash = hashOf(file);
   return unified;
 }
@@ -84,4 +91,4 @@ function saveVoucher({ userId, file, unified }) {
   });
 }
 
-module.exports = { extractAndValidate, extractFlightsMerged, saveVoucher };
+module.exports = { extractAndValidate, extractFlightsRaw, extractFlightsMerged, saveVoucher, hashOf };
