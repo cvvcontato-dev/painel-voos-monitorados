@@ -27,6 +27,7 @@
 // os mapas diferem (lado sem bagagem = desconhecido). baggageDetail lista antes/depois.
 
 const { locatorOf, restrictTo } = require('./flightChangeReservations');
+const { journeysOf, expandAffected, itineraryText } = require('./flightJourneys');
 
 const ISO_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
@@ -184,10 +185,42 @@ function diffBaggage(oldList, newList) {
   return { changed: true, detail: { antes: baggageLines(a.map), depois: baggageLines(b.map) } };
 }
 
+const journeyStrongKey = (j) => j.trips.map(strongKey).join('+');
+// Mesma estrutura de escalas: mesma quantidade de voos e mesmas escalas intermediárias (origem/destino da viagem
+// podem mudar: isso continua sendo comparado voo a voo).
+const sameStructure = (a, b) => a.trips.length === b.trips.length
+  && a.trips.slice(0, -1).every((t, k) => compact(t.arrival?.airport) === compact(b.trips[k].arrival?.airport));
+
+/** Viagem como um "trecho sintético" (partida do 1º voo, chegada do último) para a mensagem/UI. */
+function syntheticTrip(j, voucher) {
+  const first = j.trips[0], last = j.trips[j.trips.length - 1];
+  return {
+    direction: j.direction, dateLabel: first.dateLabel, locator: locatorOf(voucher, first),
+    flightNumber: j.trips.map(t => squash(t.flightNumber) || '—').join(' + '),
+    departure: first.departure, arrival: last.arrival, cabinClass: first.cabinClass == null ? null : first.cabinClass,
+    segments: j.trips.length
+  };
+}
+
+/** Mudanças de uma viagem cuja estrutura de escalas mudou: itinerário + partida do 1º voo + chegada do último. */
+function compareJourney(oj, nj) {
+  const a = syntheticTrip(oj, {}), b = syntheticTrip(nj, {});
+  const changes = [{ campo: 'itinerario', antes: itineraryText(oj.trips), depois: itineraryText(nj.trips) }];
+  for (const [campo, key, show] of FIELDS) {
+    if (campo !== 'partida' && campo !== 'chegada') continue;
+    if (key(a) !== key(b)) changes.push({ campo, antes: show(a), depois: show(b) });
+  }
+  return changes;
+}
+
 /**
- * `opts.affected` = índices (em oldV.trips) dos trechos alterados. Com subconjunto, os demais trechos são
- * SEMPRE 'igual' (não entram na mensagem) e trechos novos só contam nas direções dos afetados. Sem `affected`
- * (ou cobrindo todos), compara tudo como sempre.
+ * `opts.affected` = índices (em oldV.trips) dos voos das viagens alteradas (normalizados para viagens inteiras).
+ * Com subconjunto, as demais viagens são SEMPRE 'igual' (não entram na mensagem) e voos novos só contam nas
+ * direções dos afetados. Sem `affected` (ou cobrindo todos), compara tudo como sempre.
+ *
+ * Viagem = voos encadeados (helpers/flightJourneys.js). Se a estrutura de escalas mudou (nº de voos ou aeroportos
+ * das pernas), sai UMA entrada 'alterado' por viagem (journey: true; old/new = trecho sintético com a origem e o
+ * destino da viagem inteira) com `changes` itinerario/partida/chegada; senão, comparação voo a voo como antes.
  *
  * Extras do resultado: reservationChanges [{ direction, antes, depois }] = um por reserva (afetada) cujo
  * localizador mudou; affectedReservations = [{ locator, directions }] (localizadores NOVOS das reservas dos
@@ -195,20 +228,26 @@ function diffBaggage(oldList, newList) {
  */
 function diffVouchers(oldV, newV, opts) {
   const o = oldV || {}, n = newV || {};
-  const oldG = groupByDirection(o.trips), newG = groupByDirection(n.trips);
-  const A = restrictTo(opts && opts.affected, Array.isArray(o.trips) ? o.trips.length : 0);
-  const isAffected = (t) => !A || A.includes((o.trips || []).indexOf(t));
-  const affectedDirs = new Set(A ? (o.trips || []).filter((t, i) => t && A.includes(i)).map(t => t.direction || 'multi') : []);
+  const A = restrictTo(expandAffected(o, opts && opts.affected), Array.isArray(o.trips) ? o.trips.length : 0);
+  const idxOf = new Map();
+  (o.trips || []).forEach((t, i) => { if (t) idxOf.set(t, i); });
+  const isAffectedFlight = (t) => !A || A.includes(idxOf.get(t));
+  const oldJ = journeysOf(o), newJ = journeysOf(n);
+  const groupJ = (list) => { const m = new Map(); list.forEach(j => { if (!m.has(j.direction)) m.set(j.direction, []); m.get(j.direction).push(j); }); return m; };
+  const oldG = groupJ(oldJ), newG = groupJ(newJ);
+  const affectedDirs = new Set(oldJ.filter(j => isAffectedFlight(j.trips[0])).map(j => j.direction));
   const trips = [];
+  const affEntries = new Set();      // entradas que pertencem a viagens marcadas
+  const push = (entry, affected) => { trips.push(entry); if (affected) affEntries.add(entry); return entry; };
 
   for (const [direction, olds] of oldG) {
     const news = (newG.get(direction) || []).slice();
     const pair = new Array(olds.length).fill(null);
     const used = new Set();
-    // passe (a): chave forte
+    // passe (a): chave forte da viagem (voo + data de partida de todos os voos)
     olds.forEach((old, i) => {
-      const k = strongKey(old);
-      const j = news.findIndex((nw, idx) => !used.has(idx) && strongKey(nw) === k);
+      const k = journeyStrongKey(old);
+      const j = news.findIndex((nw, idx) => !used.has(idx) && journeyStrongKey(nw) === k);
       if (j >= 0) { pair[i] = news[j]; used.add(j); }
     });
     // passe (b): sobrantes por ordem
@@ -216,21 +255,31 @@ function diffVouchers(oldV, newV, opts) {
     let r = 0;
     olds.forEach((old, i) => { if (!pair[i] && r < restNew.length) pair[i] = restNew[r++]; });
     const pairedNew = new Set(pair.filter(Boolean));
-    olds.forEach((old, i) => {
-      const nw = pair[i];
-      if (!isAffected(old)) return trips.push({ status: 'igual', direction, changes: [], old, new: nw || old });   // não marcado: nunca entra na mensagem
-      if (!nw) return trips.push({ status: 'removido', direction, changes: [], old, new: null });
-      const changes = compareTrip(old, nw);
-      trips.push({ status: changes.length ? 'alterado' : 'igual', direction, changes, old, new: nw });
+    olds.forEach((oj, i) => {
+      const nj = pair[i];
+      const aff = isAffectedFlight(oj.trips[0]);
+      if (!aff) {                                           // não marcada: nunca entra na mensagem
+        oj.trips.forEach((old, k) => push({ status: 'igual', direction, changes: [], old, new: (nj && nj.trips[k]) || old }, false));
+        return;
+      }
+      if (!nj) { oj.trips.forEach(old => push({ status: 'removido', direction, changes: [], old, new: null }, true)); return; }
+      if (sameStructure(oj, nj)) {
+        oj.trips.forEach((old, k) => {
+          const changes = compareTrip(old, nj.trips[k]);
+          push({ status: changes.length ? 'alterado' : 'igual', direction, changes, old, new: nj.trips[k] }, true);
+        });
+        return;
+      }
+      push({ status: 'alterado', direction, changes: compareJourney(oj, nj), old: syntheticTrip(oj, o), new: syntheticTrip(nj, n), journey: true }, true);
     });
     if (!A || affectedDirs.has(direction)) {
-      news.filter(nw => !pairedNew.has(nw)).forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+      news.filter(nw => !pairedNew.has(nw)).forEach(nj => nj.trips.forEach(nw => push({ status: 'novo', direction, changes: [], old: null, new: nw }, true)));
     }
   }
   if (!A) {
     for (const [direction, news] of newG) {
       if (oldG.has(direction)) continue;
-      news.forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+      news.forEach(nj => nj.trips.forEach(nw => push({ status: 'novo', direction, changes: [], old: null, new: nw }, true)));
     }
   }
 
@@ -241,7 +290,7 @@ function diffVouchers(oldV, newV, opts) {
   const reservationChanges = [];
   const seen = new Set();
   for (const t of trips) {
-    if (!t.old || !t.new || t.old === t.new || !isAffected(t.old)) continue;
+    if (!t.old || !t.new || t.old === t.new || !affEntries.has(t)) continue;
     const antes = locatorOf(o, t.old), depois = locatorOf(n, t.new);
     if (!antes || !depois || antes === depois || seen.has(`${antes}|${depois}`)) continue;
     seen.add(`${antes}|${depois}`);
@@ -252,7 +301,7 @@ function diffVouchers(oldV, newV, opts) {
   if (A) {
     affectedReservations = [];
     for (const t of trips) {
-      if (t.status === 'igual' && !isAffected(t.old)) continue;
+      if (!affEntries.has(t)) continue;
       const loc = t.new ? locatorOf(n, t.new) : locatorOf(o, t.old);
       if (!loc) continue;
       let g = affectedReservations.find(x => x.locator === loc);

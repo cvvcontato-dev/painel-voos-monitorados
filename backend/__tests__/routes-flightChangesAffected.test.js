@@ -72,8 +72,12 @@ describe('detalhe do caso', () => {
     expect(c.affected).toEqual([0, 1]);
     expect(c.messages.notice).toBeNull();
     expect(c.reservation_groups).toEqual([
-      { locator: 'ABC123', carrier: 'azul', appliesTo: 'ida', trips: [{ index: 0, direction: 'ida', label: 'Ida · GRU → REC · 12 SET 2026' }] },
-      { locator: 'XYZ789', carrier: 'azul', appliesTo: 'volta', trips: [{ index: 1, direction: 'volta', label: 'Volta · REC → GRU · 19 SET 2026' }] }
+      { locator: 'ABC123', carrier: 'azul', appliesTo: 'ida', trips: [{ index: 0, direction: 'ida', label: 'Ida · GRU → REC · 12 SET 2026' }],
+        journeys: [{ key: 'j0', direction: 'ida', origin: 'GRU', destination: 'REC', label: 'Ida · GRU → REC · 12 SET 2026 · direto', segments: 1,
+          trips: [{ index: 0, label: 'Ida · GRU → REC · 12 SET 2026' }] }] },
+      { locator: 'XYZ789', carrier: 'azul', appliesTo: 'volta', trips: [{ index: 1, direction: 'volta', label: 'Volta · REC → GRU · 19 SET 2026' }],
+        journeys: [{ key: 'j1', direction: 'volta', origin: 'REC', destination: 'GRU', label: 'Volta · REC → GRU · 19 SET 2026 · direto', segments: 1,
+          trips: [{ index: 1, label: 'Volta · REC → GRU · 19 SET 2026' }] }] }
     ]);
   });
 
@@ -222,7 +226,7 @@ describe('merge e diff restritos nas rotas', () => {
     extractFlights.mockResolvedValueOnce({ carrier: 'azul', locator: null, trips: [F.printIda({ flightNumber: 'AD 9999' })] });
     const r = await novoVoucher(agent, csrf, c.id);
     expect(r.status).toBe(422);
-    expect(r.body.error).toBe('O print mostra 1 trecho(s) e você marcou 1. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.');
+    expect(r.body.error).toBe('O print mostra 1 viagem(ns) e você marcou 1. Marque exatamente as viagens que aparecem no print, ou envie um print só da viagem alterada.');
     expect((await q.get('SELECT new_json n FROM flight_changes WHERE id=?', [c.id])).n).toBeNull();
   });
 
@@ -350,6 +354,26 @@ describe('merge e diff restritos nas rotas', () => {
     r = await marcar(agent, csrf, c.id, [0, 1]);
     expect(r.status).toBe(409); expect(r.body.error).toBe('caso_alterado');
     expect(await q.get('SELECT * FROM flight_changes WHERE id=?', [c.id])).toEqual(antes);
+  });
+
+  test('viagem com conexão: PUT /affected normaliza para a viagem inteira e new-voucher troca o bloco (conexão -> direto)', async () => {
+    const { agent, csrf } = await authed();
+    const c = await casoCombinado(agent, csrf, F.combinadoConexao());
+    expect(c.needs_affected).toBe(true);
+    expect(c.reservation_groups[1].journeys).toHaveLength(1);
+    expect(c.reservation_groups[1].journeys[0]).toMatchObject({ key: 'j1', segments: 2, label: 'Volta · REC → BSB → GRU · 19 SET 2026' });
+    const m = await marcar(agent, csrf, c.id, [2]);           // só o 2º voo da volta
+    expect(m.status).toBe(200);
+    expect(m.body.affected).toEqual([1, 2]);                  // normalizado: a viagem inteira
+    expect((await q.get('SELECT affected_json a FROM flight_changes WHERE id=?', [c.id])).a).toBe('[1,2]');
+    expect(m.body.messages.notice).toContain('no seu voo de *volta* da reserva *XYZ789* (REC → GRU, 19 SET 2026).');
+    extractFlights.mockResolvedValueOnce({ carrier: 'azul', locator: null, trips: [F.printTrip('volta', { flightNumber: 'AD 4020' })] });
+    const r = await novoVoucher(agent, csrf, c.id);
+    expect(r.status).toBe(200);
+    expect(r.body.new.trips.map(t => t.flightNumber)).toEqual(['AD 4001', 'AD 4020']);
+    expect(statusOf(r.body)).toEqual(['ida:igual', 'volta:alterado']);
+    expect(r.body.diff.trips[1].changes[0]).toEqual({ campo: 'itinerario', antes: 'REC → BSB → GRU (AD 4002 + AD 4012)', depois: 'REC → GRU (AD 4020, direto)' });
+    expect(r.body.messages.confirmation).toContain('• Itinerário: REC → BSB → GRU (AD 4002 + AD 4012) → REC → GRU (AD 4020, direto)');
   });
 
   test('PUT /new respeita a marcação: mexer num trecho NÃO marcado não conta como mudança', async () => {

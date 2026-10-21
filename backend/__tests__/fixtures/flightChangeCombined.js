@@ -45,6 +45,15 @@ const combinado3 = () => combineVouchers([
 const combinado = (idaOpts, voltaOpts) => combineVouchers([
   { voucher: ida(idaOpts), role: 'ida' }, { voucher: volta(voltaOpts), role: 'volta' }
 ]);
+/** Como `combinado`, mas a VOLTA tem conexão: REC → BSB (AD 4002) + BSB → GRU (AD 4012); índices 0 (ida), 1 e 2 (volta). */
+const combinadoConexao = () => {
+  const c = combinado();
+  const v = c.trips[1];
+  const a = { ...JSON.parse(JSON.stringify(v)), flightNumber: 'AD 4002', departure: { airport: 'REC', datetime: '2026-09-19T10:00:00-03:00' }, arrival: { airport: 'BSB', datetime: '2026-09-19T12:30:00-03:00' } };
+  const b = { ...JSON.parse(JSON.stringify(v)), flightNumber: 'AD 4012', departure: { airport: 'BSB', datetime: '2026-09-19T14:00:00-03:00' }, arrival: { airport: 'GRU', datetime: '2026-09-19T16:00:00-03:00' } };
+  c.trips.splice(1, 1, a, b);
+  return c;
+};
 /** Ida ABC123 (Azul) + volta XYZ789 (Gol): carrier 'multi'. */
 const combinadoMulti = () => combinado({}, { carrier: 'gol', flight: 'G3 1925' });
 
@@ -61,4 +70,4 @@ const printIda = (o = {}) => printTrip('ida', {
   flightNumber: 'AD 4001', ...o
 });
 
-module.exports = { single, ida, volta, interno, combinado3, combinado, combinadoMulti, printTrip, printIda };
+module.exports = { single, ida, volta, interno, combinado3, combinadoConexao, combinado, combinadoMulti, printTrip, printIda };

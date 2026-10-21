@@ -10,7 +10,8 @@
 // ao do antigo (por posição) — senão 422 pedindo os rótulos.
 const { validate, DIRECTIONS } = require('../services/voucherSchema');
 const { carrierDisplayName, carrierShortName, tripCarrier } = require('./voucherCarrier');
-const { locatorOf, reservationCount, validIndexes, tripLabel } = require('./flightChangeReservations');
+const { locatorOf, reservationCount } = require('./flightChangeReservations');
+const { journeysOf, chainPrintTrips, expandAffected, journeyTitle } = require('./flightJourneys');
 
 const PREFIX_CARRIER = { AD: 'azul', G3: 'gol', GLO: 'gol', LA: 'latam', JJ: 'latam', LATAM: 'latam', AZU: 'azul', TAM: 'latam', LAN: 'latam' };
 const KNOWN = ['azul', 'gol', 'latam'];
@@ -111,100 +112,113 @@ function assignDirections(ext, oldTrips) {
   return false;
 }
 
-const ambiguousAffectedMsg = (n, m) => `O print mostra ${n} trecho(s) e você marcou ${m}. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.`;
+const ambiguousAffectedMsg = (n, m) => `O print mostra ${n} viagem(ns) e você marcou ${m}. Marque exatamente as viagens que aparecem no print, ou envie um print só da viagem alterada.`;
 const DIR_NAME = { ida: 'ida', volta: 'volta', interno: 'trecho interno', multi: 'trecho' };
 const dirName = (d) => DIR_NAME[d] || 'trecho';
-const routeKey = (t) => `${t.departure.airport}>${t.arrival.airport}`;
-const startMs = (t) => { const v = Date.parse(t.departure.datetime); return Number.isFinite(v) ? v : 0; };
+const odKey = (j) => `${j.origin}>${j.destination}`;
+const startMs = (j) => { const v = Date.parse(j.trips[0].departure.datetime); return Number.isFinite(v) ? v : 0; };
+const odText = (j) => `${j.origin} → ${j.destination}`;
 
 /**
- * Reconcilia a DIREÇÃO dos trechos do print pela ROTA (aeroportos), ignorando o rótulo do modelo: se a rota
- * (partida, chegada) coincide com trechos de UMA única direção entre os `candidatos` do voucher antigo, o trecho
- * do print passa a ter essa direção (com aviso se o rótulo do modelo era outro). Rotas que casam com mais de uma
- * direção, ou com nenhuma, ficam como estão. `soRotulados`: não mexe nos trechos sem rótulo.
+ * Reconcilia a DIREÇÃO das viagens do print pela ORIGEM/DESTINO da viagem inteira (juntando as conexões),
+ * ignorando o rótulo do modelo: se a rota coincide com viagens de UMA única direção do voucher antigo, todos os
+ * voos da viagem do print passam a ter essa direção (com aviso se o rótulo era outro). Rotas que casam com mais
+ * de uma direção, ou com nenhuma, ficam como estão. `soRotulados`: não mexe nas viagens sem rótulo.
  */
-function reconcileByRoute(candidatos, extTrips, warn, soRotulados) {
-  for (const t of extTrips) {
-    if (soRotulados && !t.direction) continue;
-    const dirs = new Set(candidatos.filter(c => routeKey(c) === routeKey(t)).map(c => c.direction || 'multi'));
+function reconcileByRoute(viagensAntigas, viagensPrint, warn, soRotulados) {
+  for (const pj of viagensPrint) {
+    if (soRotulados && !pj.direction) continue;
+    const dirs = new Set(viagensAntigas.filter(c => odKey(c) === odKey(pj)).map(c => c.direction || 'multi'));
     if (dirs.size !== 1) continue;
     const d = [...dirs][0];
-    if (t.direction === d) continue;
-    if (t.direction) warn(`O print identificava ${dirName(t.direction)} mas, pela rota (${t.departure.airport} → ${t.arrival.airport}), usei como ${dirName(d)}.`);
-    t.direction = d;
+    if (pj.direction === d) continue;
+    if (pj.direction) warn(`O print identificava ${dirName(pj.direction)} mas, pela rota (${odText(pj)}), usei como ${dirName(d)}.`);
+    pj.direction = d;
+    pj.trips.forEach(t => { t.direction = d; });
   }
 }
 
 /** 422 de ambiguidade (com log de diagnóstico, sem dados pessoais). */
-function ambiguousAffected(marcados, print, nPrint) {
+function ambiguousAffected(marcados, print, nViagens, mViagens) {
   const fmt = (t) => `${t.direction || '-'}:${t.flightNumber}:${t.departure && t.departure.airport}-${t.arrival && t.arrival.airport}`;
   console.warn(`[FLIGHT-CHANGES] merge ambíguo: marcados=${marcados.map(fmt).join(',')} print=${print.map(fmt).join(',')}`);
-  return unprocessable(ambiguousAffectedMsg(nPrint, marcados.length));
+  return unprocessable(ambiguousAffectedMsg(nViagens, mViagens));
 }
 const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
 const flightKey = (t) => String(t.flightNumber || '').replace(/\s+/g, '').toUpperCase() + '|' + String(t.departure && t.departure.datetime || '').slice(0, 10);
 const describeTrip = (t) => `${t.flightNumber} (${t.departure.airport} → ${t.arrival.airport})`;
 
 /**
- * Merge restrito aos trechos marcados (A = índices em oldTrips; subconjunto estrito). Só eles são trocados;
- * os demais permanecem INTACTOS. Localizador e companhia valem só para a(s) reserva(s) dos afetados.
+ * Merge restrito às VIAGENS marcadas (A = índices de voos em oldTrips, já normalizados para viagens inteiras;
+ * subconjunto estrito, ou todos em voucher de ≥2 reservas). Só elas são trocadas, o bloco inteiro de voos por vez
+ * (qualquer quantidade de voos/conexões); as demais permanecem INTACTAS. Localizador e companhia valem só para a(s)
+ * reserva(s) dos afetados.
  */
 function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings, warn }) {
   const isAff = new Set(A);
   const affTrips = A.map(i => oldTrips[i]);
-  const affOfDir = (d) => affTrips.filter(a => a.direction === d);
-  const unmarkedKeys = (d) => new Set(oldTrips.filter((o, i) => !isAff.has(i) && (d === undefined || o.direction === d)).map(flightKey));
+  const todasAntigas = journeysOf(merged);
+  const marcadas = todasAntigas.filter(j => isAff.has(j.indexes[0]));
+  const naoMarcadas = todasAntigas.filter(j => !isAff.has(j.indexes[0]));
 
-  // ---- 1. Reconciliação pela rota e pareamento dos trechos do print com os afetados ----
-  reconcileByRoute(affTrips, extTrips, warn, false);
-  const naoMarcados = unmarkedKeys();
+  // ---- 1. Viagens do print (voos encadeados por horário; o rótulo do modelo só desempata) ----
   const jaVistos = new Set();
-  // descarte silencioso: igual (voo + data) a um trecho NÃO marcado, ou repetido no próprio print
-  const C = extTrips.filter(t => { const k = flightKey(t); if (naoMarcados.has(k) || jaVistos.has(k)) return false; jaVistos.add(k); return true; });
-  const repl = new Map();            // direção -> trechos novos
-  const ignored = [];
-  for (const t of C) {
-    if (t.direction && affOfDir(t.direction).length) {
-      if (!repl.has(t.direction)) repl.set(t.direction, []);
-      repl.get(t.direction).push(t);
-    } else ignored.push(t);          // direção sem trecho marcado, ou sem rótulo e sem rota conhecida
-  }
-  if (!repl.size) {
-    // Nenhuma direção do print cobre os marcados: com o mesmo número de trechos, pareia por ORDEM CRONOLÓGICA.
-    // Trecho do print com a rota de um trecho NÃO marcado (horário/voo mudou) é desse trecho: não serve de candidato.
-    const rotasNaoMarcadas = new Set(oldTrips.filter((o, i) => !isAff.has(i)).map(routeKey));
-    const P = C.filter(t => !rotasNaoMarcadas.has(routeKey(t)));
-    if (P.length !== A.length) throw ambiguousAffected(affTrips, extTrips, C.length);
-    ignored.length = 0;
-    C.filter(t => !P.includes(t)).forEach(t => ignored.push(t));
-    [...P].sort((x, y) => startMs(x) - startMs(y)).forEach((t, k) => {
-      const a = affTrips[k];
-      if (t.direction && t.direction !== a.direction) {
-        warn(`O print identificava ${dirName(t.direction)} mas, pela sua marcação e pela rota (${t.departure.airport} → ${t.arrival.airport}), usei como ${dirName(a.direction)}.`);
-      }
-      t.direction = a.direction;
-      if (!repl.has(a.direction)) repl.set(a.direction, []);
-      repl.get(a.direction).push(t);
-    });
-  }
-  // dois trechos da mesma rota na mesma direção não são uma conexão: é ambíguo
-  repl.forEach(list => { const rs = list.map(routeKey); if (new Set(rs).size !== rs.length) throw ambiguousAffected(affTrips, extTrips, C.length); });
+  const semRepetidos = extTrips.filter(t => { const k = flightKey(t); if (jaVistos.has(k)) return false; jaVistos.add(k); return true; });
+  const viagensPrint = chainPrintTrips(semRepetidos);
+  // descarte silencioso: viagem do print idêntica (voo + data de TODOS os voos) a uma viagem NÃO marcada
+  const chavesDe = (j) => new Set(j.trips.map(flightKey));
+  const P = viagensPrint.filter(pj => !naoMarcadas.some(u => u.trips.length === pj.trips.length && pj.trips.every(t => chavesDe(u).has(flightKey(t)))));
 
-  // ---- 2. Substituição: o bloco dos afetados de cada direção vira os trechos novos daquela direção ----
-  const replaced = new Map();        // trecho novo -> trecho antigo que ele substitui (herança de classe/status/localizador/cia)
-  repl.forEach((list, d) => list.forEach((t, k) => {
-    const as = affOfDir(d), o = as[Math.min(k, as.length - 1)];
-    replaced.set(t, o);
-    if (as[k]) { if (t.cabinClass == null) t.cabinClass = as[k].cabinClass == null ? null : as[k].cabinClass; if (t.status == null) t.status = as[k].status == null ? null : as[k].status; }
-  }));
+  // ---- 2. Pareamento viagem do print <-> viagem marcada: (a) mesma origem+destino; (b) senão, por ordem ----
+  const pairs = [];
+  let livresP = P.slice(), livresM = marcadas.slice();
+  const parear = (mj, pj, porOrdem) => {
+    if (pj.direction && pj.direction !== mj.direction) {
+      warn(porOrdem
+        ? `O print identificava ${dirName(pj.direction)} mas, pela sua marcação e pela rota (${odText(pj)}), usei como ${dirName(mj.direction)}.`
+        : `O print identificava ${dirName(pj.direction)} mas, pela rota (${odText(pj)}), usei como ${dirName(mj.direction)}.`);
+    }
+    pairs.push([mj, pj]);
+    livresP = livresP.filter(x => x !== pj); livresM = livresM.filter(x => x !== mj);
+  };
+  for (const mj of marcadas) {
+    let cands = livresP.filter(pj => odKey(pj) === odKey(mj));
+    if (cands.length > 1) {
+      const mesmaDir = cands.filter(pj => pj.direction === mj.direction);
+      if (mesmaDir.length !== 1) throw ambiguousAffected(affTrips, extTrips, P.length, marcadas.length);
+      cands = mesmaDir;
+    }
+    if (cands.length === 1) parear(mj, cands[0], false);
+  }
+  // viagem do print com a rota de uma viagem NÃO marcada (voos/horários diferentes) é dela: não é candidata
+  const ignoradas = livresP.filter(pj => naoMarcadas.some(u => odKey(u) === odKey(pj)));
+  livresP = livresP.filter(pj => !ignoradas.includes(pj));
+  if (livresM.length && livresP.length === livresM.length) {
+    const ordenadas = [...livresP].sort((x, y) => startMs(x) - startMs(y));
+    [...livresM].forEach((mj, k) => parear(mj, ordenadas[k], true));
+  } else if (!pairs.length) {
+    throw ambiguousAffected(affTrips, extTrips, P.length, marcadas.length);
+  }
+  ignoradas.push(...livresP);        // sobras do print: realmente diferentes e não marcadas
+  const ignored = ignoradas.flatMap(pj => pj.trips);
+
+  // ---- 3. Substituição: o bloco de voos da viagem marcada vira os voos da viagem do print ----
+  const replaced = new Map();        // voo novo -> voo antigo que ele substitui (herança de classe/status/localizador/cia)
+  const emitAt = new Map(), skip = new Set();
+  pairs.forEach(([mj, pj]) => {
+    pj.trips.forEach((t, k) => {
+      t.direction = mj.direction;    // direção e reserva vêm da viagem substituída
+      replaced.set(t, mj.trips[Math.min(k, mj.trips.length - 1)]);
+      const par = mj.trips[k];       // classe/status herdados por posição quando existe par; senão ficam null
+      if (par) { if (t.cabinClass == null) t.cabinClass = par.cabinClass == null ? null : par.cabinClass; if (t.status == null) t.status = par.status == null ? null : par.status; }
+    });
+    mj.indexes.forEach(i => skip.add(i));
+    emitAt.set(mj.indexes[0], pj.trips);
+  });
   const trips = [];
-  const done = new Set();
   oldTrips.forEach((t, i) => {
-    const list = isAff.has(i) ? repl.get(t.direction) : null;
-    if (!list || !list.length) { trips.push(t); return; }
-    if (done.has(t.direction)) return;
-    done.add(t.direction);
-    trips.push(...list);
+    if (emitAt.has(i)) trips.push(...emitAt.get(i));
+    else if (!skip.has(i)) trips.push(t);
   });
 
   // ---- 3. Companhia por trecho (prefixo do voo), só para os trechos novos ----
@@ -294,15 +308,8 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     });
   }
 
-  // Trecho marcado que não ganhou substituto no print (a direção não veio, ou veio com menos trechos).
-  const semSubstituto = [];
-  const vistos = new Map();
-  affTrips.forEach(a => {
-    const k = vistos.get(a.direction) || 0;
-    vistos.set(a.direction, k + 1);
-    if (k >= (repl.get(a.direction) || []).length) semSubstituto.push(a);
-  });
-  semSubstituto.forEach(a => warn(`Não encontrei no print o trecho marcado: ${tripLabel(a)}`));
+  // Viagem marcada que não ganhou substituto no print.
+  livresM.forEach(mj => warn(`Não encontrei no print o trecho marcado: ${journeyTitle(mj)}`));
   if (ignored.length) warn(`Ignorei trechos do print que não estavam marcados: ${ignored.map(describeTrip).join(', ')}. Eles diferem do voucher antigo: marque o trecho se ele mudou`);
 
   const idas = trips.filter(t => t.direction === 'ida');
@@ -340,11 +347,11 @@ function mergeNewFlights(oldVoucher, extracted, opts) {
   // Marcação explícita (affected passado) restringe o merge. Cobrindo TODOS os trechos só vale se o voucher tem
   // >=2 reservas (o localizador do print não pode ir para a reserva errada); com 1 reserva = comportamento antigo.
   const marcados = oldTrips.length === (Array.isArray(merged.trips) ? merged.trips.length : 0)
-    ? validIndexes(opts && opts.affected, oldTrips.length) : null;
+    ? expandAffected(merged, opts && opts.affected) : null;
   const A = marcados && (marcados.length < oldTrips.length || reservationCount(old) >= 2) ? marcados : null;
   if (A) return mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings, warn });
   // Caminho sem marcação: um print só da volta rotulado 'ida' não pode trocar a ida. (Voucher só multi/interno troca por posição.)
-  if (!oldTrips.every(t => t.direction === 'multi' || t.direction === 'interno')) reconcileByRoute(oldTrips, extTrips, warn, true);
+  if (!oldTrips.every(t => t.direction === 'multi' || t.direction === 'interno')) reconcileByRoute(journeysOf(merged), chainPrintTrips(extTrips), warn, true);
   const positional = assignDirections(extTrips, oldTrips);   // voucher antigo multi/interno: troca por posição
 
   // Trechos por direção -> substitui no lugar do 1º da direção; ausentes permanecem.

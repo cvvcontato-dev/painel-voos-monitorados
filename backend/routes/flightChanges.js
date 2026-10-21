@@ -12,6 +12,7 @@ const { extractAndValidate, extractFlightsRaw, saveVoucher, hashOf } = require('
 const { diffVouchers } = require('../helpers/flightChangeDiff');
 const { mergeNewFlights } = require('../helpers/flightChangeMerge');
 const Res = require('../helpers/flightChangeReservations');
+const { expandAffected } = require('../helpers/flightJourneys');
 const { buildNoticeText, buildConfirmationText, buildChangeSummaryLines } = require('../helpers/flightChangeMessage');
 
 const router = express.Router();
@@ -249,7 +250,8 @@ router.put('/:id/affected', async (req, res) => {
         || list.some(i => !Number.isInteger(i) || i < 0 || i >= n)) {
       return res.status(400).json({ error: 'trechos_invalidos', message: 'Marque ao menos um trecho válido do voucher.' });
     }
-    const affected = [...list].sort((a, b) => a - b);
+    // A unidade da marcação é a VIAGEM (voos encadeados): qualquer voo marcado marca a viagem inteira.
+    const affected = expandAffected(old, list);
     const restr = Res.restrictTo(affected, n);
     const atual = parse(row.new_json), extracted = parse(row.extracted_json);
     // Escrita condicionada ao que foi lido: se o caso mudou no meio (confirmado, outro upload, outra marcação), 409.

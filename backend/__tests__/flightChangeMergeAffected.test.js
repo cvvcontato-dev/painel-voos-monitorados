@@ -4,7 +4,7 @@ const F = require('./fixtures/flightChangeCombined');
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const erro = (fn) => { try { fn(); } catch (e) { return e; } throw new Error('não lançou'); };
-const msgAmbiguo = (n, m) => `O print mostra ${n} trecho(s) e você marcou ${m}. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.`;
+const msgAmbiguo = (n, m) => `O print mostra ${n} viagem(ns) e você marcou ${m}. Marque exatamente as viagens que aparecem no print, ou envie um print só da viagem alterada.`;
 const warns = (m) => m.meta.mergeWarnings;
 const semMeta = (m) => { const c = clone(m); delete c.meta.parsedAt; return c; };
 
@@ -55,7 +55,7 @@ describe('mergeNewFlights restrito aos trechos afetados', () => {
     }, { affected: [1] }));
     expect(e.status).toBe(422);
     expect(e.body.error).toBe(msgAmbiguo(2, 1));
-    expect(log).toHaveBeenCalledWith('[FLIGHT-CHANGES] merge ambíguo: marcados=volta:AD 4002:REC-GRU print=volta:AD 1:REC-GRU,volta:AD 2:REC-GRU');
+    expect(log).toHaveBeenCalledWith('[FLIGHT-CHANGES] merge ambíguo: marcados=volta:AD 4002:REC-GRU print=-:AD 1:REC-GRU,-:AD 2:REC-GRU');
     log.mockRestore();
   });
 

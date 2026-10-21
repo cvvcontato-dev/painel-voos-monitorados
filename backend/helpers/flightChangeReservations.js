@@ -25,6 +25,8 @@ function locatorOf(voucher, trip) {
   return up(voucher?.reservation?.locator);
 }
 
+// flightJourneys depende deste módulo: carga tardia evita o ciclo de require.
+const journeys = () => require('./flightJourneys');
 const tripsOf = (v) => (Array.isArray(v?.trips) ? v.trips : []);
 
 /** Quantidade de reservas distintas (localizadores distintos entre os trechos). */
@@ -62,6 +64,16 @@ function reservationGroups(voucher) {
     }
     g.trips.push({ index, direction: t.direction || 'multi', label: tripLabel(t) });
   });
+  // Viagens (voos encadeados da mesma direção e reserva) de cada reserva: a unidade que a usuária marca.
+  const J = journeys();
+  const todas = J.journeysOf(voucher);
+  out.forEach(g => {
+    g.journeys = todas.filter(j => (j.locator || null) === g.locator).map(j => ({
+      key: j.key, direction: j.direction, origin: j.origin, destination: j.destination,
+      label: J.journeyLabel(j), segments: j.trips.length,
+      trips: j.indexes.map(i => ({ index: i, label: tripLabel(voucher.trips[i]) }))
+    }));
+  });
   return out;
 }
 
@@ -85,14 +97,16 @@ function storedAffected(row, oldVoucher) {
   return validIndexes(parseJson(row && row.affected_json), tripsOf(oldVoucher).length);
 }
 
-/** Índices efetivos: o gravado, ou todos os trechos. */
+/** Índices efetivos (viagens inteiras): o gravado, ou todos os trechos. */
 function effectiveAffected(row, oldVoucher) {
-  return storedAffected(row, oldVoucher) || tripsOf(oldVoucher).map((_, i) => i);
+  const st = storedAffected(row, oldVoucher);
+  return (st && journeys().expandAffected(oldVoucher, st)) || tripsOf(oldVoucher).map((_, i) => i);
 }
 
-/** Restrição a aplicar no merge/diff/mensagens (null = todos). */
+/** Restrição a aplicar no merge/diff/mensagens (null = todos), sempre em viagens inteiras. */
 function restrictionOf(row, oldVoucher) {
-  return restrictTo(storedAffected(row, oldVoucher), tripsOf(oldVoucher).length);
+  const st = storedAffected(row, oldVoucher);
+  return restrictTo(st && journeys().expandAffected(oldVoucher, st), tripsOf(oldVoucher).length);
 }
 
 /**

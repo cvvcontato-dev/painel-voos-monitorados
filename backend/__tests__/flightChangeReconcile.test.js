@@ -53,21 +53,25 @@ describe('reconciliação da direção pela rota (caminho restrito)', () => {
     ];
     const m = mergeNewFlights(old, { trips: novo }, { affected: [1, 2] });
     expect(m.trips.map(t => [t.direction, t.flightNumber])).toEqual([['ida', 'AD 4001'], ['volta', 'AD 4010'], ['volta', 'AD 4011']]);
-    expect(warns(m)).toEqual([
-      'O print identificava ida mas, pela rota (REC → GRU), usei como volta.',
-      'O print identificava ida mas, pela rota (GRU → CWB), usei como volta.']);
-    // rotas mudaram: pareia por ordem cronológica, mesmo se o print vier fora de ordem
-    const trocadas = [
+    // a viagem inteira (REC → CWB) casa com a viagem marcada: UM aviso, não um por voo
+    expect(warns(m)).toEqual(['O print identificava ida mas, pela rota (REC → CWB), usei como volta.']);
+    // escala e destino mudaram: ainda 1 viagem do print para 1 marcada => pareia por ordem, mesmo com o print fora de ordem
+    const outraEscala = [
+      leg('ida', 'GRU', 'CWB', 'AD 4021', '2026-09-19T17:00:00-03:00', '2026-09-19T18:00:00-03:00'),
+      leg('ida', 'SSA', 'GRU', 'AD 4020', '2026-09-19T14:00:00-03:00', '2026-09-19T16:00:00-03:00')
+    ];
+    const m2 = mergeNewFlights(old, { trips: outraEscala }, { affected: [1, 2] });
+    expect(m2.trips.map(t => [t.direction, t.flightNumber])).toEqual([['ida', 'AD 4001'], ['volta', 'AD 4020'], ['volta', 'AD 4021']]);
+    expect(warns(m2)).toEqual(['O print identificava ida mas, pela sua marcação e pela rota (SSA → CWB), usei como volta.']);
+    // dois voos que NÃO se encadeiam são 2 viagens: 422 em viagens
+    const log = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const soltos = [
       leg('ida', 'SSA', 'CWB', 'AD 4021', '2026-09-19T20:00:00-03:00', '2026-09-19T21:00:00-03:00'),
       leg('ida', 'SSA', 'GRU', 'AD 4020', '2026-09-19T14:00:00-03:00', '2026-09-19T16:00:00-03:00')
     ];
-    const m2 = mergeNewFlights(old, { trips: trocadas }, { affected: [1, 2] });
-    expect(m2.trips.map(t => [t.direction, t.flightNumber])).toEqual([['ida', 'AD 4001'], ['volta', 'AD 4020'], ['volta', 'AD 4021']]);
-    // 1 trecho de rota desconhecida para 2 marcados: 422 claro
-    const log = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const e = erro(() => mergeNewFlights(old, { trips: [trocadas[0]] }, { affected: [1, 2] }));
+    const e = erro(() => mergeNewFlights(old, { trips: soltos }, { affected: [1, 2] }));
     expect(e.status).toBe(422);
-    expect(e.body.error).toBe('O print mostra 1 trecho(s) e você marcou 2. Marque exatamente os trechos que aparecem no print, ou envie um print só do trecho alterado.');
+    expect(e.body.error).toBe('O print mostra 2 viagem(ns) e você marcou 1. Marque exatamente as viagens que aparecem no print, ou envie um print só da viagem alterada.');
     log.mockRestore();
   });
 });
@@ -96,25 +100,25 @@ describe('reconciliação pela rota no caminho NÃO restrito', () => {
   });
 });
 
-describe('reconcileByRoute', () => {
-  const cand = (dir, o, d) => ({ direction: dir, departure: { airport: o }, arrival: { airport: d } });
-  const ext = (dir, o, d) => ({ direction: dir, departure: { airport: o }, arrival: { airport: d } });
+describe('reconcileByRoute (viagens)', () => {
+  const viagem = (dir, origin, destination, n = 1) => ({ direction: dir, origin, destination, trips: Array.from({ length: n }, () => ({ direction: dir })) });
 
   test('(g) rota que casa com mais de uma direção distinta, ou com nenhuma, não é reconciliada', () => {
     const avisos = [];
-    const t1 = ext('volta', 'GRU', 'REC'), t2 = ext('ida', 'SSA', 'BSB'), t3 = ext('volta', 'GRU', 'REC');
-    reconcileByRoute([cand('ida', 'GRU', 'REC'), cand('interno', 'GRU', 'REC')], [t1, t2, t3], (m) => avisos.push(m), false);
-    expect([t1.direction, t2.direction, t3.direction]).toEqual(['volta', 'ida', 'volta']);
+    const p1 = viagem('volta', 'GRU', 'REC'), p2 = viagem('ida', 'SSA', 'BSB');
+    reconcileByRoute([viagem('ida', 'GRU', 'REC'), viagem('interno', 'GRU', 'REC')], [p1, p2], (m) => avisos.push(m), false);
+    expect([p1.direction, p2.direction]).toEqual(['volta', 'ida']);
     expect(avisos).toEqual([]);
   });
 
-  test('rota que casa com várias viagens da MESMA direção é reconciliada; soRotulados ignora os sem rótulo', () => {
-    const a = ext('ida', 'REC', 'GRU'), b = ext(null, 'REC', 'GRU');
+  test('reescreve o rótulo da viagem inteira (todos os voos) com um aviso; soRotulados ignora as sem rótulo', () => {
+    const a = viagem('ida', 'REC', 'GRU', 2), b = viagem(null, 'REC', 'GRU');
     const avisos = [];
-    reconcileByRoute([cand('volta', 'REC', 'GRU'), cand('volta', 'REC', 'GRU')], [a, b], (m) => avisos.push(m), true);
-    expect(a.direction).toBe('volta'); expect(b.direction).toBeNull();
-    expect(avisos).toHaveLength(1);
-    reconcileByRoute([cand('volta', 'REC', 'GRU')], [b], () => {}, false);
+    reconcileByRoute([viagem('volta', 'REC', 'GRU', 2)], [a, b], (m) => avisos.push(m), true);
+    expect(a.direction).toBe('volta'); expect(a.trips.map(t => t.direction)).toEqual(['volta', 'volta']);
+    expect(b.direction).toBeNull();
+    expect(avisos).toEqual(['O print identificava ida mas, pela rota (REC → GRU), usei como volta.']);
+    reconcileByRoute([viagem('volta', 'REC', 'GRU')], [b], () => {}, false);
     expect(b.direction).toBe('volta');
   });
 });

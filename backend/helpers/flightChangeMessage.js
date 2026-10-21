@@ -3,10 +3,11 @@
 const { firstNameOf } = require('./voucherCarrier');
 const { normalizePhone } = require('./boardingPassPayload');
 const { locatorOf, restrictTo } = require('./flightChangeReservations');
+const { journeysOf, expandAffected } = require('./flightJourneys');
 
 const DIRECTION_LABEL = { ida: 'Ida', volta: 'Volta', interno: 'Trecho interno', multi: 'Trecho' };
 const FIELD_LABEL = {
-  partida: 'Partida', chegada: 'Chegada', voo: 'Voo', origem: 'Origem', destino: 'Destino', classe: 'Classe'
+  partida: 'Partida', chegada: 'Chegada', voo: 'Voo', origem: 'Origem', destino: 'Destino', classe: 'Classe', itinerario: 'Itinerário'
 };
 
 // Localizador: só o '*' quebra o negrito do WhatsApp; o resto é preservado.
@@ -58,25 +59,27 @@ const tripLabel = (t) => {
  */
 function noticeSegments(v, affected) {
   const trips = v?.trips || [];
-  const A = restrictTo(affected, trips.length);
+  const exp = expandAffected(v, affected);          // viagens inteiras
+  const A = restrictTo(exp, trips.length);
   if (!A) return null;
+  const marcadas = journeysOf(v).filter(j => A.includes(j.indexes[0]));
   const groups = [];
-  A.forEach(i => {
-    const t = trips[i];
-    if (!t) return;
-    const key = locatorOf(v, t);
-    let g = groups.find(x => x.key === key);
-    if (!g) { g = { key, trips: [] }; groups.push(g); }
-    g.trips.push(t);
+  marcadas.forEach(j => {
+    let g = groups.find(x => x.key === j.locator);
+    if (!g) { g = { key: j.locator, journeys: [] }; groups.push(g); }
+    g.journeys.push(j);
   });
   return groups.map(g => {
-    const idas = g.trips.filter(t => t.direction === 'ida');
-    const o = g.trips[0]?.departure?.airport;
-    const d = (idas.length ? idas : g.trips).slice(-1)[0]?.arrival?.airport;
+    // origem = partida da 1ª viagem; destino = chegada da viagem de ida (senão da última): sempre a viagem INTEIRA
+    const idas = g.journeys.filter(j => j.direction === 'ida');
+    const o = g.journeys[0].origin;
+    const d = (idas.length ? idas : g.journeys).slice(-1)[0].destination;
+    const datas = [];
+    g.journeys.forEach(j => { const m = String(j.trips[0]?.dateLabel || '').match(DATE_RE); if (m && !datas.includes(m[0])) datas.push(m[0]); });
     return {
       locator: safeLoc(g.key),
-      dirs: [...new Set(g.trips.map(t => t.direction))],
-      detail: [o && d ? `${o} → ${d}` : '', joinDates(datesOf({ trips: g.trips }))].filter(Boolean).join(', ')
+      dirs: [...new Set(g.journeys.map(j => j.direction))],
+      detail: [o && d ? `${o} → ${d}` : '', joinDates(datas)].filter(Boolean).join(', ')
     };
   });
 }
