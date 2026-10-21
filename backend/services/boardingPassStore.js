@@ -187,8 +187,12 @@ async function registerOpen(linkId) {
 }
 
 // --- Leitura de vouchers (para o prefill) ---
-async function listVoucherRows(userId) {
-  return dbAll(`SELECT id, unified_json FROM vouchers WHERE user_id = ? ORDER BY id DESC LIMIT 30`, [userId]);
+// Padrão alto (500) para a lista mostrar na prática todos os vouchers; o teto protege o servidor.
+const DEFAULT_VOUCHER_LIMIT = 500;
+const MAX_VOUCHER_LIMIT = 1000;
+async function listVoucherRows(userId, limit = DEFAULT_VOUCHER_LIMIT) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || DEFAULT_VOUCHER_LIMIT, 1), MAX_VOUCHER_LIMIT);
+  return dbAll(`SELECT id, unified_json FROM vouchers WHERE user_id = ? ORDER BY id DESC LIMIT ?`, [userId, n]);
 }
 
 async function getVoucherUnified(userId, voucherId) {

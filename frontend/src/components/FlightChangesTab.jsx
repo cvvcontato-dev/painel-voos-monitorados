@@ -6,9 +6,14 @@ import { sectionCls, inputCls, labelCls, btnPrimary, btnGhost, STATUS, fmtDateTi
 import UploadZone from './flight-changes/UploadZone';
 import CaseView from './flight-changes/CaseView';
 
+// Busca sem acento e sem diferença de maiúsculas ("sao paulo" acha "São Paulo").
+const norm = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const FILTER_MIN = 8;   // abaixo disso a lista é curta e a busca só atrapalha
+
 function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
   const [vouchers, setVouchers] = useState(null);
   const [voucherId, setVoucherId] = useState('');
+  const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const alive = useRef(true);
@@ -63,14 +68,46 @@ function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
         ) : vouchers.length === 0 ? (
           <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum voucher salvo — envie o arquivo abaixo.</div>
         ) : (
-          <div className="flex gap-2">
-            <select id="fc-voucher" className={`${inputCls} pii`} value={voucherId} onChange={e => setVoucherId(e.target.value)} disabled={busy}>
-              <option value="">— Escolha um voucher —</option>
-              {vouchers.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-            </select>
-            <button type="button" className={btnPrimary} disabled={busy || !voucherId} onClick={() => create(() => api.createFromVoucher(Number(voucherId)))}>
-              Usar
-            </button>
+          <div className="space-y-2">
+            {vouchers.length > FILTER_MIN && (
+              <input
+                type="search"
+                className={`${inputCls} pii`}
+                placeholder="Buscar por nome, voo, cidade ou data…"
+                aria-label="Buscar voucher salvo"
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                disabled={busy}
+              />
+            )}
+            {(() => {
+              const termos = norm(q).split(/\s+/).filter(Boolean);
+              const achadosLista = termos.length
+                ? vouchers.filter(v => termos.every(t => norm(v.label).includes(t)))
+                : vouchers;
+              const achados = achadosLista.length;
+              // O voucher já escolhido continua na lista mesmo que a busca mude, para a seleção não "sumir".
+              const escolhido = voucherId ? vouchers.find(v => String(v.id) === voucherId) : null;
+              const lista = escolhido && !achadosLista.includes(escolhido) ? [escolhido, ...achadosLista] : achadosLista;
+              return (
+                <>
+                  <div className="flex gap-2">
+                    <select id="fc-voucher" className={`${inputCls} pii`} value={voucherId} onChange={e => setVoucherId(e.target.value)} disabled={busy}>
+                      <option value="">— Escolha um voucher —</option>
+                      {lista.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                    <button type="button" className={btnPrimary} disabled={busy || !voucherId} onClick={() => create(() => api.createFromVoucher(Number(voucherId)))}>
+                      Usar
+                    </button>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+                    {termos.length
+                      ? (achados > 0 ? `${achados} de ${vouchers.length} vouchers` : 'Nenhum voucher encontrado para essa busca.')
+                      : `${vouchers.length} vouchers, do mais recente ao mais antigo`}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

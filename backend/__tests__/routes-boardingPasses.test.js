@@ -223,3 +223,27 @@ test('voucher-options e voucher-prefill', async () => {
 
   expect((await agent.get('/api/boarding-passes/voucher-prefill/999999')).status).toBe(404);
 });
+
+test('voucher-options não corta a lista em 30: devolve todos (até 500) e aceita ?limit=', async () => {
+  const { agent, csrf } = await authed();
+  const ids = [];
+  for (let i = 0; i < 32; i++) {   // o limite antigo (30) deixaria os 2 primeiros de fora
+    const r = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+      .attach('file', Buffer.from(`lista-longa-${i}`), { filename: `v${i}.pdf`, contentType: 'application/pdf' });
+    expect(r.status).toBe(201);
+    ids.push(r.body.id);
+  }
+  const todos = await agent.get('/api/boarding-passes/voucher-options');
+  expect(todos.status).toBe(200);
+  expect(todos.body.length).toBeGreaterThanOrEqual(32);
+  const doBanco = new Set(todos.body.map(o => o.id));
+  ids.forEach(id => expect(doBanco.has(id)).toBe(true));
+  expect(todos.body[0].id).toBeGreaterThan(todos.body[todos.body.length - 1].id);   // mais recentes primeiro
+
+  const tres = await agent.get('/api/boarding-passes/voucher-options?limit=3');
+  expect(tres.body).toHaveLength(3);
+  const invalido = await agent.get('/api/boarding-passes/voucher-options?limit=abc');
+  expect(invalido.body.length).toBeGreaterThanOrEqual(32);                          // valor inválido ⇒ padrão
+  const enorme = await agent.get('/api/boarding-passes/voucher-options?limit=99999999');
+  expect(enorme.status).toBe(200);                                                  // limitado ao teto, sem erro
+});

@@ -23,7 +23,8 @@ router.post('/parse-link', (req, res) => {
 
 router.get('/voucher-options', async (req, res) => {
   try {
-    const rows = await store.listVoucherRows(req.session.userId);
+    // ?limit= opcional (1 a 1000); sem ele, devolve até 500 — na prática, todos os vouchers.
+    const rows = await store.listVoucherRows(req.session.userId, req.query.limit);
     res.json(rows.map(r => {
       let unified = null;
       try { unified = JSON.parse(r.unified_json); } catch { /* voucher corrompido: rótulo genérico */ }
