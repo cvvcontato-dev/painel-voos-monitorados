@@ -33,6 +33,14 @@ const ida = (o = {}) => single({ carrier: 'azul', locator: 'ABC123', flight: 'AD
 const volta = (o = {}) => single({ carrier: 'azul', locator: 'XYZ789', flight: 'AD 4002', dep: 'REC', arr: 'GRU',
   depDt: '2026-09-19T13:00:00-03:00', arrDt: '2026-09-19T16:30:00-03:00', dateLabel: '19 SET 2026', direction: 'volta', ...o });
 
+const interno = (o = {}) => single({ carrier: 'azul', locator: 'INT111', flight: 'AD 5000', dep: 'REC', arr: 'FOR',
+  depDt: '2026-09-14T09:00:00-03:00', arrDt: '2026-09-14T11:00:00-03:00', dateLabel: '14 SET 2026', direction: 'interno', ...o });
+
+/** Ida ABC123 + interno INT111 + volta XYZ789 (3 reservas, todas Azul): índices 0, 1, 2. */
+const combinado3 = () => combineVouchers([
+  { voucher: ida(), role: 'ida' }, { voucher: interno(), role: 'interno' }, { voucher: volta(), role: 'volta' }
+]);
+
 /** Ida ABC123 (Azul) + volta XYZ789 (Azul): trips[0] = ida, trips[1] = volta. */
 const combinado = (idaOpts, voltaOpts) => combineVouchers([
   { voucher: ida(idaOpts), role: 'ida' }, { voucher: volta(voltaOpts), role: 'volta' }
@@ -53,4 +61,4 @@ const printIda = (o = {}) => printTrip('ida', {
   flightNumber: 'AD 4001', ...o
 });
 
-module.exports = { ida, volta, combinado, combinadoMulti, printTrip, printIda };
+module.exports = { single, ida, volta, interno, combinado3, combinado, combinadoMulti, printTrip, printIda };

@@ -9,7 +9,8 @@
 // 'multi'/'interno' é substituído POR POSIÇÃO; com ida/volta, só se a quantidade de trechos for igual
 // ao do antigo (por posição) — senão 422 pedindo os rótulos.
 const { validate, DIRECTIONS } = require('../services/voucherSchema');
-const { carrierDisplayName, carrierShortName } = require('./voucherCarrier');
+const { carrierDisplayName, carrierShortName, tripCarrier } = require('./voucherCarrier');
+const { locatorOf, restrictTo } = require('./flightChangeReservations');
 
 const PREFIX_CARRIER = { AD: 'azul', G3: 'gol', GLO: 'gol', LA: 'latam', JJ: 'latam', LATAM: 'latam', AZU: 'azul', TAM: 'latam', LAN: 'latam' };
 const KNOWN = ['azul', 'gol', 'latam'];
@@ -110,7 +111,162 @@ function assignDirections(ext, oldTrips) {
   return false;
 }
 
-function mergeNewFlights(oldVoucher, extracted) {
+const AMBIGUOUS_AFFECTED_MSG = 'Não consegui identificar qual trecho do print corresponde ao que foi marcado. Envie um print com os rótulos ou só o trecho alterado.';
+const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+const flightKey = (t) => String(t.flightNumber || '').replace(/\s+/g, '').toUpperCase() + '|' + String(t.departure && t.departure.datetime || '').slice(0, 10);
+const describeTrip = (t) => `${t.flightNumber} (${t.departure.airport} → ${t.arrival.airport})`;
+
+/**
+ * Merge restrito aos trechos marcados (A = índices em oldTrips; subconjunto estrito). Só eles são trocados;
+ * os demais permanecem INTACTOS. Localizador e companhia valem só para a(s) reserva(s) dos afetados.
+ */
+function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings, warn }) {
+  const isAff = new Set(A);
+  const affTrips = A.map(i => oldTrips[i]);
+  const affOfDir = (d) => affTrips.filter(a => a.direction === d);
+  const unmarkedKeys = (d) => new Set(oldTrips.filter((o, i) => !isAff.has(i) && (d === undefined || o.direction === d)).map(flightKey));
+
+  // ---- 1. Pareamento dos trechos do print com os afetados ----
+  const repl = new Map();            // direção -> trechos novos
+  const ignored = [];
+  const unlabeled = extTrips.filter(t => !t.direction);
+  if (unlabeled.length && unlabeled.length !== extTrips.length) throw unprocessable(AMBIGUOUS_AFFECTED_MSG);   // rótulos misturados
+  if (unlabeled.length) {
+    // Sem rótulo: por ordem, contra os afetados. Com sobra, descarta os que são trechos NÃO marcados do antigo.
+    let cand = extTrips.slice();
+    if (cand.length > A.length) { const keys = unmarkedKeys(); cand = cand.filter(t => !keys.has(flightKey(t))); }
+    if (cand.length !== A.length) throw unprocessable(AMBIGUOUS_AFFECTED_MSG);
+    cand.forEach((t, k) => {
+      t.direction = affTrips[k].direction;
+      if (!repl.has(t.direction)) repl.set(t.direction, []);
+      repl.get(t.direction).push(t);
+    });
+  } else {
+    for (const t of extTrips) {
+      if (!affOfDir(t.direction).length) { ignored.push(t); continue; }                  // direção sem trecho marcado
+      if (unmarkedKeys(t.direction).has(flightKey(t))) continue;                          // é um trecho não marcado da mesma direção
+      if (!repl.has(t.direction)) repl.set(t.direction, []);
+      repl.get(t.direction).push(t);
+    }
+  }
+  if (!repl.size) throw unprocessable(AMBIGUOUS_AFFECTED_MSG);
+
+  // ---- 2. Substituição: o bloco dos afetados de cada direção vira os trechos novos daquela direção ----
+  const replaced = new Map();        // trecho novo -> trecho antigo que ele substitui (herança de classe/status/localizador/cia)
+  repl.forEach((list, d) => list.forEach((t, k) => {
+    const as = affOfDir(d), o = as[Math.min(k, as.length - 1)];
+    replaced.set(t, o);
+    if (as[k]) { if (t.cabinClass == null) t.cabinClass = as[k].cabinClass == null ? null : as[k].cabinClass; if (t.status == null) t.status = as[k].status == null ? null : as[k].status; }
+  }));
+  const trips = [];
+  const done = new Set();
+  oldTrips.forEach((t, i) => {
+    const list = isAff.has(i) ? repl.get(t.direction) : null;
+    if (!list || !list.length) { trips.push(t); return; }
+    if (done.has(t.direction)) return;
+    done.add(t.direction);
+    trips.push(...list);
+  });
+
+  // ---- 3. Companhia por trecho (prefixo do voo), só para os trechos novos ----
+  const oldCarrier = KNOWN.includes(old.carrier) ? old.carrier : null;
+  const hint = KNOWN.includes(extracted.carrier) ? extracted.carrier : null;
+  const fallbackTop = oldCarrier || 'azul';
+  const oldTripCarrier = (o) => tripCarrier(o, fallbackTop);
+  const carrierOfNew = (t) => {
+    const c = carrierFromFlight(t.flightNumber);
+    if (c) return c;
+    warn(`O voo ${t.flightNumber} tem prefixo desconhecido: mantive a companhia do trecho substituído. Confira.`);
+    return hint || oldTripCarrier(replaced.get(t));
+  };
+  const tripCarriers = trips.map(t => (replaced.has(t) ? carrierOfNew(t) : oldTripCarrier(t)));
+  trips.forEach((t, i) => { if (replaced.has(t)) t.airlineDisplayName = carrierDisplayName(tripCarriers[i]); });
+
+  const res = merged.reservation = merged.reservation && typeof merged.reservation === 'object' ? merged.reservation : {};
+  const nameOf = (c) => carrierShortName(c);
+  const distinct = [...new Set(tripCarriers)];
+  const dirCarrier = (dir) => { const i = trips.findIndex(t => t.direction === dir); return i >= 0 ? tripCarriers[i] : null; };
+  const wasMulti = old.carrier === 'multi';
+  let carrierChanged = false;
+  if (distinct.length === 1) {
+    const c = distinct[0];
+    if (merged.carrier !== c) {
+      carrierChanged = true;
+      warn(`Companhia alterada de ${wasMulti ? 'várias companhias' : nameOf(oldCarrier || merged.carrier)} para ${nameOf(c)}: confira o localizador e a bagagem`);
+      merged.carrier = c;
+      merged.branding = { ...(merged.branding || {}), airlineName: nameOf(c), logoUrl: null, primaryColor: null };
+    }
+    delete res.primaryCarrier; delete res.secondaryCarrier;   // não é mais 'multi'
+  } else {
+    const primary = dirCarrier('ida') || tripCarriers[0];
+    const voltaC = dirCarrier('volta');
+    const secondary = voltaC && voltaC !== primary ? voltaC : distinct.find(c => c !== primary);   // padrão do voucherCombiner
+    if (!wasMulti || res.primaryCarrier !== primary || res.secondaryCarrier !== secondary) {
+      carrierChanged = !wasMulti;
+      warn('Ida e volta agora são de companhias diferentes: confira o localizador de cada reserva');
+    }
+    if (!wasMulti) merged.branding = { ...(merged.branding || {}), logoUrl: null, primaryColor: null };
+    merged.carrier = 'multi';
+    res.primaryCarrier = primary;
+    res.secondaryCarrier = secondary;
+  }
+  const dirChanged = trips.some((t, i) => replaced.has(t) && tripCarriers[i] !== oldTripCarrier(replaced.get(t)));
+  if ((carrierChanged || dirChanged) && Array.isArray(old.baggage) && old.baggage.length) {
+    warn('Bagagem mantida do voucher antigo, mas a companhia mudou: confira a franquia');
+  }
+
+  // ---- 4. Localizador: vale só para a reserva dos trechos afetados ----
+  const oldKeyOf = (o) => locatorOf(old, o);
+  const S = [...new Set(affTrips.map(oldKeyOf).filter(Boolean))];
+  const rawLoc = up(extracted.locator);
+  let applied = null;
+  if (rawLoc) {
+    if (!LOCATOR_RE.test(rawLoc)) warn('Localizador lido da imagem ignorado (formato inválido)');
+    else if (S.length > 1) warn(`Localizador ${rawLoc} lido da imagem não foi aplicado (os trechos marcados são de reservas diferentes): confira`);
+    else if (S.length === 1 && rawLoc !== S[0]) { applied = { from: S[0], to: rawLoc }; warn(`Localizador alterado de ${S[0]} para ${rawLoc}: confira`); }
+  }
+  const swap = (v) => (applied && up(v) === applied.from ? applied.to : v);
+  trips.forEach(t => {
+    if (replaced.has(t)) { const ol = replaced.get(t).locator; if (ol) t.locator = swap(ol); }
+    else if (t.locator) t.locator = swap(t.locator);
+  });
+  if (applied) {
+    if (res.locator) res.locator = swap(res.locator);
+    if (res.secondaryLocator) res.secondaryLocator = swap(res.secondaryLocator);
+  }
+  // reservation.reservations[]: renomeia o código e troca a cia só das reservas afetadas
+  if (Array.isArray(res.reservations)) {
+    S.forEach(k => {
+      const novo = trips.findIndex(t => replaced.has(t) && oldKeyOf(replaced.get(t)) === k);
+      const antigo = affTrips.find(a => oldKeyOf(a) === k);
+      const cNovo = novo >= 0 ? tripCarriers[novo] : null;
+      res.reservations.forEach(e => {
+        if (!e || up(e.code) !== k) return;
+        if (cNovo && antigo && cNovo !== oldTripCarrier(antigo)) e.carrier = cNovo;
+        if (applied) e.code = applied.to;
+      });
+    });
+  }
+
+  if (ignored.length) warn(`Ignorei trechos do print que não estavam marcados: ${ignored.map(describeTrip).join(', ')}`);
+
+  const idas = trips.filter(t => t.direction === 'ida');
+  const lastDest = (idas.length ? idas : trips).slice(-1)[0];
+  merged.trips = trips;
+  merged.route = { origin: trips[0].departure.airport, destination: lastDest.arrival.airport };
+  merged.meta = { parsedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), parserVersion: 'flights-merge@2026-10', mergeWarnings: warnings };
+
+  const v = validate(merged);
+  if (!v.ok) throw unprocessable('schema inválido após extração', v.errors);
+  return merged;
+}
+
+/**
+ * Mescla os voos extraídos com o voucher ANTIGO. `opts.affected` = índices (em oldVoucher.trips) dos trechos
+ * alterados: com subconjunto, só eles são trocados (ver mergeAffected). Sem `affected`, ou cobrindo todos os
+ * trechos, o comportamento é o de sempre.
+ */
+function mergeNewFlights(oldVoucher, extracted, opts) {
   const warnings = [];
   const warn = (m) => { if (!warnings.includes(m)) warnings.push(m); };
 
@@ -125,6 +281,10 @@ function mergeNewFlights(oldVoucher, extracted) {
   const old = oldVoucher && typeof oldVoucher === 'object' ? oldVoucher : {};
   const merged = clone(old) || {};
   const oldTrips = Array.isArray(merged.trips) ? merged.trips.filter(Boolean) : [];
+  // Os índices de `affected` valem para a lista original; se ela tinha buracos, a marcação não é confiável.
+  const A = oldTrips.length === (Array.isArray(merged.trips) ? merged.trips.length : 0)
+    ? restrictTo(opts && opts.affected, oldTrips.length) : null;
+  if (A) return mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings, warn });
   const positional = assignDirections(extTrips, oldTrips);   // voucher antigo multi/interno: troca por posição
 
   // Trechos por direção -> substitui no lugar do 1º da direção; ausentes permanecem.
