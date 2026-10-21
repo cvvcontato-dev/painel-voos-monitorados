@@ -4,7 +4,7 @@ import { btnGhost, copyText } from './ui';
 
 // Voucher novo no padrão Clube do Voo (o mesmo da aba Vouchers).
 // `ts` muda quando o voucher é re-enviado ou corrigido, recarregando a prévia.
-export default function NewVoucherSection({ voucherId, url, ts, showToast }) {
+export default function NewVoucherSection({ voucherId, url, ts, partial, showToast }) {
   async function copyLink() {
     if (await copyText(url)) showToast('Link do voucher copiado', 'success');
     else showToast('Não consegui copiar — use "Abrir link"', 'error');
@@ -13,7 +13,7 @@ export default function NewVoucherSection({ voucherId, url, ts, showToast }) {
     <details open className="rounded-lg border border-slate-200 dark:border-slate-700/60 px-3 py-2">
       <summary className="cursor-pointer text-sm font-medium text-slate-800 dark:text-slate-100">Voucher novo (padrão Clube do Voo)</summary>
       <div className="mt-3 space-y-3">
-        <p className="text-xs text-slate-500 dark:text-slate-400">É o mesmo voucher gerado na aba Vouchers, com os dados novos — este é o PDF que vai por e-mail.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">É o mesmo voucher gerado na aba Vouchers, com os dados novos — este é o PDF que vai por e-mail.{partial ? ' Só os trechos marcados foram substituídos; os demais permanecem como no voucher antigo.' : ''}</p>
         <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-100 dark:bg-slate-900/40">
           <iframe key={`${voucherId}-${ts}`} src={`/voucher-preview/${voucherId}?ts=${ts}`} title="Prévia do voucher novo" className="w-full border-0" style={{ height: '70vh', minHeight: 420 }} />
         </div>

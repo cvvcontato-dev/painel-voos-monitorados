@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle2, Pencil, Info } from 'lucide-react';
 import * as api from '../../api/flightChangeClient';
-import { errorMessage } from '../../api/flightChangeClient';
+import { errorMessage, errorCode } from '../../api/flightChangeClient';
+import AffectedTripsSection from './AffectedTripsSection';
 import { sectionCls, btnPrimary, btnGhost, STATUS, fmtDateTime } from './ui';
 import MessageBox from './MessageBox';
 import UploadZone from './UploadZone';
@@ -21,6 +22,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   const [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState(null); // 'aviso' | 'confirmacao'
   const [pvTs, setPvTs] = useState(() => Date.now());
+  const [focusTick, setFocusTick] = useState(0);
   const alive = useRef(true);
   const lock = useRef(false);
   const ver = useRef(0); // versão do detalhe: descarta respostas antigas
@@ -47,15 +49,23 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
 
   // Executa uma ação com trava de duplo clique. O onOk roda mesmo se o caso foi
   // trocado (lista + toast); só o estado local depende de alive/versão.
+  // Devolve true se a ação (e o onOk) concluiu sem erro.
   async function run(kind, fn, onOk) {
-    if (lock.current) return;
+    if (lock.current) return false;
     lock.current = true;
     setBusy(kind);
     try {
       const r = await fn();
       await onOk?.(r);
+      return true;
     } catch (e) {
       showToast(errorMessage(e), 'error');
+      if (errorCode(e) === 'escolha_trechos' && alive.current) {
+        setFocusTick(n => n + 1); // leva o operador à seção de trechos
+        const v = ++ver.current;
+        api.get(id).then(d => commit(d, v)).catch(() => {}); // estado local estava defasado
+      }
+      return false;
     } finally {
       lock.current = false;
       if (alive.current) setBusy(null);
@@ -79,7 +89,16 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
   };
   const stopEditing = () => { if (alive.current) setEditing(false); };
 
-  const markNotice = () => run('notice', () => api.markNoticeSent(id), d => { apply(d); showToast('Aviso marcado como enviado', 'success'); });
+  const needsAffected = !!detail.needs_affected;
+  const total = old.trips?.length || 0;
+  const partial = Array.isArray(detail.affected) && detail.affected.length > 0 && detail.affected.length < total;
+  const saveAffected = (list) => run('affected', () => api.setAffected(id, list), d => {
+    const had = !!detail.new;
+    apply(d);
+    if (had) bumpPreview();
+    showToast(had ? 'Trechos atualizados — voucher novo refeito' : 'Trechos salvos', 'success');
+  });
+  const markNotice =() => run('notice', () => api.markNoticeSent(id), d => { apply(d); showToast('Aviso marcado como enviado', 'success'); });
   const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); stopEditing(); bumpPreview(); showToast('Voucher novo lido', 'success'); });
   const saveEdits = (unified) => run('save', () => api.saveNew(id, unified), d => { apply(d); stopEditing(); bumpPreview(); showToast('Correções salvas', 'success'); });
   const sendEmail = (kind) => (emails) => run('email', () => api.sendEmail(id, kind, emails), async () => {
@@ -114,6 +133,13 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
         </ul>
       </div>
 
+      <AffectedTripsSection detail={detail} busy={busy} locked={editing} focusTick={focusTick} onSave={saveAffected} />
+
+      {needsAffected ? (
+        <div className={`${sectionCls} text-sm text-slate-600 dark:text-slate-400`}>
+          Os passos 1 (aviso) e 2 (confirmação) ficam disponíveis depois de confirmar os trechos alterados.
+        </div>
+      ) : (<>
       <div className={`${sectionCls} space-y-3`}>
         <div className={h3}>Passo 1 — Aviso ao cliente</div>
         {!detail.support_phone && (
@@ -158,7 +184,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
-                label={hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODOS os trechos alterados. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só os trechos que aparecerem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).'}
+                label={(partial ? 'Só os trechos marcados serão substituídos; os demais permanecem como no voucher antigo. ' : '') + (hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODOS os trechos alterados. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só os trechos que aparecerem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).')}
               />
             )}
             {hasNew && detail.diff && (
@@ -178,7 +204,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 )}
                 <FlightDiffView diff={detail.diff} />
                 {detail.new_voucher_id && (
-                  <NewVoucherSection voucherId={detail.new_voucher_id} url={detail.new_voucher_url} ts={pvTs} showToast={showToast} />
+                  <NewVoucherSection voucherId={detail.new_voucher_id} url={detail.new_voucher_url} ts={pvTs} partial={partial} showToast={showToast} />
                 )}
                 {!done && !editing && (
                   <button type="button" className={btnGhost} onClick={() => setEditing(true)} disabled={!!busy}>
@@ -215,6 +241,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
           </>
         )}
       </div>
+      </>)}
     </div>
     {preview && <EmailPreviewModal key={preview} id={id} kind={preview} onClose={() => setPreview(null)} showToast={showToast} />}
     </>

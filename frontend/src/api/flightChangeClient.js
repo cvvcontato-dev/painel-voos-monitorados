@@ -17,7 +17,8 @@ export const createFromVoucher = (voucher_id) => api.post(BASE, { voucher_id }).
 export const markNoticeSent = (id) => api.post(`${BASE}/${id}/notice-sent`, {}).then(r => r.data);
 export const uploadNewVoucher = (id, file) => api.post(`${BASE}/${id}/new-voucher`, form(file)).then(r => r.data);
 export const saveNew = (id, unified) => api.put(`${BASE}/${id}/new`, { unified }).then(r => r.data);
-export const confirm = (id) => api.post(`${BASE}/${id}/confirm`, {}).then(r => r.data);
+export const setAffected = (id, affected) => api.put(`${BASE}/${id}/affected`, { affected }).then(r => r.data);
+export const confirm =(id) => api.post(`${BASE}/${id}/confirm`, {}).then(r => r.data);
 export const sendEmail = (id, kind, emails) => api.post(`${BASE}/${id}/send-email`, { kind, emails }).then(r => r.data);
 export const emailPreview = (id, kind) => api.get(`${BASE}/${id}/email-preview`, { params: { kind } }).then(r => r.data);
 export const remove = (id) => api.delete(`${BASE}/${id}`);
@@ -32,7 +33,15 @@ const CODE_MSGS = {
   sem_voucher_novo: 'Envie o voucher novo antes de continuar.',
   voucher_novo_removido: 'O voucher novo deste caso foi removido. Envie-o novamente.',
   voucher_corrompido: 'Os dados do voucher deste caso estão corrompidos.',
-  voucher_novo_corrompido: 'Os dados do voucher novo estão corrompidos. Envie-o novamente.'
+  voucher_novo_corrompido: 'Os dados do voucher novo estão corrompidos. Envie-o novamente.',
+  escolha_trechos: 'Marque ao menos um trecho alterado antes de continuar.',
+  trechos_invalidos: 'Seleção de trechos inválida. Recarregue o caso.'
+};
+
+// Código de erro do backend (ex.: 'escolha_trechos'), ou null.
+export const errorCode = (err) => {
+  const e = err?.response?.data?.error;
+  return typeof e === 'string' ? e : null;
 };
 
 export function errorMessage(err, fallback = 'Erro inesperado') {
@@ -41,6 +50,8 @@ export function errorMessage(err, fallback = 'Erro inesperado') {
     if (Array.isArray(data.details) && data.details.length) {
       return `${data.error || 'Dados inválidos'}: ${data.details.map(String).join('; ')}`;
     }
+    // Códigos mapeados têm texto próprio, mesmo que o backend mande message.
+    if (data.error === 'trechos_invalidos' || data.error === 'escolha_trechos') return CODE_MSGS[data.error];
     if (data.message) return data.message;
     if (data.error) return CODE_MSGS[data.error] || String(data.error);
   }

@@ -67,16 +67,39 @@ function Note({ tone, children }) {
   return <div className={`rounded-lg border px-3 py-2 text-sm text-slate-800 dark:text-slate-100 ${noteCls[tone]}`}>{children}</div>;
 }
 
-const names = (l) => l.map(p => p?.name || String(p)).join(', ');
+const DIR = { ida: 'ida', volta: 'volta', interno: 'interno' };
+const dirLabel = (d) => DIR[String(d || '').toLowerCase()] || String(d || '');
+
+const names =(l) => l.map(p => p?.name || String(p)).join(', ');
 
 export default function FlightDiffView({ diff }) {
   if (!diff) return null;
   const add = diff.passengers?.adicionados || [];
   const rem = diff.passengers?.removidos || [];
+  const reservationChanges = Array.isArray(diff.reservationChanges) ? diff.reservationChanges : [];
   return (
     <div className="space-y-2">
       {(diff.trips || []).map((t, i) => <Trip key={`${t.direction || 't'}-${i}`} t={t} />)}
-      {diff.locatorChanged && (
+      {Array.isArray(diff.affectedReservations) && diff.affectedReservations.length > 0 && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Trechos considerados:{' '}
+          {diff.affectedReservations.map((r, i) => (
+            <span key={`${r.locator || 'sem'}-${i}`}>
+              {i > 0 && '; '}
+              {(r.directions || []).map(dirLabel).join(' e ') || 'trechos'} da reserva{' '}
+              {r.locator ? <span className="pii">{r.locator}</span> : 'sem localizador'}
+            </span>
+          ))}
+        </p>
+      )}
+      {reservationChanges.map((c, i) => (
+        <Note key={`${c.direction || 'r'}-${i}`} tone="amber">
+          <span className="font-medium">Novo localizador{c.direction ? ` (${dirLabel(c.direction)})` : ''}:</span>{' '}
+          <span className="font-semibold pii">{c.depois}</span>{' '}
+          <span className="opacity-70">(antes <span className="pii">{c.antes}</span>)</span>
+        </Note>
+      ))}
+      {reservationChanges.length === 0 && diff.locatorChanged && (
         <Note tone="amber">
           <span className="font-medium">Localizador:</span>{' '}
           <span className="line-through opacity-70">{diff.locatorChanged.antes}</span>{' '}
