@@ -96,7 +96,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
     const had = !!detail.new;
     apply(d);
     if (had) bumpPreview();
-    showToast(had ? 'Trechos atualizados — voucher novo refeito' : 'Trechos salvos', 'success');
+    showToast(had ? 'Viagens atualizadas — voucher novo refeito' : 'Viagens salvas', 'success');
   });
   const markNotice =() => run('notice', () => api.markNoticeSent(id), d => { apply(d); showToast('Aviso marcado como enviado', 'success'); });
   const uploadNew = (file) => run('upload', () => api.uploadNewVoucher(id, file), d => { apply(d); stopEditing(); bumpPreview(); showToast('Voucher novo lido', 'success'); });
@@ -137,7 +137,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
 
       {needsAffected ? (
         <div className={`${sectionCls} text-sm text-slate-600 dark:text-slate-400`}>
-          Os passos 1 (aviso) e 2 (confirmação) ficam disponíveis depois de confirmar os trechos alterados.
+          Os passos 1 (aviso) e 2 (confirmação) ficam disponíveis depois de confirmar as viagens alteradas.
         </div>
       ) : (<>
       <div className={`${sectionCls} space-y-3`}>
@@ -184,7 +184,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
-                label={(partial ? 'Só os trechos marcados serão substituídos; os demais permanecem como no voucher antigo. ' : '') + (hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODOS os trechos alterados. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só os trechos que aparecerem são substituídos. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).')}
+                label={(partial ? 'Só as viagens marcadas serão substituídas; os demais permanecem como no voucher antigo. A viagem pode ter um número de voos diferente (conexão ↔ direto). ' : '') + (hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODAS as viagens alteradas. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só as viagens que aparecerem são substituídas. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).')}
               />
             )}
             {hasNew && detail.diff && (

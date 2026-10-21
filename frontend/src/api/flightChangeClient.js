@@ -34,8 +34,8 @@ const CODE_MSGS = {
   voucher_novo_removido: 'O voucher novo deste caso foi removido. Envie-o novamente.',
   voucher_corrompido: 'Os dados do voucher deste caso estão corrompidos.',
   voucher_novo_corrompido: 'Os dados do voucher novo estão corrompidos. Envie-o novamente.',
-  escolha_trechos: 'Marque ao menos um trecho alterado antes de continuar.',
-  trechos_invalidos: 'Seleção de trechos inválida. Recarregue o caso.'
+  escolha_trechos: 'Marque ao menos uma viagem alterada antes de continuar.',
+  trechos_invalidos: 'Seleção de viagens inválida. Recarregue o caso.'
 };
 
 // Código de erro do backend (ex.: 'escolha_trechos'), ou null.

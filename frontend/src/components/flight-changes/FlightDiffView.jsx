@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 
 const CAMPO = {
-  partida: 'Partida', chegada: 'Chegada', voo: 'Voo', origem: 'Origem', destino: 'Destino', classe: 'Classe',
+  itinerario: 'Itinerário', partida: 'Partida', chegada: 'Chegada', voo: 'Voo', origem: 'Origem', destino: 'Destino', classe: 'Classe',
   departure: 'Partida', arrival: 'Chegada', flightNumber: 'Voo', origin: 'Origem', destination: 'Destino', cabinClass: 'Classe'
 };
 const campoLabel = (c) => CAMPO[c] || CAMPO[String(c || '').toLowerCase()] || String(c || '');
@@ -19,30 +19,46 @@ const noteCls = {
   red: 'border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10'
 };
 
-export function tripSummary(t) {
+export function tripSummary(t, journey = false) {
   if (!t) return '';
+  // Viagem encadeada: o "número do voo" sintético (AD 1 + AD 2) aparece só no itinerário.
+  if (journey) {
+    const o = t.departure?.airport || '?';
+    const d = t.arrival?.airport || '?';
+    return `${t.direction ? t.direction + ': ' : ''}${o} → ${d}${t.dateLabel ? ' · ' + t.dateLabel : ''}`;
+  }
   const o = t.departure?.airport || '?';
   const d = t.arrival?.airport || '?';
   return `${t.direction ? t.direction + ': ' : ''}${o} → ${d}${t.dateLabel ? ' · ' + t.dateLabel : ''}${t.flightNumber ? ' · ' + t.flightNumber : ''}`;
 }
 
 function Trip({ t }) {
-  const st = tripStyle[t.status] || tripStyle.igual;
+  const st0 = tripStyle[t.status] || tripStyle.igual;
   const ref = t.new || t.old;
   const changes = Array.isArray(t.changes) ? t.changes : [];
+  const jr = t.journey === true;
+  const st = jr ? { ...st0, tag: st0.tag.replace('Novo trecho', 'Nova viagem').replace('Trecho removido', 'Viagem removida') } : st0;
+  const title = tripSummary(ref, jr) || t.direction || (jr ? 'Viagem' : 'Trecho');
   const body = (
     <>
-      <div className="font-medium text-sm">{tripSummary(ref) || t.direction || 'Trecho'}</div>
+      <div className="font-medium text-sm">{title}</div>
       {changes.length > 0 && (
         <ul className="mt-1 space-y-0.5 text-sm">
-          {changes.map((c, i) => (
+          {changes.map((c, i) => (c.campo === 'itinerario' ? (
+            <li key={`${c.campo}-${i}`} className="rounded border border-current/20 bg-white/50 dark:bg-white/5 px-2 py-1">
+              <span className="font-medium">Itinerário:</span>{' '}
+              <span className="line-through opacity-70">{String(c.antes ?? '—')}</span>{' '}
+              <ArrowRight className="inline w-3.5 h-3.5 -mt-0.5" />{' '}
+              <span className="font-semibold">{String(c.depois ?? '—')}</span>
+            </li>
+          ) : (
             <li key={`${c.campo}-${i}`}>
               <span className="font-medium">{campoLabel(c.campo)}:</span>{' '}
               <span className="line-through opacity-70">{String(c.antes ?? '—')}</span>{' '}
               <ArrowRight className="inline w-3.5 h-3.5 -mt-0.5" />{' '}
               <span className="font-semibold">{String(c.depois ?? '—')}</span>
             </li>
-          ))}
+          )))}
         </ul>
       )}
     </>
@@ -50,7 +66,7 @@ function Trip({ t }) {
   if (t.status === 'igual') {
     return (
       <details className={`rounded-lg border px-3 py-2 ${st.box}`}>
-        <summary className="cursor-pointer text-xs">{st.tag} — {tripSummary(ref) || 'Trecho'}</summary>
+        <summary className="cursor-pointer text-xs">{st.tag} — {title}</summary>
         <div className="mt-1">{body}</div>
       </details>
     );
@@ -82,11 +98,11 @@ export default function FlightDiffView({ diff }) {
       {(diff.trips || []).map((t, i) => <Trip key={`${t.direction || 't'}-${i}`} t={t} />)}
       {Array.isArray(diff.affectedReservations) && diff.affectedReservations.length > 0 && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Trechos considerados:{' '}
+          Viagens consideradas:{' '}
           {diff.affectedReservations.map((r, i) => (
             <span key={`${r.locator || 'sem'}-${i}`}>
               {i > 0 && '; '}
-              {(r.directions || []).map(dirLabel).join(' e ') || 'trechos'} da reserva{' '}
+              {(r.directions || []).map(dirLabel).join(' e ') || 'viagens'} da reserva{' '}
               {r.locator ? <span className="pii">{r.locator}</span> : 'sem localizador'}
             </span>
           ))}
