@@ -1,18 +1,21 @@
 const fs = require('fs');
 const { transporter, AGENCY_LOGO_PATH, AGENCY_LOGO_CID } = require('./notifier');
 const { firstNameOf } = require('../helpers/voucherCarrier');
-const { buildWaLink, noticeClientMessage, noticeDetail } = require('../helpers/flightChangeMessage');
+const { buildWaLink, noticeClientMessage, noticeDetail, noticeSentence } = require('../helpers/flightChangeMessage');
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const SUBJECT = 'Importante: houve uma alteração no seu voo ✈️';
 
-function buildNoticeEmailHtml(v, { supportPhone } = {}) {
+// `affected` = índices dos trechos alterados: o aviso cita só eles (e a reserva deles); sem isso, texto de sempre.
+function buildNoticeEmailHtml(v, { supportPhone, affected } = {}) {
   const nome = firstNameOf(v?.passengers?.[0]?.name);
   const loc = v?.reservation?.locator;
   const detalhe = noticeDetail(v);
-  const link = buildWaLink(supportPhone, noticeClientMessage(v));
+  const link = buildWaLink(supportPhone, noticeClientMessage(v, { affected }));
+  const frase = noticeSentence(v, affected, { bold: (t) => `<strong>${esc(t)}</strong>`, plain: esc })
+    || `A companhia aérea fez uma alteração no seu voo${loc ? ` da reserva <strong>${esc(loc)}</strong>` : ''}${detalhe ? ` (${esc(detalhe)})` : ''}.`;
   const botao = link ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;"><tr>
       <td bgcolor="#25D366" style="background:#25D366;border-radius:8px;">
         <a href="${esc(link)}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;">Falar com a gente no WhatsApp</a>
@@ -32,7 +35,7 @@ function buildNoticeEmailHtml(v, { supportPhone } = {}) {
         <tr><td style="padding:28px 24px;">
           <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">Olá${nome ? `, ${esc(nome)}` : ''}</div>
           <h2 style="font-size:24px;font-weight:700;color:#2D3748;margin:6px 0 10px;">Houve uma alteração no seu voo</h2>
-          <p style="font-size:15px;color:#4A5568;line-height:1.55;margin:0 0 8px;">A companhia aérea fez uma alteração no seu voo${loc ? ` da reserva <strong>${esc(loc)}</strong>` : ''}${detalhe ? ` (${esc(detalhe)})` : ''}.</p>
+          <p style="font-size:15px;color:#4A5568;line-height:1.55;margin:0 0 8px;">${frase}</p>
           <p style="font-size:15px;color:#4A5568;line-height:1.55;margin:0;">Entraremos em contato pelo WhatsApp com os detalhes${link ? '. Se preferir, é só nos chamar pelo botão abaixo:' : '.'}</p>
           ${botao}
           <div style="border-top:1px solid #E5E7EB;padding-top:18px;margin-top:20px;">
@@ -48,7 +51,7 @@ function buildNoticeEmailHtml(v, { supportPhone } = {}) {
 </body></html>`;
 }
 
-async function sendNoticeEmail({ to, bcc, voucher, supportPhone }) {
+async function sendNoticeEmail({ to, bcc, voucher, supportPhone, affected }) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
@@ -60,7 +63,7 @@ async function sendNoticeEmail({ to, bcc, voucher, supportPhone }) {
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: to.join(', '), bcc: bcc || undefined,
-      subject: SUBJECT, html: buildNoticeEmailHtml(voucher, { supportPhone }), attachments
+      subject: SUBJECT, html: buildNoticeEmailHtml(voucher, { supportPhone, affected }), attachments
     });
     return { sucesso: true, messageId: info.messageId, subject: SUBJECT };
   } catch (error) {

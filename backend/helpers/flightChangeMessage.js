@@ -2,6 +2,7 @@
 // *texto* = negrito no WhatsApp (mesmo padrão dos outros módulos).
 const { firstNameOf } = require('./voucherCarrier');
 const { normalizePhone } = require('./boardingPassPayload');
+const { locatorOf, restrictTo } = require('./flightChangeReservations');
 
 const DIRECTION_LABEL = { ida: 'Ida', volta: 'Volta', interno: 'Trecho interno', multi: 'Trecho' };
 const FIELD_LABEL = {
@@ -51,26 +52,90 @@ const tripLabel = (t) => {
   return o && d ? `${base} (${o} → ${d})` : base;
 };
 
+/**
+ * Trechos afetados agrupados por reserva (na ordem do voucher): [{ locator, dirs, detail }].
+ * null = sem restrição (sem `affected` ou cobrindo todos os trechos) => textos de sempre.
+ */
+function noticeSegments(v, affected) {
+  const trips = v?.trips || [];
+  const A = restrictTo(affected, trips.length);
+  if (!A) return null;
+  const groups = [];
+  A.forEach(i => {
+    const t = trips[i];
+    if (!t) return;
+    const key = locatorOf(v, t);
+    let g = groups.find(x => x.key === key);
+    if (!g) { g = { key, trips: [] }; groups.push(g); }
+    g.trips.push(t);
+  });
+  return groups.map(g => {
+    const idas = g.trips.filter(t => t.direction === 'ida');
+    const o = g.trips[0]?.departure?.airport;
+    const d = (idas.length ? idas : g.trips).slice(-1)[0]?.arrival?.airport;
+    return {
+      locator: safeLoc(g.key),
+      dirs: [...new Set(g.trips.map(t => t.direction))],
+      detail: [o && d ? `${o} → ${d}` : '', joinDates(datesOf({ trips: g.trips }))].filter(Boolean).join(', ')
+    };
+  });
+}
+
+/** "voo de ida e volta" / "voo de volta" / "trecho interno" / "voo" (b = negrito do canal). */
+function segmentKind(dirs, b) {
+  const lados = ['ida', 'volta'].filter(d => dirs.includes(d));
+  if (lados.length && dirs.every(d => d === 'ida' || d === 'volta')) return `voo de ${lados.map(b).join(' e ')}`;
+  if (dirs.length === 1 && dirs[0] === 'interno') return 'trecho interno';
+  return 'voo';
+}
+
+/**
+ * Frase do aviso só dos trechos afetados, ex.: "A companhia aérea fez uma alteração no seu voo de *volta* da
+ * reserva *XYZ789* (REC → GRU, 19 SET 2026)." fmt = { bold, plain }: como o canal marca negrito e trata texto
+ * variável (WhatsApp: *x*; e-mail: <strong> + escape). null = sem restrição (usar o texto de sempre).
+ */
+function noticeSentence(v, affected, fmt) {
+  const segs = noticeSegments(v, affected);
+  if (!segs || !segs.length) return null;
+  const { bold, plain } = fmt;
+  const textos = segs.map(sg => `${segmentKind(sg.dirs, bold)}${sg.locator ? ` da reserva ${bold(sg.locator)}` : ''}${sg.detail ? ` (${plain(sg.detail)})` : ''}`);
+  const lista = textos.length === 1 ? textos[0]
+    : `${textos.slice(0, -1).join(', no ')} e no ${textos[textos.length - 1]}`;
+  return `A companhia aérea fez uma alteração no seu ${lista}.`;
+}
+
 /** Mensagem que o CLIENTE envia para nós ao tocar no link (pré-preenchida). */
-function noticeClientMessage(v) {
+function noticeClientMessage(v, { affected } = {}) {
   const n = greetingName(v);
-  const loc = safeLoc(v?.reservation?.locator);
-  const extra = [loc ? `Reserva ${loc}` : '', n].filter(Boolean).join(' — ');
+  const segs = noticeSegments(v, affected);
+  let loc, rotulo = 'Reserva';
+  if (segs) {
+    const locs = [...new Set(segs.map(x => x.locator).filter(Boolean))];
+    loc = locs.length > 1 ? `${locs.slice(0, -1).join(', ')} e ${locs[locs.length - 1]}` : (locs[0] || '');
+    if (locs.length > 1) rotulo = 'Reservas';
+  } else {
+    loc = safeLoc(v?.reservation?.locator);
+  }
+  const extra = [loc ? `${rotulo} ${loc}` : '', n].filter(Boolean).join(' — ');
   return `Olá! Recebi o aviso de alteração do meu voo.${extra ? ` ${extra}.` : ''}`;
 }
 
 /** "GRU → REC, 12 SET 2026 e 19 SET 2026" (rota + datas válidas de todos os trechos, sem horário). */
-function noticeDetail(v) {
+function noticeDetail(v, { affected } = {}) {
+  const segs = noticeSegments(v, affected);
+  if (segs) return segs.map(x => x.detail).filter(Boolean).join(' e ');
   return [routeOf(v), joinDates(datesOf(v))].filter(Boolean).join(', ');
 }
 
-function buildNoticeText(v, { supportPhone } = {}) {
+function buildNoticeText(v, { supportPhone, affected } = {}) {
   const loc = safeLoc(v?.reservation?.locator);
   const detalhe = noticeDetail(v);
-  const link = buildWaLink(supportPhone, noticeClientMessage(v));
+  const link = buildWaLink(supportPhone, noticeClientMessage(v, { affected }));
+  const frase = noticeSentence(v, affected, { bold: s => `*${s}*`, plain: s => s })
+    || `A companhia aérea fez uma alteração no seu voo${loc ? ` da reserva *${loc}*` : ''}${detalhe ? ` (${detalhe})` : ''}.`;
   const linhas = [
     hello(v, '✈️'), '',
-    `A companhia aérea fez uma alteração no seu voo${loc ? ` da reserva *${loc}*` : ''}${detalhe ? ` (${detalhe})` : ''}.`, '',
+    frase, '',
     'Entraremos em contato pelo WhatsApp com os detalhes.'
   ];
   if (link) linhas.push(`Se preferir, é só nos chamar: ${link}`);
@@ -82,7 +147,14 @@ function buildNoticeText(v, { supportPhone } = {}) {
  * `b` envolve trechos em negrito do WhatsApp (ou não, para texto puro).
  */
 function changeBlocks(diff, b) {
-  const loc = diff?.locatorChanged ? [`Novo localizador: ${b(safeLoc(diff.locatorChanged.depois))}`] : null;
+  // Uma linha por reserva afetada cujo localizador mudou; sem reservationChanges, o localizador único de sempre.
+  const rc = diff?.reservationChanges || [];
+  let loc = null;
+  if (rc.length) {
+    loc = rc.map(r => `Novo localizador${rc.length > 1 ? ` (${(DIRECTION_LABEL[r.direction] || 'Trecho').toLowerCase()})` : ''}: ${b(safeLoc(r.depois))}`);
+  } else if (diff?.locatorChanged) {
+    loc = [`Novo localizador: ${b(safeLoc(diff.locatorChanged.depois))}`];
+  }
   const trips = [];
   for (const t of diff?.trips || []) {
     if (t.status === 'igual') continue;
@@ -107,8 +179,11 @@ function buildChangeSummaryLines(diff) {
 }
 
 function buildConfirmationText(newV, diff, { emailSent = false, voucherUrl = '' } = {}) {
-  const loc = safeLoc(newV?.reservation?.locator);
-  const linhas = [hello(newV, '😊'), '', `Seu voo foi reajustado ✅${loc ? ` Reserva *${loc}*` : ''}`];
+  // Com trechos afetados (diff restrito), cita a(s) reserva(s) afetada(s), não a da ida.
+  const ar = diff?.affectedReservations;
+  const locs = (ar && ar.length ? ar.map(x => safeLoc(x.locator)) : [safeLoc(newV?.reservation?.locator)]).filter(Boolean);
+  const reserva = locs.length > 1 ? ` Reservas ${locs.map(l => `*${l}*`).join(' e ')}` : (locs.length ? ` Reserva *${locs[0]}*` : '');
+  const linhas = [hello(newV, '😊'), '', `Seu voo foi reajustado ✅${reserva}`];
   const { loc: locBlock, trips } = changeBlocks(diff, s => `*${s}*`);
   if (locBlock) linhas.push(...locBlock);
 
@@ -121,4 +196,4 @@ function buildConfirmationText(newV, diff, { emailSent = false, voucherUrl = '' 
   return linhas.join('\n');
 }
 
-module.exports = { noticeDetail, buildWaLink, buildNoticeText, buildConfirmationText, buildChangeSummaryLines, noticeClientMessage };
+module.exports = { noticeDetail, noticeSentence, buildWaLink, buildNoticeText, buildConfirmationText, buildChangeSummaryLines, noticeClientMessage };
