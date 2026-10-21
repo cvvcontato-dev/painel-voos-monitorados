@@ -162,11 +162,15 @@ function changeBlocks(diff, b) {
   for (const t of diff?.trips || []) {
     if (t.status === 'igual') continue;
     if (t.status === 'removido') {
-      trips.push([b(tripLabel(t.old)), '• Trecho cancelado']);
+      trips.push(t.journey ? [b(tripLabel(t.old)), '• Viagem cancelada', `• Itinerário: ${t.old.itinerary}`] : [b(tripLabel(t.old)), '• Trecho cancelado']);
     } else if (t.status === 'novo') {
-      trips.push([b(tripLabel(t.new)), '• Trecho incluído', `• Voo: ${t.new.flightNumber || '—'}`]);
+      trips.push(t.journey
+        ? [b(tripLabel(t.new)), '• Viagem incluída', `• Itinerário: ${t.new.itinerary}`]
+        : [b(tripLabel(t.new)), '• Trecho incluído', `• Voo: ${t.new.flightNumber || '—'}`]);
     } else {
-      trips.push([b(tripLabel(t.new)), ...t.changes.map(c => `• ${FIELD_LABEL[c.campo] || c.campo}: ${c.antes} → ${c.depois}`)]);
+      trips.push([b(tripLabel(t.new)), ...t.changes.map(c => (c.campo === 'itinerario'
+        ? `• ${FIELD_LABEL[c.campo]}: de ${c.antes} para ${c.depois}`      // as duas rotas têm setas: "de … para …" evita a leitura confusa
+        : `• ${FIELD_LABEL[c.campo] || c.campo}: ${c.antes} → ${c.depois}`))]);
     }
   }
   return { loc, trips };

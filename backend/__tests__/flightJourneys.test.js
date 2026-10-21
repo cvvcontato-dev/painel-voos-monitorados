@@ -110,7 +110,8 @@ describe('merge por viagem', () => {
       leg('volta', 'SSA', 'GRU', 'AD 5002', '2026-09-19T12:00:00-03:00', '2026-09-19T15:00:00-03:00')], [1]);
     expect(resumo(m)).toEqual(['ida:AD 4001:ABC123', 'volta:AD 5001:XYZ789', 'volta:AD 5002:XYZ789']);
     expect(m.trips[1].cabinClass).toBe('Econômica');          // herdado por posição
-    expect(m.trips[2].cabinClass).toBeNull();                  // sem par no antigo
+    expect(m.trips[2].cabinClass).toBe('Econômica');           // voo extra herda o do ÚLTIMO voo da viagem antiga
+    expect(m.trips[2].status).toBe('Confirmado');
     expect(warns(m)).toEqual([]);
   });
 
@@ -212,7 +213,7 @@ describe('mensagens por viagem', () => {
       'Olá, *Joao*! 😊', '',
       'Seu voo foi reajustado ✅ Reserva *XYZ789*', '',
       '*Volta (REC → GRU)*',
-      '• Itinerário: REC → BSB → GRU (AD 4002 + AD 4012) → REC → GRU (AD 4020, direto)',
+      '• Itinerário: de REC → BSB → GRU (AD 4002 + AD 4012) para REC → GRU (AD 4020, direto)',
       '• Partida: 19/09/2026 10:00 → 19/09/2026 11:00',
       '• Chegada: 19/09/2026 16:00 → 19/09/2026 14:30', '',
       'Em instantes enviamos o novo voucher.'].join('\n'));
@@ -227,8 +228,67 @@ describe('mensagens por viagem', () => {
     const t = buildConfirmationText(novo, diff, {});
     expect(t).toContain('Seu voo foi reajustado ✅ Reserva *ABC123*');
     expect(t).toContain('*Ida (GRU → REC)*');
-    expect(t).toContain('• Itinerário: GRU → REC (AD 4001, direto) → GRU → BSB → REC (AD 6001 + AD 6002)');
+    expect(t).toContain('• Itinerário: de GRU → REC (AD 4001, direto) para GRU → BSB → REC (AD 6001 + AD 6002)');
     expect(t).toContain('• Partida: 12/09/2026 08:30 → 12/09/2026 07:00');
     expect(t).not.toContain('Volta');
+  });
+});
+
+describe('revisão: classe, viagens inteiras removidas/incluídas e normalização', () => {
+  const diretoComClasse = (cabinClass) => leg('volta', 'REC', 'GRU', 'AD 4020', '2026-09-19T11:00:00-03:00', '2026-09-19T14:30:00-03:00');
+
+  test('conexão -> direto com classe nova: o diff e a confirmação mostram "Classe: antes → depois"', () => {
+    const old = F.combinadoConexao();
+    const novoTrip = diretoComClasse(); novoTrip.cabinClass = 'Executiva';
+    const novo = mergeNewFlights(old, { trips: [novoTrip] }, { affected: [1, 2] });
+    const d = diffVouchers(old, novo, { affected: [1, 2] });
+    expect(d.trips[1].changes.map(c => c.campo)).toEqual(['itinerario', 'partida', 'chegada', 'classe']);
+    expect(d.trips[1].changes[3]).toEqual({ campo: 'classe', antes: 'Econômica', depois: 'Executiva' });
+    expect(buildConfirmationText(novo, d, {})).toContain('• Classe: Econômica → Executiva');
+  });
+
+  test('classe: lista quando os voos divergem; sem classe de um dos lados não conta', () => {
+    const old = F.combinadoConexao();
+    old.trips[2].cabinClass = 'Executiva';
+    const novoTrip = diretoComClasse(); novoTrip.cabinClass = 'Econômica';
+    const d = diffVouchers(old, mergeNewFlights(old, { trips: [novoTrip] }, { affected: [1] }), { affected: [1] });
+    expect(d.trips[1].changes.find(c => c.campo === 'classe')).toEqual({ campo: 'classe', antes: 'Econômica + Executiva', depois: 'Econômica' });
+    const sem = F.combinadoConexao();
+    sem.trips.forEach(t => { t.cabinClass = null; });
+    const novoTrip2 = diretoComClasse(); novoTrip2.cabinClass = 'Executiva';
+    const d2 = diffVouchers(sem, mergeNewFlights(sem, { trips: [novoTrip2] }, { affected: [1] }), { affected: [1] });
+    expect(d2.trips[1].changes.some(c => c.campo === 'classe')).toBe(false);
+  });
+
+  test('viagem com conexão cancelada: UMA entrada "removido" (journey) e uma só linha "Viagem cancelada"', () => {
+    const old = F.combinadoConexao();
+    const novo = clone(old); novo.trips = [novo.trips[0]];
+    const d = diffVouchers(old, novo, { affected: [1, 2] });
+    expect(d.trips.map(t => `${t.direction}:${t.status}`)).toEqual(['ida:igual', 'volta:removido']);
+    expect(d.trips[1]).toMatchObject({ journey: true, new: null });
+    const t = buildConfirmationText(novo, d, {});
+    expect(t).toContain('*Volta (REC → GRU)*\n• Viagem cancelada\n• Itinerário: REC → BSB → GRU (AD 4002 + AD 4012)');
+    expect(t).not.toContain('Trecho cancelado');
+    expect(d.hasChanges).toBe(true);
+  });
+
+  test('viagem com conexão incluída: UMA entrada "novo" (journey) com o itinerário; voo simples segue como antes', () => {
+    const novo = F.combinadoConexao();
+    const old = clone(novo); old.trips = [old.trips[0]];
+    const d = diffVouchers(old, novo);
+    expect(d.trips.map(t => `${t.direction}:${t.status}`)).toEqual(['ida:igual', 'volta:novo']);
+    expect(buildConfirmationText(novo, d, {})).toContain('*Volta (REC → GRU)*\n• Viagem incluída\n• Itinerário: REC → BSB → GRU (AD 4002 + AD 4012)');
+    const simples = F.combinado(); simples.trips = [simples.trips[0]];
+    const d2 = diffVouchers(simples, F.combinado());
+    expect(buildConfirmationText(F.combinado(), d2, {})).toContain('• Trecho incluído');
+  });
+
+  test('itinerário normaliza o número do voo (espaços repetidos)', () => {
+    const t = [{ flightNumber: ' AD   4002 ', departure: { airport: 'REC' }, arrival: { airport: 'GRU' } }];
+    expect(J.itineraryText(t)).toBe('REC → GRU (AD 4002, direto)');
+    const old = F.combinadoConexao();
+    old.trips[1].flightNumber = 'AD  4002';
+    const novo = mergeNewFlights(old, { trips: [direto()] }, { affected: [1] });
+    expect(diffVouchers(old, novo, { affected: [1] }).trips[1].changes[0].antes).toBe('REC → BSB → GRU (AD 4002 + AD 4012)');
   });
 });

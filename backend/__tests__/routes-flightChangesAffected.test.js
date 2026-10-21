@@ -226,7 +226,7 @@ describe('merge e diff restritos nas rotas', () => {
     extractFlights.mockResolvedValueOnce({ carrier: 'azul', locator: null, trips: [F.printIda({ flightNumber: 'AD 9999' })] });
     const r = await novoVoucher(agent, csrf, c.id);
     expect(r.status).toBe(422);
-    expect(r.body.error).toBe('O print mostra 1 viagem(ns) e você marcou 1. Marque exatamente as viagens que aparecem no print, ou envie um print só da viagem alterada.');
+    expect(r.body.error).toBe('Nenhuma viagem do print corresponde à viagem marcada (origem e destino diferentes). Confira a marcação ou envie um print só da viagem alterada.');
     expect((await q.get('SELECT new_json n FROM flight_changes WHERE id=?', [c.id])).n).toBeNull();
   });
 
@@ -373,7 +373,7 @@ describe('merge e diff restritos nas rotas', () => {
     expect(r.body.new.trips.map(t => t.flightNumber)).toEqual(['AD 4001', 'AD 4020']);
     expect(statusOf(r.body)).toEqual(['ida:igual', 'volta:alterado']);
     expect(r.body.diff.trips[1].changes[0]).toEqual({ campo: 'itinerario', antes: 'REC → BSB → GRU (AD 4002 + AD 4012)', depois: 'REC → GRU (AD 4020, direto)' });
-    expect(r.body.messages.confirmation).toContain('• Itinerário: REC → BSB → GRU (AD 4002 + AD 4012) → REC → GRU (AD 4020, direto)');
+    expect(r.body.messages.confirmation).toContain('• Itinerário: de REC → BSB → GRU (AD 4002 + AD 4012) para REC → GRU (AD 4020, direto)');
   });
 
   test('PUT /new respeita a marcação: mexer num trecho NÃO marcado não conta como mudança', async () => {

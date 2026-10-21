@@ -27,7 +27,7 @@
 // os mapas diferem (lado sem bagagem = desconhecido). baggageDetail lista antes/depois.
 
 const { locatorOf, restrictTo } = require('./flightChangeReservations');
-const { journeysOf, expandAffected, itineraryText } = require('./flightJourneys');
+const { journeysOf, expandAffected, itineraryText, flightText } = require('./flightJourneys');
 
 const ISO_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
@@ -196,9 +196,11 @@ function syntheticTrip(j, voucher) {
   const first = j.trips[0], last = j.trips[j.trips.length - 1];
   return {
     direction: j.direction, dateLabel: first.dateLabel, locator: locatorOf(voucher, first),
-    flightNumber: j.trips.map(t => squash(t.flightNumber) || '—').join(' + '),
-    departure: first.departure, arrival: last.arrival, cabinClass: first.cabinClass == null ? null : first.cabinClass,
-    segments: j.trips.length
+    flightNumber: j.trips.map(flightText).join(' + '),
+    departure: first.departure, arrival: last.arrival,
+    // classe da viagem: a do 1º voo, ou a lista "Econômica + Executiva" quando os voos divergem; null se nenhum tem
+    cabinClass: [...new Set(j.trips.map(t => squash(t.cabinClass)).filter(Boolean))].join(' + ') || null,
+    segments: j.trips.length, itinerary: itineraryText(j.trips)
   };
 }
 
@@ -207,7 +209,8 @@ function compareJourney(oj, nj) {
   const a = syntheticTrip(oj, {}), b = syntheticTrip(nj, {});
   const changes = [{ campo: 'itinerario', antes: itineraryText(oj.trips), depois: itineraryText(nj.trips) }];
   for (const [campo, key, show] of FIELDS) {
-    if (campo !== 'partida' && campo !== 'chegada') continue;
+    if (campo !== 'partida' && campo !== 'chegada' && campo !== 'classe') continue;
+    if (campo === 'classe' && (!key(a) || !key(b))) continue;     // classe só conta quando as duas existem
     if (key(a) !== key(b)) changes.push({ campo, antes: show(a), depois: show(b) });
   }
   return changes;
@@ -240,6 +243,11 @@ function diffVouchers(oldV, newV, opts) {
   const affEntries = new Set();      // entradas que pertencem a viagens marcadas
   const push = (entry, affected) => { trips.push(entry); if (affected) affEntries.add(entry); return entry; };
 
+  const pushNovo = (nj, direction) => {   // viagem nova: UMA entrada se tem conexão
+    if (nj.trips.length > 1) push({ status: 'novo', direction, changes: [], old: null, new: syntheticTrip(nj, n), journey: true }, true);
+    else push({ status: 'novo', direction, changes: [], old: null, new: nj.trips[0] }, true);
+  };
+
   for (const [direction, olds] of oldG) {
     const news = (newG.get(direction) || []).slice();
     const pair = new Array(olds.length).fill(null);
@@ -262,7 +270,11 @@ function diffVouchers(oldV, newV, opts) {
         oj.trips.forEach((old, k) => push({ status: 'igual', direction, changes: [], old, new: (nj && nj.trips[k]) || old }, false));
         return;
       }
-      if (!nj) { oj.trips.forEach(old => push({ status: 'removido', direction, changes: [], old, new: null }, true)); return; }
+      if (!nj) {   // viagem inteira removida: UMA entrada (conexão não vira "cancelado" duas vezes)
+        if (oj.trips.length > 1) push({ status: 'removido', direction, changes: [], old: syntheticTrip(oj, o), new: null, journey: true }, true);
+        else push({ status: 'removido', direction, changes: [], old: oj.trips[0], new: null }, true);
+        return;
+      }
       if (sameStructure(oj, nj)) {
         oj.trips.forEach((old, k) => {
           const changes = compareTrip(old, nj.trips[k]);
@@ -273,13 +285,13 @@ function diffVouchers(oldV, newV, opts) {
       push({ status: 'alterado', direction, changes: compareJourney(oj, nj), old: syntheticTrip(oj, o), new: syntheticTrip(nj, n), journey: true }, true);
     });
     if (!A || affectedDirs.has(direction)) {
-      news.filter(nw => !pairedNew.has(nw)).forEach(nj => nj.trips.forEach(nw => push({ status: 'novo', direction, changes: [], old: null, new: nw }, true)));
+      news.filter(nw => !pairedNew.has(nw)).forEach(nj => pushNovo(nj, direction));
     }
   }
   if (!A) {
     for (const [direction, news] of newG) {
       if (oldG.has(direction)) continue;
-      news.forEach(nj => nj.trips.forEach(nw => push({ status: 'novo', direction, changes: [], old: null, new: nw }, true)));
+      news.forEach(nj => pushNovo(nj, direction));
     }
   }
 

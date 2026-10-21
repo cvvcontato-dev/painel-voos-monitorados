@@ -18,7 +18,8 @@ function chained(prev, next) {
 
 const routeText = (trips) => [trips[0].departure?.airport, ...trips.map(t => t.arrival?.airport)].filter(Boolean).join(' → ');
 /** "REC → BSB → GRU (G3 1920 + G3 1930)" ou "REC → GRU (G3 1925, direto)". */
-const itineraryText = (trips) => `${routeText(trips)} (${trips.map(t => t.flightNumber || '—').join(' + ')}${trips.length === 1 ? ', direto' : ''})`;
+const flightText = (t) => String((t && t.flightNumber) || '').replace(/\s+/g, ' ').trim() || '—';
+const itineraryText = (trips) => `${routeText(trips)} (${trips.map(flightText).join(' + ')}${trips.length === 1 ? ', direto' : ''})`;
 
 function finish(j) {
   j.origin = j.trips[0].departure?.airport;
@@ -87,4 +88,4 @@ function expandAffected(voucher, list) {
   return [...set].sort((a, b) => a - b);
 }
 
-module.exports = { journeysOf, chainPrintTrips, expandAffected, journeyTitle, journeyLabel, itineraryText, routeText, chained };
+module.exports = { flightText, journeysOf, chainPrintTrips, expandAffected, journeyTitle, journeyLabel, itineraryText, routeText, chained };

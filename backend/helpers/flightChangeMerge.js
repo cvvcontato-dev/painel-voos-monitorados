@@ -139,9 +139,10 @@ function reconcileByRoute(viagensAntigas, viagensPrint, warn, soRotulados) {
 }
 
 /** 422 de ambiguidade (com log de diagnóstico, sem dados pessoais). */
-function ambiguousAffected(marcados, print, nViagens, mViagens) {
+function ambiguousAffected(marcados, print, nViagens, mViagens, nenhumaCorresponde) {
   const fmt = (t) => `${t.direction || '-'}:${t.flightNumber}:${t.departure && t.departure.airport}-${t.arrival && t.arrival.airport}`;
   console.warn(`[FLIGHT-CHANGES] merge ambíguo: marcados=${marcados.map(fmt).join(',')} print=${print.map(fmt).join(',')}`);
+  if (nenhumaCorresponde) return unprocessable('Nenhuma viagem do print corresponde à viagem marcada (origem e destino diferentes). Confira a marcação ou envie um print só da viagem alterada.');
   return unprocessable(ambiguousAffectedMsg(nViagens, mViagens));
 }
 const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
@@ -197,7 +198,7 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     const ordenadas = [...livresP].sort((x, y) => startMs(x) - startMs(y));
     [...livresM].forEach((mj, k) => parear(mj, ordenadas[k], true));
   } else if (!pairs.length) {
-    throw ambiguousAffected(affTrips, extTrips, P.length, marcadas.length);
+    throw ambiguousAffected(affTrips, extTrips, P.length, marcadas.length, P.length === marcadas.length);
   }
   ignoradas.push(...livresP);        // sobras do print: realmente diferentes e não marcadas
   const ignored = ignoradas.flatMap(pj => pj.trips);
@@ -209,7 +210,8 @@ function mergeAffected({ old, merged, oldTrips, extTrips, extracted, A, warnings
     pj.trips.forEach((t, k) => {
       t.direction = mj.direction;    // direção e reserva vêm da viagem substituída
       replaced.set(t, mj.trips[Math.min(k, mj.trips.length - 1)]);
-      const par = mj.trips[k];       // classe/status herdados por posição quando existe par; senão ficam null
+      // classe/status herdados por posição; voo extra (sem par) herda o do ÚLTIMO voo da viagem antiga
+      const par = mj.trips[k] || mj.trips[mj.trips.length - 1];
       if (par) { if (t.cabinClass == null) t.cabinClass = par.cabinClass == null ? null : par.cabinClass; if (t.status == null) t.status = par.status == null ? null : par.status; }
     });
     mj.indexes.forEach(i => skip.add(i));

@@ -76,7 +76,7 @@ describe('mergeNewFlights restrito aos trechos afetados', () => {
     expect(erro(() => mergeNewFlights(F.combinado3(), { trips: [desconhecido] }, { affected: [1, 2] })).body.error).toBe(msgAmbiguo(1, 2));
     // print só com a ida (rota da ida NÃO marcada, horário/voo diferentes): não pode virar a volta
     const e = erro(() => mergeNewFlights(F.combinado(), { trips: [F.printIda({ flightNumber: 'AD 9999' })] }, { affected: [1] }));
-    expect(e.status).toBe(422); expect(e.body.error).toBe(msgAmbiguo(1, 1));
+    expect(e.status).toBe(422); expect(e.body.error).toBe('Nenhuma viagem do print corresponde à viagem marcada (origem e destino diferentes). Confira a marcação ou envie um print só da viagem alterada.');
     jest.restoreAllMocks();
   });
 
