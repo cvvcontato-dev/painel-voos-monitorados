@@ -26,6 +26,8 @@
 // há exatamente um item do tipo em cada lado. baggageChanged só é true quando AMBOS os lados trazem bagagem e
 // os mapas diferem (lado sem bagagem = desconhecido). baggageDetail lista antes/depois.
 
+const { locatorOf, restrictTo } = require('./flightChangeReservations');
+
 const ISO_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
 /** "12/09/2026 08:30" a partir do horário escrito no ISO (hora local do aeroporto). */
@@ -182,9 +184,21 @@ function diffBaggage(oldList, newList) {
   return { changed: true, detail: { antes: baggageLines(a.map), depois: baggageLines(b.map) } };
 }
 
-function diffVouchers(oldV, newV) {
+/**
+ * `opts.affected` = índices (em oldV.trips) dos trechos alterados. Com subconjunto, os demais trechos são
+ * SEMPRE 'igual' (não entram na mensagem) e trechos novos só contam nas direções dos afetados. Sem `affected`
+ * (ou cobrindo todos), compara tudo como sempre.
+ *
+ * Extras do resultado: reservationChanges [{ direction, antes, depois }] = um por reserva (afetada) cujo
+ * localizador mudou; affectedReservations = [{ locator, directions }] (localizadores NOVOS das reservas dos
+ * trechos afetados) quando há restrição, senão null.
+ */
+function diffVouchers(oldV, newV, opts) {
   const o = oldV || {}, n = newV || {};
   const oldG = groupByDirection(o.trips), newG = groupByDirection(n.trips);
+  const A = restrictTo(opts && opts.affected, Array.isArray(o.trips) ? o.trips.length : 0);
+  const isAffected = (t) => !A || A.includes((o.trips || []).indexOf(t));
+  const affectedDirs = new Set(A ? (o.trips || []).filter((t, i) => t && A.includes(i)).map(t => t.direction || 'multi') : []);
   const trips = [];
 
   for (const [direction, olds] of oldG) {
@@ -204,27 +218,56 @@ function diffVouchers(oldV, newV) {
     const pairedNew = new Set(pair.filter(Boolean));
     olds.forEach((old, i) => {
       const nw = pair[i];
+      if (!isAffected(old)) return trips.push({ status: 'igual', direction, changes: [], old, new: nw || old });   // não marcado: nunca entra na mensagem
       if (!nw) return trips.push({ status: 'removido', direction, changes: [], old, new: null });
       const changes = compareTrip(old, nw);
       trips.push({ status: changes.length ? 'alterado' : 'igual', direction, changes, old, new: nw });
     });
-    news.filter(nw => !pairedNew.has(nw)).forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+    if (!A || affectedDirs.has(direction)) {
+      news.filter(nw => !pairedNew.has(nw)).forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+    }
   }
-  for (const [direction, news] of newG) {
-    if (oldG.has(direction)) continue;
-    news.forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+  if (!A) {
+    for (const [direction, news] of newG) {
+      if (oldG.has(direction)) continue;
+      news.forEach(nw => trips.push({ status: 'novo', direction, changes: [], old: null, new: nw }));
+    }
   }
 
   const la = squash(o.reservation?.locator), lb = squash(n.reservation?.locator);
   const locatorChanged = la && lb && la.toUpperCase() !== lb.toUpperCase() ? { antes: la, depois: lb } : null;
 
+  // Uma entrada por reserva afetada cujo localizador mudou (compara o localizador de cada trecho pareado).
+  const reservationChanges = [];
+  const seen = new Set();
+  for (const t of trips) {
+    if (!t.old || !t.new || t.old === t.new || !isAffected(t.old)) continue;
+    const antes = locatorOf(o, t.old), depois = locatorOf(n, t.new);
+    if (!antes || !depois || antes === depois || seen.has(`${antes}|${depois}`)) continue;
+    seen.add(`${antes}|${depois}`);
+    reservationChanges.push({ direction: t.direction, antes, depois });
+  }
+
+  let affectedReservations = null;
+  if (A) {
+    affectedReservations = [];
+    for (const t of trips) {
+      if (t.status === 'igual' && !isAffected(t.old)) continue;
+      const loc = t.new ? locatorOf(n, t.new) : locatorOf(o, t.old);
+      if (!loc) continue;
+      let g = affectedReservations.find(x => x.locator === loc);
+      if (!g) { g = { locator: loc, directions: [] }; affectedReservations.push(g); }
+      if (!g.directions.includes(t.direction)) g.directions.push(t.direction);
+    }
+  }
+
   const passengers = diffPassengers(o.passengers, n.passengers);
   const bag = diffBaggage(o.baggage, n.baggage);
   const baggageChanged = bag.changed;
-  const hasChanges = trips.some(t => t.status !== 'igual') || !!locatorChanged
+  const hasChanges = trips.some(t => t.status !== 'igual') || !!locatorChanged || reservationChanges.length > 0
     || passengers.adicionados.length > 0 || passengers.removidos.length > 0 || baggageChanged;
 
-  return { trips, locatorChanged, passengers, baggageChanged, baggageDetail: bag.detail, hasChanges };
+  return { trips, locatorChanged, reservationChanges, affectedReservations, passengers, baggageChanged, baggageDetail: bag.detail, hasChanges };
 }
 
 module.exports = { diffVouchers, formatLocal };
