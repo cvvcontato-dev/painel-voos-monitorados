@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import api from '../hooks/useApi';
+import useBackClose from '../hooks/useBackClose';
 
 export default function UserModal({ isOpen, onClose, editTarget, onSuccess, onToast }) {
+  useBackClose(isOpen, onClose);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

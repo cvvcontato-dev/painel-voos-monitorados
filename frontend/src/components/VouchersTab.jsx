@@ -4,6 +4,7 @@ import {
   UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
+import useBackClose from '../hooks/useBackClose';
 
 const inputCls =
   "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -31,6 +32,7 @@ export default function VouchersTab({ showToast }) {
   const [settings, setSettings] = useState({ contact_phone: '', contact_email: '', contact_site: '', contact_extra: '' });
   const [savingSettings, setSavingSettings] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  useBackClose(emailModalOpen, () => setEmailModalOpen(false));
   const [emailRecipients, setEmailRecipients] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);

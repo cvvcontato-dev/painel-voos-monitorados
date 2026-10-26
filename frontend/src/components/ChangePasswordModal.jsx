@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 import { changePassword, logout } from '../api/authClient';
+import useBackClose from '../hooks/useBackClose';
 
 function PasswordField({ label, value, onChange, placeholder }) {
   const [show, setShow] = useState(false);
@@ -28,6 +29,7 @@ function PasswordField({ label, value, onChange, placeholder }) {
 }
 
 export default function ChangePasswordModal({ isOpen, onClose, onToast }) {
+  useBackClose(isOpen, onClose);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');

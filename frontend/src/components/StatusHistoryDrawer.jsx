@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../hooks/useApi';
 import { X, CheckCircle2, AlertTriangle, XCircle, Clock, Archive, AlertOctagon } from 'lucide-react';
+import useBackClose from '../hooks/useBackClose';
 
 const EVENT_META = {
   check_ok:           { icon: CheckCircle2, color: 'text-emerald-700 dark:text-emerald-400', label: 'Verificação OK' },
@@ -18,6 +19,7 @@ function fmtLocal(iso) {
 }
 
 export default function StatusHistoryDrawer({ flightId, onClose }) {
+  useBackClose(!!flightId, onClose);
   const [data, setData] = useState(null);
 
   useEffect(() => {

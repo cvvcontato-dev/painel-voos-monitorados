@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
 import FlightCard from './precos/FlightCard';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import useBackClose from '../hooks/useBackClose';
 
 const API_URL = '/api/flights';
 const PRIORIDADES = ['Urgente', 'Alta', 'Média', 'Baixa'];
@@ -140,6 +141,7 @@ export default function PrecosTab({ showToast }) {
   };
 
   const closeModal = () => { setIsModalOpen(false); setEditingFlight(null); setPriceStats(null); reset(); };
+  useBackClose(isModalOpen, closeModal);
 
   const onSubmit = async (data) => {
     try {

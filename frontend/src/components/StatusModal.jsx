@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { X, User, Plane, Calendar, Mail, MessageSquare, Clock, Link as LinkIcon, Hand, AlertCircle } from 'lucide-react';
+import useBackClose from '../hooks/useBackClose';
 
 /** Converte "HH:MM" em horário Brasília para ISO UTC dado um data_voo YYYY-MM-DD.
  *  Brasília é UTC-3 (Brasil aboliu DST em 2019). */
@@ -36,6 +37,7 @@ const inputCls = "w-full px-4 py-3 md:py-2.5 rounded-lg transition-all focus:out
                  "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 
 export default function StatusModal({ isOpen, onClose, editing, onSubmit }) {
+  useBackClose(isOpen, onClose);
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm();
   const [overrideOn, setOverrideOn] = useState(false);
   const dataVoo = watch('data_voo');

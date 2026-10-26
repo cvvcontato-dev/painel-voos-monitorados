@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, RefreshCw, Loader2, X, ArrowLeft } from 'lucide-react';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import useBackClose from '../hooks/useBackClose';
 import * as api from '../api/flightChangeClient';
 import { errorMessage } from '../api/flightChangeClient';
 import { sectionCls, inputCls, labelCls, btnPrimary, btnGhost, STATUS, fmtDateTime } from './flight-changes/ui';
@@ -151,6 +152,7 @@ export default function FlightChangesTab({ showToast }) {
 
   const toTop = () => { if (isMobile) window.scrollTo({ top: 0 }); };
   function voltar() { setCreating(false); setSelected(null); window.scrollTo({ top: 0 }); }
+  useBackClose(creating || !!selected, voltar);   // Voltar do celular volta à lista em vez de sair do app
   function open(id) { setCreating(false); setSelected({ id, initial: null }); toTop(); }
   function created(detail) {
     setCreating(false);

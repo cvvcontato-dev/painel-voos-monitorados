@@ -3,9 +3,11 @@ import { X, Loader2 } from 'lucide-react';
 import * as api from '../../api/flightChangeClient';
 import { errorMessage } from '../../api/flightChangeClient';
 import { btnGhost } from './ui';
+import useBackClose from '../../hooks/useBackClose';
 
 // Modal com o modelo do e-mail (assunto + HTML em iframe sandbox, sem scripts).
 export default function EmailPreviewModal({ id, kind, onClose, showToast }) {
+  useBackClose(true, onClose);
   const [data, setData] = useState(null);
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);

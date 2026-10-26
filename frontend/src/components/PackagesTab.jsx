@@ -3,6 +3,7 @@ import {
   UploadCloud, FileText, Trash2, Plus, X, RefreshCw, Mail, ChevronDown, ChevronUp, Save, Package as PackageIcon
 } from 'lucide-react';
 import * as api from '../api/packageClient';
+import useBackClose from '../hooks/useBackClose';
 
 const inputCls =
   "w-full px-3 py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -31,6 +32,7 @@ export default function PackagesTab({ showToast }) {
   const [combining, setCombining] = useState(false);
   const [errorIndex, setErrorIndex] = useState(-1);
   const [emailOpen, setEmailOpen] = useState(false);
+  useBackClose(emailOpen, () => setEmailOpen(false));
   const [emailTo, setEmailTo] = useState('');
   const [emailMsg, setEmailMsg] = useState('');
   const [sending, setSending] = useState(false);

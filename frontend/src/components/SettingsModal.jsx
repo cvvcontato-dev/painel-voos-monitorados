@@ -4,8 +4,10 @@ import api from '../hooks/useApi';
 import { useAuth } from '../hooks/useAuth';
 import UsersTab from './UsersTab';
 import BackupsPanel from './BackupsPanel';
+import useBackClose from '../hooks/useBackClose';
 
 export default function SettingsModal({ isOpen, onClose, onToast }) {
+  useBackClose(isOpen, onClose);
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState({});
   const [showToken, setShowToken] = useState(false);

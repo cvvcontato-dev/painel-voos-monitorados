@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Upload, Plus, Star, Trash2, Search, Library, Info, ImageOff } from 'lucide-react';
+import useBackClose from '../hooks/useBackClose';
 import {
   getBackgroundBank, uploadBackground, setDefaultBackground, deleteBackground
 } from '../api/promoClient';
@@ -13,6 +14,7 @@ const inputCls = 'w-full px-3.5 py-2.5 text-sm rounded-lg border bg-white text-s
  * que a tela de promoções seleciona automaticamente quando aquele destino aparece.
  */
 export default function BackgroundBank({ isOpen, onClose, showToast }) {
+  useBackClose(isOpen, onClose);
   const [groups, setGroups] = useState([]);
   const [maxPer, setMaxPer] = useState(12);
   const [loading, setLoading] = useState(true);
