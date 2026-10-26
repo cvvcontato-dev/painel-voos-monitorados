@@ -42,7 +42,7 @@ export default function CorrectionForm({ unified, saving, onSave, onCancel, onNo
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 border border-slate-200 dark:border-slate-700/60 rounded-xl p-3 max-h-96 overflow-y-auto" aria-busy={saving}>
+    <form onSubmit={submit} className="space-y-3 border border-slate-200 dark:border-slate-700/60 rounded-xl p-3 md:max-h-96 md:overflow-y-auto" aria-busy={saving}>
       {trips.map((t, i) => (
         <fieldset key={i} className="grid sm:grid-cols-2 gap-2" disabled={saving}>
           <legend className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
@@ -72,8 +72,8 @@ export default function CorrectionForm({ unified, saving, onSave, onCancel, onNo
         </fieldset>
       ))}
       <div className="flex gap-2">
-        <button type="submit" className={btnPrimary} disabled={saving}>{saving ? 'Salvando…' : 'Salvar correções'}</button>
-        <button type="button" className={btnGhost} onClick={onCancel} disabled={saving}>Cancelar</button>
+        <button type="submit" className={`${btnPrimary} flex-1 md:flex-none`} disabled={saving}>{saving ? 'Salvando…' : 'Salvar correções'}</button>
+        <button type="button" className={`${btnGhost} flex-1 md:flex-none`} onClick={onCancel} disabled={saving}>Cancelar</button>
       </div>
     </form>
   );

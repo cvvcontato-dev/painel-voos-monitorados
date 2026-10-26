@@ -37,19 +37,19 @@ export default function EmailPreviewModal({ id, kind, onClose, showToast }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div role="dialog" aria-modal="true" aria-labelledby="email-preview-title"
-        className="relative w-full max-w-3xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl p-4 space-y-3">
+        className="relative w-full md:max-w-3xl h-[100dvh] md:h-auto overflow-y-auto md:overflow-visible md:rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div id="email-preview-title" className="text-sm font-semibold text-slate-900 dark:text-slate-100 pii break-words">
             {data ? `Assunto: ${data.subject}` : 'Modelo do e-mail'}
           </div>
-          <button ref={closeRef} type="button" className={btnGhost} onClick={onClose} aria-label="Fechar"><X className="w-4 h-4" /></button>
+          <button ref={closeRef} type="button" className={`${btnGhost} shrink-0`} onClick={onClose} aria-label="Fechar"><X className="w-4 h-4" /></button>
         </div>
         {data ? (
           <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 flex justify-center">
-            <iframe sandbox="" srcDoc={data.html} title="Modelo do e-mail" className="bg-white border-0 rounded w-full max-w-[640px]" style={{ height: '70vh' }} />
+            <iframe sandbox="" srcDoc={data.html} title="Modelo do e-mail" className="bg-white border-0 rounded w-full max-w-[640px] h-[calc(100dvh-10rem)] md:h-[70vh]" />
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-slate-500 py-10 justify-center" aria-busy="true"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>

@@ -119,7 +119,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
 
   return (
     <>
-    <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1" aria-busy={!!busy}>
+    <div className="space-y-4 md:max-h-[80vh] md:overflow-y-auto md:pr-1" aria-busy={!!busy}>
       <div className={sectionCls}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -161,7 +161,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
           showToast={showToast}
         >
           {!done && detail.status === 'aviso_pendente' && (
-            <button type="button" className={btnGhost} onClick={markNotice} disabled={!!busy} aria-busy={busy === 'notice'}>
+            <button type="button" className={`${btnGhost} w-full md:w-auto`} onClick={markNotice} disabled={!!busy} aria-busy={busy === 'notice'}>
               <CheckCircle2 className="w-3.5 h-3.5" /> Marcar aviso como enviado
             </button>
           )}
@@ -174,7 +174,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
         {!step2 ? (
           <div className="space-y-2">
             <p className="text-sm text-slate-600 dark:text-slate-400">Envie o aviso e marque como enviado para liberar este passo.</p>
-            <button type="button" className={btnGhost} onClick={() => setSkip(true)}>Pular aviso (cliente já avisado)</button>
+            <button type="button" className={`${btnGhost} w-full md:w-auto`} onClick={() => setSkip(true)}>Pular aviso (cliente já avisado)</button>
           </div>
         ) : (
           <>
@@ -208,7 +208,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                   <NewVoucherSection voucherId={detail.new_voucher_id} url={detail.new_voucher_url} ts={pvTs} partial={partial} showToast={showToast} />
                 )}
                 {!done && !editing && (
-                  <button type="button" className={btnGhost} onClick={() => setEditing(true)} disabled={!!busy}>
+                  <button type="button" className={`${btnGhost} w-full md:w-auto`} onClick={() => setEditing(true)} disabled={!!busy}>
                     <Pencil className="w-3.5 h-3.5" /> Corrigir dados lidos
                   </button>
                 )}
@@ -232,7 +232,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                   />
                 )}
                 {!done && (
-                  <button type="button" className={btnPrimary} onClick={confirmCase} disabled={!!busy || !hasChanges || editing} aria-busy={busy === 'confirm'}>
+                  <button type="button" className={`${btnPrimary} w-full md:w-auto`} onClick={confirmCase} disabled={!!busy || !hasChanges || editing} aria-busy={busy === 'confirm'}>
                     {busy === 'confirm' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Confirmar alteração
                   </button>
                 )}

@@ -31,22 +31,22 @@ export default function MessageBox({ idPrefix, title, text, busy, emailLabel, on
       </div>
       {blocked && <div className="text-xs text-amber-700 dark:text-amber-300">Correção não salva — a mensagem abaixo é a da última versão salva</div>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={`${btnGhost} disabled:opacity-50`} onClick={copy} disabled={!text || blocked} title={blockTitle}><Copy className="w-3.5 h-3.5" /> Copiar</button>
-        <button type="button" className={`${btnGhost} disabled:opacity-50`} onClick={whatsapp} disabled={!text || blocked} title={blockTitle}><MessageCircle className="w-3.5 h-3.5" /> Abrir no WhatsApp</button>
+        <button type="button" className={`${btnGhost} flex-1 md:flex-none disabled:opacity-50`} onClick={copy} disabled={!text || blocked} title={blockTitle}><Copy className="w-3.5 h-3.5" /> Copiar</button>
+        <button type="button" className={`${btnGhost} flex-1 md:flex-none disabled:opacity-50`} onClick={whatsapp} disabled={!text || blocked} title={blockTitle}><MessageCircle className="w-3.5 h-3.5" /> Abrir no WhatsApp</button>
       </div>
       {!readOnly && (
         <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-0 w-full md:w-auto md:min-w-[200px]">
             <label className={labelCls} htmlFor={`${idPrefix}-em`}>E-mails (separe por vírgula)</label>
             <input id={`${idPrefix}-em`} className={`${inputCls} pii`} value={emails} placeholder="cliente@email.com"
               onChange={e => setEmails(e.target.value)} disabled={off} />
           </div>
-          <button type="button" className={btnPrimary} onClick={send} disabled={off || blocked || !emails.trim()}
+          <button type="button" className={`${btnPrimary} w-full md:w-auto`} onClick={send} disabled={off || blocked || !emails.trim()}
             title={blocked ? 'Salve ou cancele a correção antes de enviar' : undefined} aria-busy={busy === 'email'}>
             {busy === 'email' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} {emailLabel}
           </button>
           {onPreview && (
-            <button type="button" className={`${btnGhost} disabled:opacity-50`} onClick={onPreview} disabled={previewDisabled} title={previewTitle}>
+            <button type="button" className={`${btnGhost} w-full md:w-auto disabled:opacity-50`} onClick={onPreview} disabled={previewDisabled} title={previewTitle}>
               <Eye className="w-3.5 h-3.5" /> Ver modelo do e-mail
             </button>
           )}

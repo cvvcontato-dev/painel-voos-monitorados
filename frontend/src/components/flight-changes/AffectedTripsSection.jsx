@@ -34,8 +34,8 @@ function GroupCheck({ journeys, sel, disabled, onToggleGroup }) {
   const n = idx.filter(i => sel.includes(i)).length;
   useEffect(() => { if (ref.current) ref.current.indeterminate = n > 0 && n < idx.length; });
   return (
-    <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
-      <input ref={ref} type="checkbox" checked={idx.length > 0 && n === idx.length} disabled={disabled}
+    <label className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
+      <input ref={ref} type="checkbox" className="w-5 h-5 md:w-auto md:h-auto shrink-0" checked={idx.length > 0 && n === idx.length} disabled={disabled}
         onChange={() => onToggleGroup(idx, n !== idx.length)} />
       Marcar a reserva toda
     </label>
@@ -51,8 +51,8 @@ function JourneyCheck({ journey, gid, sel, disabled, onToggle }) {
   const descId = `${gid}-${journey.key}-voos`;
   return (
     <div>
-      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-        <input ref={ref} type="checkbox" checked={idx.length > 0 && n === idx.length} onChange={() => onToggle(idx, n !== idx.length)}
+      <label className="flex items-center gap-2 min-h-[44px] md:min-h-0 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+        <input ref={ref} type="checkbox" className="w-5 h-5 md:w-auto md:h-auto shrink-0" checked={idx.length > 0 && n === idx.length} onChange={() => onToggle(idx, n !== idx.length)}
           disabled={disabled} aria-describedby={conn ? descId : undefined} />
         <span>{journey.label}</span>
         {conn && <span className="rounded-full border border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-800 dark:text-sky-200">com conexão</span>}
@@ -123,7 +123,7 @@ export default function AffectedTripsSection({ detail, busy, locked, focusTick, 
       ))}
       {!done && (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={`${btnPrimary} disabled:opacity-50`} onClick={save} disabled={!canSave || disabled} aria-busy={busy === 'affected'}>
+          <button type="button" className={`${btnPrimary} w-full md:w-auto disabled:opacity-50`} onClick={save} disabled={!canSave || disabled} aria-busy={busy === 'affected'}>
             {busy === 'affected' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {needs ? 'Confirmar viagens' : 'Salvar viagens'}
           </button>
           {locked && <span className="text-xs text-amber-700 dark:text-amber-300">Salve ou cancele a correção antes de alterar as viagens.</span>}

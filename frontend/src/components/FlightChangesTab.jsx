@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, RefreshCw, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Loader2, X, ArrowLeft } from 'lucide-react';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import * as api from '../api/flightChangeClient';
 import { errorMessage } from '../api/flightChangeClient';
 import { sectionCls, inputCls, labelCls, btnPrimary, btnGhost, STATUS, fmtDateTime } from './flight-changes/ui';
@@ -127,6 +128,7 @@ export default function FlightChangesTab({ showToast }) {
   const [selected, setSelected] = useState(null); // { id, initial }
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState(null);
+  const isMobile = useIsMobile();
 
   const [listError, setListError] = useState(false);
   const reqSeq = useRef(0);
@@ -147,10 +149,13 @@ export default function FlightChangesTab({ showToast }) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  function open(id) { setCreating(false); setSelected({ id, initial: null }); }
+  const toTop = () => { if (isMobile) window.scrollTo({ top: 0 }); };
+  function voltar() { setCreating(false); setSelected(null); window.scrollTo({ top: 0 }); }
+  function open(id) { setCreating(false); setSelected({ id, initial: null }); toTop(); }
   function created(detail) {
     setCreating(false);
     setSelected({ id: detail.id, initial: detail });
+    toTop();
     reload();
   }
 
@@ -174,13 +179,30 @@ export default function FlightChangesTab({ showToast }) {
     }
   }
 
+  // Celular: caso (ou nova alteração) em tela cheia, com "Voltar" para a lista.
+  if (isMobile && (creating || selected)) {
+    return (
+      <div>
+        <div className="sticky top-0 z-30 -mx-3 mb-3 px-3 py-1 border-b backdrop-blur bg-slate-50/95 border-slate-200 dark:bg-slate-950/95 dark:border-slate-800">
+          <button type="button" onClick={voltar}
+                  className="min-h-[44px] -ml-2 px-2 inline-flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-300 cursor-pointer">
+            <ArrowLeft className="w-5 h-5" /> Alterações
+          </button>
+        </div>
+        {creating
+          ? <NewCasePanel showToast={showToast} onCreated={created} onLate={createdLate} onClose={voltar} />
+          : <CaseView key={selected.id} id={selected.id} initial={selected.initial} showToast={showToast} onChanged={reload} />}
+      </div>
+    );
+  }
+
   return (
     <div className="grid lg:grid-cols-3 gap-6 items-start">
       <div className="space-y-3">
-        <button type="button" className={`${btnPrimary} w-full`} onClick={() => { setCreating(true); setSelected(null); }}>
+        <button type="button" className={`${btnPrimary} w-full`} onClick={() => { setCreating(true); setSelected(null); toTop(); }}>
           <Plus className="w-4 h-4" /> Nova alteração
         </button>
-        <div className={`${sectionCls} max-h-[70vh] overflow-y-auto p-2`} aria-busy={items === null}>
+        <div className={`${sectionCls} md:max-h-[70vh] md:overflow-y-auto p-2`} aria-busy={items === null}>
           {listError && items === null ? (
             <div className="p-3 text-sm text-red-600 dark:text-red-300 space-y-2">
               <p>Não consegui carregar a lista.</p>
@@ -201,13 +223,13 @@ export default function FlightChangesTab({ showToast }) {
                 const active = selected?.id === it.id;
                 return (
                   <li key={it.id} className={`flex items-center gap-1 rounded-lg ${active ? 'bg-indigo-50 dark:bg-indigo-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
-                    <button type="button" onClick={() => open(it.id)} aria-current={active ? 'true' : undefined} className="flex-1 text-left p-2 min-w-0 cursor-pointer">
+                    <button type="button" onClick={() => open(it.id)} aria-current={active ? 'true' : undefined} className="flex-1 text-left p-3 md:p-2 min-h-[56px] md:min-h-0 min-w-0 cursor-pointer">
                       <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate pii">{it.client_name || 'Cliente'}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400"><span className="pii">{it.locator || '—'}</span> · {fmtDateTime(it.created_at)}</div>
                       <span className={`inline-block mt-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
                     </button>
                     <button type="button" onClick={() => remove(it)} disabled={removing === it.id} aria-label={`Apagar alteração de ${it.client_name || 'cliente'}`}
-                      className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-50 cursor-pointer">
+                      className="w-11 h-11 shrink-0 flex items-center justify-center md:w-auto md:h-auto md:shrink md:p-2 text-slate-400 hover:text-red-500 disabled:opacity-50 cursor-pointer">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </li>

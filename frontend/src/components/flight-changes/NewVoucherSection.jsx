@@ -15,9 +15,9 @@ export default function NewVoucherSection({ voucherId, url, ts, partial, showToa
       <div className="mt-3 space-y-3">
         <p className="text-xs text-slate-500 dark:text-slate-400">É o mesmo voucher gerado na aba Vouchers, com os dados novos — este é o PDF que vai por e-mail.{partial ? ' Só as viagens marcadas foram substituídas; os demais permanecem como no voucher antigo. A viagem pode ter um número de voos diferente (conexão ↔ direto).' : ''}</p>
         <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-100 dark:bg-slate-900/40">
-          <iframe key={`${voucherId}-${ts}`} src={`/voucher-preview/${voucherId}?ts=${ts}`} title="Prévia do voucher novo" className="w-full border-0" style={{ height: '70vh', minHeight: 420 }} />
+          <iframe key={`${voucherId}-${ts}`} src={`/voucher-preview/${voucherId}?ts=${ts}`} title="Prévia do voucher novo" className="w-full border-0 h-[60dvh] md:h-[70vh] min-h-[420px]" />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
           <a className={btnGhost} href={exportUrl(voucherId, 'pdf')} target="_blank" rel="noopener noreferrer"><Download className="w-3.5 h-3.5" /> Baixar PDF</a>
           <a className={btnGhost} href={exportUrl(voucherId, 'png')} target="_blank" rel="noopener noreferrer"><Download className="w-3.5 h-3.5" /> Baixar PNG</a>
           {url && <button type="button" className={btnGhost} onClick={copyLink}><Copy className="w-3.5 h-3.5" /> Copiar link do voucher</button>}
