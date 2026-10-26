@@ -6,7 +6,7 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
  * Folha que sobe da parte de baixo (só no celular: `md:hidden`).
  * Fecha com Esc, toque no fundo ou no X; trava a rolagem do fundo; devolve o foco ao fechar.
  */
-export default function BottomSheet({ open, onClose, title, children }) {
+export default function BottomSheet({ open, onClose, title, titleClassName = '', children }) {
   const closeBtn = useRef(null);
   const anterior = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -41,7 +41,7 @@ export default function BottomSheet({ open, onClose, title, children }) {
                       pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 border-b
                         bg-white/95 border-slate-100 dark:bg-slate-900/95 dark:border-slate-800 backdrop-blur">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">{title}</h2>
+          <h2 className={`text-base font-semibold text-slate-900 dark:text-slate-100 truncate ${titleClassName}`}>{title}</h2>
           <button ref={closeBtn} type="button" onClick={onClose} aria-label="Fechar"
                   className="w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
             <X className="w-5 h-5" />

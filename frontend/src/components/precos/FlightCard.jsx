@@ -31,7 +31,10 @@ export default function FlightCard({ flight, d, fmt, busy, on, move, chart }) {
     : 'bg-white dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/50';
   const rotulo = 'block text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500';
 
+  // A folha de ações fica FORA do <article>: o cartão de "desistência" tem opacity, que criaria um contexto de
+  // empilhamento (a folha ficaria translúcida e presa atrás de outros cartões).
   return (
+    <>
     <article className={`relative border rounded-xl overflow-hidden ${casca}`}>
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${barra}`} />
       <div className="pl-4 pr-1 pt-1.5 pb-3">
@@ -45,8 +48,8 @@ export default function FlightCard({ flight, d, fmt, busy, on, move, chart }) {
               <span aria-hidden="true">·</span>
               <Users className="w-3 h-3 shrink-0" />
               <span>{flight.quantidade_pax || 1} pax</span>
-              {flight.email_cliente && <Mail className="w-3 h-3 shrink-0" aria-label="Tem e-mail" />}
-              {flight.telegram_chat_id && <MessageSquare className="w-3 h-3 shrink-0" aria-label="Tem Telegram" />}
+              {flight.email_cliente && <Mail className="w-3 h-3 shrink-0" role="img" aria-label="Tem e-mail" />}
+              {flight.telegram_chat_id && <MessageSquare className="w-3 h-3 shrink-0" role="img" aria-label="Tem Telegram" />}
             </span>
           </button>
           <button type="button" onClick={on.toggleCheck} aria-pressed={!!flight.check_diario}
@@ -120,8 +123,9 @@ export default function FlightCard({ flight, d, fmt, busy, on, move, chart }) {
           {chart}
         </div>
       )}
+    </article>
 
-      <BottomSheet open={sheet} onClose={fechar} title={flight.cliente}>
+      <BottomSheet open={sheet} onClose={fechar} title={flight.cliente} titleClassName="pii">
         <SheetItem icon={<RefreshCw className={`w-5 h-5 ${busy.checking ? 'animate-spin' : ''}`} />} label="Verificar preço agora"
                    disabled={busy.anyChecking} onClick={rodar(on.checkNow)} />
         <SheetItem icon={<LineChartIcon className="w-5 h-5" />} label={d.chartOpen ? 'Ocultar histórico de preços' : 'Ver histórico de preços (60 dias)'} onClick={rodar(on.toggleChart)} />
@@ -136,6 +140,6 @@ export default function FlightCard({ flight, d, fmt, busy, on, move, chart }) {
         {move && <SheetItem icon={<ArrowDown className="w-5 h-5" />} label="Mover para baixo" disabled={!move.down} onClick={rodar(move.down || (() => {}))} />}
         <SheetItem icon={<Trash2 className="w-5 h-5" />} label="Excluir" danger onClick={rodar(on.remove)} />
       </BottomSheet>
-    </article>
+    </>
   );
 }

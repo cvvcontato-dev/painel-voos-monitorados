@@ -623,8 +623,10 @@ export default function PrecosTab({ showToast }) {
                   remove: () => deleteFlight(flight.id)
                 }}
                 move={dragEnabled ? {
-                  up: index > 0 ? () => moveFlight(index, -1) : null,
-                  down: index < sortedFlights.length - 1 ? () => moveFlight(index, 1) : null
+                  // Só troca de lugar dentro da mesma faixa de status (ativos / comprados / desistências):
+                  // entre faixas a ordenação refaria a troca e o cartão não se mexeria.
+                  up: index > 0 && statusRank(sortedFlights[index - 1]) === statusRank(flight) ? () => moveFlight(index, -1) : null,
+                  down: index < sortedFlights.length - 1 && statusRank(sortedFlights[index + 1]) === statusRank(flight) ? () => moveFlight(index, 1) : null
                 } : null}
                 chart={chartOpen ? (
                   <PriceHistoryChart
