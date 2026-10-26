@@ -22,8 +22,11 @@
   const estouram = todos.filter(e => getComputedStyle(e).position !== 'fixed' && !emRolagemX(e) && e.getBoundingClientRect().right > W + 1);
   const alvos = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], summary')]
     .filter(visivel).filter(e => !e.closest('[aria-hidden="true"]'));
-  const pequenos36 = alvos.filter(e => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height) < 36; });
-  const pequenos44 = alvos.filter(e => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height) < 44; });
+  // checkbox/radio dentro de <label> contam pela área do rótulo (é ela que recebe o toque)
+  const areaClicavel = (e) => ((e.type === 'checkbox' || e.type === 'radio') && e.closest('label')) || e;
+  const medida = (e) => { const r = areaClicavel(e).getBoundingClientRect(); return Math.min(r.width, r.height); };
+  const pequenos36 = alvos.filter(e => medida(e) < 36);
+  const pequenos44 = alvos.filter(e => medida(e) < 44);
   const textoMin = todos.filter(e => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 11);
   const campos16 = W < 768
     ? [...document.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]), select, textarea')]
