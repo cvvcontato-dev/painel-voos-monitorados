@@ -116,7 +116,8 @@ function NewCasePanel({ showToast, onCreated, onLate, onClose }) {
         onFile={file => create(() => api.createFromFile(file))}
         loading={busy}
         showToast={showToast}
-              />
+        labelMobile="Envie o voucher antigo — PDF ou imagem."
+      />
     </div>
   );
 }

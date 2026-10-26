@@ -184,6 +184,7 @@ export default function CaseView({ id, initial, showToast, onChanged }) {
                 loading={busy === 'upload'}
                 disabled={!!busy}
                 showToast={showToast}
+                labelMobile={hasNew ? 'Substituir o voucher novo — envie um print com TODAS as viagens alteradas.' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos.'}
                 label={(partial ? 'Só as viagens marcadas serão substituídas; os demais permanecem como no voucher antigo. A viagem pode ter um número de voos diferente (conexão ↔ direto). ' : '') + (hasNew ? 'Substituir o voucher novo — o voucher novo é refeito a partir do voucher antigo: envie um print que mostre TODAS as viagens alteradas. Clique, arraste ou cole (Ctrl+V).' : 'Voucher novo — PDF ou imagem. Pode ser só um print dos voos: passageiros e bagagem são mantidos do voucher antigo; o localizador só muda se aparecer na imagem; só as viagens que aparecerem são substituídas. Clique, arraste ou, com esta área selecionada, cole (Ctrl+V).')}
               />
             )}
