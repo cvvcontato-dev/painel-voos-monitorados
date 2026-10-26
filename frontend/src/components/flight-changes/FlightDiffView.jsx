@@ -66,7 +66,7 @@ function Trip({ t }) {
   if (t.status === 'igual') {
     return (
       <details className={`rounded-lg border px-3 py-2 ${st.box}`}>
-        <summary className="cursor-pointer text-xs">{st.tag} — {title}</summary>
+        <summary className="cursor-pointer py-3 md:py-0 text-xs">{st.tag} — {title}</summary>
         <div className="mt-1">{body}</div>
       </details>
     );

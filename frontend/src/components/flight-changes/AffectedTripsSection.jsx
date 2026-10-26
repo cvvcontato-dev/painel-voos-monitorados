@@ -147,7 +147,7 @@ export default function AffectedTripsSection({ detail, busy, locked, focusTick, 
         <div className="text-sm text-slate-700 dark:text-slate-300">{affectedSummary(groups, saved, total)}</div>
       ) : (
         <details open={open} onToggle={e => setOpen(e.currentTarget.open)}>
-          <summary className="cursor-pointer text-sm text-slate-700 dark:text-slate-300">{affectedSummary(groups, saved, total)}</summary>
+          <summary className="cursor-pointer py-3 md:py-0 text-sm text-slate-700 dark:text-slate-300">{affectedSummary(groups, saved, total)}</summary>
           <div className="mt-3">{body}</div>
         </details>
       )}

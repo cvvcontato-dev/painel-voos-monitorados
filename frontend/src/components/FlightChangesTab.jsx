@@ -246,7 +246,7 @@ export default function FlightChangesTab({ showToast }) {
         ) : selected ? (
           <CaseView key={selected.id} id={selected.id} initial={selected.initial} showToast={showToast} onChanged={reload} />
         ) : (
-          <div className={`${sectionCls} text-sm text-slate-500 dark:text-slate-400`}>Selecione uma alteração na lista ou crie uma nova.</div>
+          <div className={`${sectionCls} hidden md:block text-sm text-slate-500 dark:text-slate-400`}>Selecione uma alteração na lista ou crie uma nova.</div>
         )}
       </div>
     </div>
