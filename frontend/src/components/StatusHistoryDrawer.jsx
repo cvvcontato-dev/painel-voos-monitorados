@@ -32,15 +32,15 @@ export default function StatusHistoryDrawer({ flightId, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm dark:bg-slate-950/80" onClick={onClose}></div>
-      <div className="relative w-full max-w-md bg-white border-l border-slate-200 shadow-2xl h-full overflow-y-auto dark:bg-slate-900 dark:border-slate-700/50">
-        <div className="sticky top-0 bg-white/95 backdrop-blur-xl flex justify-between items-center p-6 border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-700/50">
+      <div className="relative w-full max-w-md bg-white border-l border-slate-200 shadow-2xl h-[100dvh] md:h-full overflow-y-auto overscroll-contain dark:bg-slate-900 dark:border-slate-700/50">
+        <div className="sticky top-0 bg-white/95 backdrop-blur-xl flex justify-between items-center p-4 md:p-6 border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-700/50">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             Histórico {data?.flight && <span className="text-slate-600 font-normal text-sm dark:text-slate-400">— {data.flight.numero_voo} / {data.flight.data_voo}</span>}
           </h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900 cursor-pointer dark:text-slate-400 dark:hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} aria-label="Fechar" className="w-11 h-11 -mr-2 flex items-center justify-center md:w-auto md:h-auto md:mr-0 text-slate-600 hover:text-slate-900 cursor-pointer dark:text-slate-400 dark:hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           {!data ? (
             <p className="text-slate-600 text-sm dark:text-slate-400">Carregando…</p>
           ) : data.history.length === 0 ? (
