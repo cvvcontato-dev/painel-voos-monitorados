@@ -13,13 +13,13 @@ function PasswordField({ label, value, onChange, placeholder }) {
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full px-3 py-2 pr-10 rounded-lg border text-sm
+          className="w-full px-3 py-3 md:py-2 pr-12 md:pr-10 rounded-lg border text-sm
                      bg-white border-slate-300 text-slate-900 placeholder-slate-400
                      dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-100 dark:placeholder-slate-400
                      focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
-        <button type="button" onClick={() => setShow(v => !v)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+        <button type="button" onClick={() => setShow(v => !v)} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'}
+          className="absolute right-3 top-1/2 -translate-y-1/2 max-md:right-0 max-md:w-11 max-md:h-11 max-md:flex max-md:items-center max-md:justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
           {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
       </div>
@@ -62,11 +62,11 @@ export default function ChangePasswordModal({ isOpen, onClose, onToast }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-50 flex md:items-center md:justify-center bg-slate-950/80 md:px-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 md:rounded-2xl p-4 md:p-6 w-full md:max-w-sm h-[100dvh] md:h-auto overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Trocar senha</h2>
-          <button onClick={() => { reset(); onClose(); }} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button onClick={() => { reset(); onClose(); }} aria-label="Fechar" className="p-1 max-md:w-11 max-md:h-11 max-md:-mr-2 max-md:flex max-md:items-center max-md:justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -84,13 +84,13 @@ export default function ChangePasswordModal({ isOpen, onClose, onToast }) {
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={() => { reset(); onClose(); }}
-              className="flex-1 py-2 rounded-lg border text-sm font-medium
+              className="flex-1 min-h-[44px] md:min-h-0 py-2 rounded-lg border text-sm font-medium
                          bg-white border-slate-300 text-slate-700 hover:bg-slate-50
                          dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700">
               Cancelar
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60
+              className="flex-1 min-h-[44px] md:min-h-0 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60
                          text-white text-sm font-medium transition-colors">
               {loading ? 'Salvando…' : 'Alterar senha'}
             </button>

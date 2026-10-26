@@ -67,32 +67,32 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
   const labelCls = "text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:p-4">
       <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative w-full max-w-lg bg-white border border-slate-200 dark:bg-slate-900/90 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden modal-animate max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700/50">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+      <div className="relative w-full md:max-w-lg bg-white border border-slate-200 dark:bg-slate-900 md:dark:bg-slate-900/90 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl md:rounded-2xl overflow-hidden modal-animate h-[100dvh] md:h-auto md:max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 md:static bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent flex justify-between items-center px-4 py-2 md:p-6 border-b border-slate-200 dark:border-slate-700/50">
+          <h2 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <Settings className="w-5 h-5 text-indigo-400" /> Configurações do Sistema
           </h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer">
+          <button onClick={onClose} aria-label="Fechar" className="w-11 h-11 -mr-2 md:w-auto md:h-auto md:mr-0 flex items-center justify-center text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex gap-1 px-6 pt-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex gap-1 px-4 md:px-6 pt-2 md:pt-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto md:overflow-visible">
           <button onClick={() => setInnerTab('geral')}
-            className={`px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'geral' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'geral' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
             Geral
           </button>
           {currentUser?.role === 'admin' && (
             <button onClick={() => setInnerTab('usuarios')}
-              className={`px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'usuarios' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'usuarios' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
               Usuários
             </button>
           )}
           {currentUser?.role === 'admin' && (
             <button onClick={() => setInnerTab('backups')}
-              className={`px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'backups' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'backups' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
               Backup
             </button>
           )}
@@ -103,11 +103,11 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
             {!settings ? (
               <div className="p-6 text-center text-slate-400 text-sm">Carregando…</div>
             ) : (
-              <div className="p-6 space-y-6">
+              <div className="p-4 md:p-6 space-y-6">
                 {/* Scheduler */}
                 <div>
                   <h3 className="text-sm font-semibold text-indigo-400 mb-3 uppercase tracking-wider">Agendador</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div><label className={labelCls}>Intervalo (h)</label>
                       <input type="number" min="1" value={form.check_interval_hours || ''} onChange={e => setForm({...form, check_interval_hours: e.target.value})} className={inputCls} /></div>
                     <div><label className={labelCls}>Consultas simultâneas</label>
@@ -123,7 +123,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                   <label className={labelCls}>Bot Token {settings.telegram_bot_token_set && <span className="text-emerald-600 dark:text-emerald-400 ml-1">✓ configurado</span>}</label>
                   <div className="relative">
                     <input type={showToken ? 'text' : 'password'} value={form.telegram_bot_token} onChange={e => setForm({...form, telegram_bot_token: e.target.value})} className={inputCls} placeholder={settings.telegram_bot_token_set ? '••••••••' : 'Cole o token aqui'} />
-                    <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer">
+                    <button type="button" onClick={() => setShowToken(!showToken)} aria-label={showToken ? 'Ocultar token' : 'Mostrar token'} className="absolute right-3 top-2.5 max-md:right-0 max-md:top-0 max-md:w-11 max-md:h-11 max-md:flex max-md:items-center max-md:justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer">
                       {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
@@ -144,7 +144,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                     <div><label className={labelCls}>Senha {settings.email_pass_set && <span className="text-emerald-600 dark:text-emerald-400 ml-1">✓</span>}</label>
                       <div className="relative">
                         <input type={showPass ? 'text' : 'password'} value={form.email_pass} onChange={e => setForm({...form, email_pass: e.target.value})} className={inputCls} placeholder={settings.email_pass_set ? '••••••••' : 'Senha do app'} />
-                        <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer">
+                        <button type="button" onClick={() => setShowPass(!showPass)} aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'} className="absolute right-3 top-2.5 max-md:right-0 max-md:top-0 max-md:w-11 max-md:h-11 max-md:flex max-md:items-center max-md:justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer">
                           {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
@@ -155,19 +155,19 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                 </div>
               </div>
             )}
-            <div className="p-6 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-3">
-              <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">Cancelar</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50">
+            <div className="p-4 md:p-6 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
+              <button onClick={onClose} className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">Cancelar</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar Configurações'}
               </button>
             </div>
           </>
         ) : innerTab === 'backups' ? (
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             <BackupsPanel onToast={onToast} />
           </div>
         ) : (
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             <UsersTab onToast={onToast} />
           </div>
         )}
