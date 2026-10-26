@@ -155,7 +155,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                 </div>
               </div>
             )}
-            <div className="p-4 md:p-6 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
+            <div className="sticky bottom-0 z-10 md:static bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent p-4 md:p-6 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
               <button onClick={onClose} className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar Configurações'}

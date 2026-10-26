@@ -52,7 +52,7 @@ export default function BackupsPanel({ onToast }) {
         <button
           onClick={rodarAgora}
           disabled={rodando}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${rodando ? 'animate-spin' : ''}`} />
           {rodando ? 'Gerando...' : 'Fazer backup agora'}
@@ -82,7 +82,7 @@ export default function BackupsPanel({ onToast }) {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
                   {fmtData(b.criado_em)}
-                  {i === 0 && <span className="ml-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">mais recente</span>}
+                  {i === 0 && <span className="ml-2 text-[11px] md:text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">mais recente</span>}
                 </div>
                 <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono truncate">
                   {b.arquivo} · {fmtBytes(b.bytes)}{b.fotos > 0 && ` · ${b.fotos} foto(s) de fundo`}
@@ -91,7 +91,7 @@ export default function BackupsPanel({ onToast }) {
               <a
                 href={`/api/backups/${b.arquivo}`}
                 download
-                className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10 transition-colors"
+                className="shrink-0 flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10 transition-colors"
                 title="Baixar esta cópia"
               >
                 <Download className="w-4 h-4" />

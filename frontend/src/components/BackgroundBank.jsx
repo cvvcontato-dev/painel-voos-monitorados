@@ -108,11 +108,11 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
   const sugestoes = groups.map((g) => g.label);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center p-0 md:p-4">
       <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
+      <div className="relative w-full max-w-none md:max-w-4xl h-[100dvh] md:h-auto max-h-none md:max-h-[90vh] flex flex-col bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700/50 shadow-2xl rounded-none md:rounded-2xl overflow-hidden">
         {/* Cabeçalho */}
-        <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-200 dark:border-slate-700/50 shrink-0">
+        <div className="flex items-start justify-between gap-4 p-4 md:p-6 border-b border-slate-200 dark:border-slate-700/50 shrink-0">
           <div>
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
               <Library className="w-5 h-5 text-indigo-500" /> Banco de fundos
@@ -122,12 +122,12 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
               selecionada automaticamente sempre que esse destino aparecer numa promoção.
             </p>
           </div>
-          <button onClick={onClose} aria-label="Fechar" className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer shrink-0">
+          <button onClick={onClose} aria-label="Fechar" className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 -mr-2 md:mr-0 -mt-1 md:mt-0 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-6 space-y-6">
+        <div className="overflow-y-auto flex-1 p-4 md:p-6 space-y-6">
           {/* Novo destino / enviar fotos */}
           <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 dark:border-indigo-500/25 dark:bg-indigo-500/5 p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-2">Adicionar fotos a um destino</p>
@@ -145,7 +145,7 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
                 type="button"
                 onClick={() => newFileRef.current?.click()}
                 disabled={busy === 'new' || !newDest.trim()}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 whitespace-nowrap"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 whitespace-nowrap"
               >
                 <Upload className={`w-4 h-4 ${busy === 'new' ? 'animate-pulse' : ''}`} />
                 {busy === 'new' ? 'Enviando...' : 'Escolher fotos'}
@@ -198,7 +198,7 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
                         type="button"
                         onClick={() => openAddFor(g)}
                         disabled={busy === `add:${g.slug}` || g.images.length >= maxPer}
-                        className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title={g.images.length >= maxPer ? 'Limite de fotos atingido' : `Adicionar fotos a ${g.label}`}
                       >
                         <Plus className="w-3.5 h-3.5" /> {busy === `add:${g.slug}` ? 'Enviando...' : 'Adicionar foto'}
@@ -209,11 +209,11 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
                         <div key={img.id} className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 group ${img.is_default ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'}`}>
                           <img src={img.thumb} alt={`Foto de ${g.label}`} loading="lazy" className="w-full h-full object-cover" />
                           {img.is_default && (
-                            <span className="absolute top-1 left-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-400 text-amber-950">
+                            <span className="absolute top-1 left-1 flex items-center gap-1 text-[11px] md:text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-400 text-amber-950">
                               <Star className="w-2.5 h-2.5 fill-amber-950" /> Padrão
                             </span>
                           )}
-                          <span className="absolute bottom-1 left-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/60 text-white">
+                          <span className="absolute bottom-1 left-1 text-[11px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/60 text-white">
                             {img.origin === 'pexels' ? 'Pexels' : 'Envio'} · {fmtBytes(img.bytes)}
                           </span>
                           <div className="absolute top-1 right-1 flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
@@ -224,7 +224,7 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
                                 aria-label="Usar como foto padrão"
                                 disabled={busy === `def:${img.id}`}
                                 onClick={() => makeDefault(img)}
-                                className="p-1.5 rounded-md bg-amber-400 text-amber-950 hover:bg-amber-300 cursor-pointer disabled:opacity-50"
+                                className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-md bg-amber-400 text-amber-950 hover:bg-amber-300 cursor-pointer disabled:opacity-50"
                               >
                                 <Star className="w-3.5 h-3.5" />
                               </button>
@@ -235,7 +235,7 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
                               aria-label="Excluir foto"
                               disabled={busy === `del:${img.id}`}
                               onClick={() => remove(g, img)}
-                              className="p-1.5 rounded-md bg-black/60 text-white hover:bg-red-600 cursor-pointer disabled:opacity-50"
+                              className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-md bg-black/60 text-white hover:bg-red-600 cursor-pointer disabled:opacity-50"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -250,7 +250,7 @@ export default function BackgroundBank({ isOpen, onClose, showToast }) {
           </div>
         </div>
 
-        <div className="flex items-start gap-2 px-6 py-3 border-t border-slate-200 dark:border-slate-700/50 text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
+        <div className="flex items-start gap-2 px-4 md:px-6 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3 border-t border-slate-200 dark:border-slate-700/50 text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
             As fotos ficam no volume persistente do servidor e sobrevivem a novos deploys, mas{' '}

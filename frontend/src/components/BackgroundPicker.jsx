@@ -26,7 +26,7 @@ function TileAction({ title, onClick, disabled, children, tone = 'dark' }) {
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       onKeyDown={(e) => e.stopPropagation()}
-      className={`p-1.5 rounded-md backdrop-blur-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
+      className={`flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-md backdrop-blur-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
         tone === 'gold'
           ? 'bg-amber-400 text-amber-950 hover:bg-amber-300'
           : 'bg-black/60 text-white hover:bg-black/80'
@@ -166,7 +166,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={busy === 'upload'}
-            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50"
             title={`Enviar uma foto sua e guardá-la no banco de ${dest || 'este destino'}`}
           >
             <Upload className={`w-3.5 h-3.5 ${busy === 'upload' ? 'animate-pulse' : ''}`} />
@@ -176,7 +176,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
             type="button"
             onClick={() => load({ includePexels: withPexels })}
             disabled={loading}
-            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar fundos
           </button>
@@ -193,13 +193,13 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Buscar outra foto no Pexels (ex.: dunas, centro histórico, cachoeira)"
             maxLength={80}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border bg-white text-slate-900 placeholder-slate-400 border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700"
+            className="w-full pl-9 pr-3 py-2.5 md:py-2 text-sm rounded-lg border bg-white text-slate-900 placeholder-slate-400 border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700"
           />
         </div>
         <button
           type="submit"
           disabled={loading || term.trim().length < 2}
-          className="px-4 py-2 text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 min-h-[44px] md:min-h-0 text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Buscar
         </button>
@@ -215,7 +215,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
                 {savedCount > 1 ? `${savedCount} fotos` : 'Foto'} do banco de <strong className="text-slate-700 dark:text-slate-200">{dest || 'este destino'}</strong> — a padrão já está selecionada.
               </span>
               <button type="button" onClick={() => load({ includePexels: true, select: 'keep' })}
-                className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
+                className="inline-flex items-center min-h-[44px] md:min-h-0 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
                 Ver sugestões do Pexels
               </button>
             </>
@@ -225,7 +225,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
               <Library className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               <span>Fotos do banco e sugestões do Pexels.</span>
               <button type="button" onClick={() => load({ includePexels: false, select: 'keep' })}
-                className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
+                className="inline-flex items-center min-h-[44px] md:min-h-0 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
                 Ocultar sugestões
               </button>
             </>
@@ -241,7 +241,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
               <Search className="w-3.5 h-3.5 shrink-0" />
               <span>Resultados para “<strong className="text-slate-700 dark:text-slate-200">{activeSearch}</strong>”.</span>
               <button type="button" onClick={clearSearch}
-                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
+                className="inline-flex items-center gap-1 min-h-[44px] md:min-h-0 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline cursor-pointer">
                 <X className="w-3 h-3" /> Limpar busca
               </button>
             </>
@@ -286,7 +286,7 @@ export default function BackgroundPicker({ destination, country, selectedBg, onS
                 >
                   <img src={opt.thumb} alt={`Fundo (${SOURCE_LABEL[opt.source] || opt.source})`} loading="lazy" className="w-full h-full object-cover" />
 
-                  <span className="absolute bottom-1 left-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/60 text-white flex items-center gap-1">
+                  <span className="absolute bottom-1 left-1 text-[11px] md:text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/60 text-white flex items-center gap-1">
                     {isLibrary && opt.is_default && <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />}
                     {isLibrary && opt.is_default ? 'Padrão' : (SOURCE_LABEL[opt.source] || opt.source)}
                   </span>
