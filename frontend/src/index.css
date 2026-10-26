@@ -96,3 +96,25 @@
   --phc-target: #34d399;      /* emerald-400 */
   --phc-dot-stroke: #1e293b;  /* slate-800 */
 }
+
+/* ── Mobile ─────────────────────────────────────────────────────────── */
+html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+
+/* iOS dá zoom ao focar campos com fonte < 16 px: no celular, todos os campos usam 16 px. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sheet-animate { animation: sheet-in 0.2s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-animate, .modal-animate { animation: none; }
+}
