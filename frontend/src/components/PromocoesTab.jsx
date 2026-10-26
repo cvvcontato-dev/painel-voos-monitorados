@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud, Sparkles, ArrowLeft, RefreshCw, Copy, Download,
-  Plus, AlertTriangle, Info, Image as ImageIcon, Library
+  Plus, AlertTriangle, Info, Image as ImageIcon, Library, Camera
 } from 'lucide-react';
 import { extractPrint, renderMessage, renderImage } from '../api/promoClient';
 import BackgroundPicker from './BackgroundPicker';
@@ -143,7 +143,7 @@ export default function PromocoesTab({ showToast }) {
         <button
           type="button"
           onClick={() => setBankOpen(true)}
-          className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2 min-h-[44px] md:min-h-0 text-sm font-medium text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
           title="Gerenciar as fotos de fundo salvas por destino"
         >
           <Library className="w-4 h-4 text-indigo-500" /> Banco de fundos
@@ -202,9 +202,9 @@ function Stepper({ step }) {
   ];
   const idx = steps.findIndex((s) => s.id === step);
   return (
-    <div className="flex items-center justify-center gap-3 mb-6">
+    <div className="flex items-center justify-center gap-2 md:gap-3 mb-6">
       {steps.map((s, i) => (
-        <div key={s.id} className="flex items-center gap-3">
+        <div key={s.id} className="flex items-center gap-2 md:gap-3">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${
             i === idx
               ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-500/25'
@@ -213,9 +213,9 @@ function Stepper({ step }) {
                 : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/50'
           }`}>
             <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-white/20">{i + 1}</span>
-            {s.label}
+            <span className={i === idx ? '' : 'hidden md:inline'}>{s.label}</span>
           </div>
-          {i < steps.length - 1 && <div className="w-8 h-px bg-slate-300 dark:bg-slate-700" />}
+          {i < steps.length - 1 && <div className="w-4 md:w-8 h-px bg-slate-300 dark:bg-slate-700" />}
         </div>
       ))}
     </div>
@@ -224,12 +224,13 @@ function Stepper({ step }) {
 
 // ── Step 1: Upload ────────────────────────────────────────────────
 function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
+  const cameraRef = useRef(null);
   return (
-    <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-8">
+    <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-4 md:p-8">
       <label
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
-        className="flex flex-col items-center justify-center gap-4 py-16 px-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500/60 transition-colors cursor-pointer text-center"
+        className="flex flex-col items-center justify-center gap-4 py-10 md:py-16 px-4 md:px-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500/60 transition-colors cursor-pointer text-center"
       >
         {loading ? (
           <>
@@ -243,8 +244,16 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
             </div>
             <div>
               <p className="text-base font-semibold text-slate-900 dark:text-white">Envie o print da promoção</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Cole (Ctrl+V), arraste uma imagem aqui ou clique para selecionar (PNG ou JPG)</p>
+              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mt-1">Cole (Ctrl+V), arraste uma imagem aqui ou clique para selecionar (PNG ou JPG)</p>
+              <p className="md:hidden text-sm text-slate-500 dark:text-slate-400 mt-1">Toque para escolher uma imagem (PNG ou JPG)</p>
             </div>
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); cameraRef.current?.click(); }}
+              className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium border-indigo-300 text-indigo-600 dark:border-indigo-700 dark:text-indigo-300"
+            >
+              <Camera className="w-4 h-4" /> Tirar foto
+            </button>
           </>
         )}
         <input
@@ -252,6 +261,16 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
           type="file"
           accept="image/png,image/jpeg"
           className="hidden"
+          onChange={onSelect}
+          disabled={loading}
+        />
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          aria-label="Fotografar o print"
           onChange={onSelect}
           disabled={loading}
         />
@@ -299,7 +318,7 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
         </div>
 
         {/* Editable form */}
-        <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-6 space-y-4">
+        <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-4 md:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Cidade de origem" name="origin_city" lowConf={lowConf}>
               <input className={`${inputCls} ${lowConf('origin_city') ? lowConfCls : ''}`} value={promotion.origin_city ?? ''} onChange={(e) => setField('origin_city', e.target.value)} />
@@ -366,13 +385,13 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
             </div>
             <div className="mt-4">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Bagagem</span>
-              <div className="flex items-center gap-6 mt-2">
-                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded accent-indigo-600" checked={(promotion.baggage || []).includes('carry_on')} onChange={() => toggleBaggage('carry_on')} />
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-0 mt-2">
+                <label className="flex items-center gap-2 min-h-[44px] md:min-h-0 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" className="w-5 h-5 md:w-4 md:h-4 rounded accent-indigo-600" checked={(promotion.baggage || []).includes('carry_on')} onChange={() => toggleBaggage('carry_on')} />
                   Bagagem de mão
                 </label>
-                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded accent-indigo-600" checked={(promotion.baggage || []).includes('checked')} onChange={() => toggleBaggage('checked')} />
+                <label className="flex items-center gap-2 min-h-[44px] md:min-h-0 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" className="w-5 h-5 md:w-4 md:h-4 rounded accent-indigo-600" checked={(promotion.baggage || []).includes('checked')} onChange={() => toggleBaggage('checked')} />
                   Bagagem despachada
                 </label>
               </div>
@@ -416,14 +435,14 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
             <button
               onClick={onBack}
               disabled={loading}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
             >
               <ArrowLeft className="w-4 h-4" /> Voltar
             </button>
             <button
               onClick={onGenerate}
               disabled={loading}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95 disabled:opacity-50"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               {loading ? 'Gerando...' : 'Gerar'}
@@ -442,7 +461,7 @@ function Field({ label, name, lowConf, children }) {
       <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
         {label}
         {flagged && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-1.5 py-0.5 rounded">
+          <span className="inline-flex items-center gap-1 text-[11px] md:text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 px-1.5 py-0.5 rounded">
             <AlertTriangle className="w-2.5 h-2.5" /> revisar
           </span>
         )}
@@ -457,7 +476,7 @@ function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onRe
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Generated art */}
-      <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-6">
+      <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-4 md:p-6">
         <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <ImageIcon className="w-3.5 h-3.5" /> Arte gerada
         </div>
@@ -469,14 +488,14 @@ function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onRe
         <a
           href={imageUrl}
           download="promocao.png"
-          className="mt-4 w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+          className="mt-4 w-full flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" /> Baixar imagem
         </a>
       </div>
 
       {/* WhatsApp message */}
-      <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-6 flex flex-col">
+      <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-4 md:p-6 flex flex-col">
         <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Mensagem WhatsApp</div>
         <textarea
           readOnly
@@ -485,7 +504,7 @@ function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onRe
         />
         <button
           onClick={onCopy}
-          className="mt-4 w-full flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
+          className="mt-4 w-full flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
         >
           <Copy className="w-4 h-4" /> Copiar mensagem
         </button>
@@ -496,13 +515,13 @@ function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onRe
         <button
           onClick={onRegenerate}
           disabled={loading}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Regenerar
         </button>
         <button
           onClick={onReset}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
         >
           <Plus className="w-4 h-4" /> Nova promoção
         </button>
