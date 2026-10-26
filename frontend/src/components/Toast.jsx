@@ -15,9 +15,9 @@ export default function Toast({ message, type = 'info', onClose }) {
   };
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-xl shadow-2xl ${colors[type]} modal-animate`}>
+    <div className={`fixed z-[100] left-3 right-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:left-auto md:right-6 md:bottom-6 flex items-center justify-between md:justify-start gap-3 px-4 md:px-5 py-3 rounded-xl border backdrop-blur-xl shadow-2xl ${colors[type]} modal-animate`}>
       <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="hover:opacity-70 cursor-pointer"><X className="w-4 h-4" /></button>
+      <button onClick={onClose} className="hover:opacity-70 cursor-pointer p-2 -m-2" aria-label="Fechar aviso"><X className="w-4 h-4" /></button>
     </div>
   );
 }

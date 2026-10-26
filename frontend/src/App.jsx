@@ -22,6 +22,8 @@ import { PrivacyProvider } from './contexts/PrivacyContext';
 import PrivacyToggle from './components/PrivacyToggle';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
+import MobileNav from './components/mobile/MobileNav';
+import MobileMenu from './components/mobile/MobileMenu';
 
 const TABS = [
   { value: 'precos', label: 'Preços', icon: <DollarSign className="w-4 h-4" /> },
@@ -78,10 +80,18 @@ function AppShell() {
   // o voucher real do cliente sairia borrado na exportação.
   return (
     <PrivacyProvider>
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 lg:p-8">
         {sessionExpired && <SessionExpiredModal />}
 
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <header className="md:hidden flex items-center justify-between gap-3 mb-3 min-h-[44px]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img src={logo} alt="Clube do Voo" className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/30 shrink-0" />
+            <h1 className="text-lg font-bold truncate text-slate-900 dark:text-white">Clube do Voo</h1>
+          </div>
+          <MobileMenu user={currentUser} theme={theme} onToggleTheme={toggleTheme} onOpenSettings={() => setSettingsOpen(true)} onToast={showToast} />
+        </header>
+
+        <header className="hidden md:flex flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-3">
             <img src={logo} alt="Clube do Voo" className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/20" />
             <div>
@@ -101,7 +111,7 @@ function AppShell() {
           </div>
         </header>
 
-        <Tabs active={activeTab} onChange={setActiveTab} tabs={TABS} />
+        <div className="hidden md:block"><Tabs active={activeTab} onChange={setActiveTab} tabs={TABS} /></div>
         {activeTab === 'precos' && <PrecosTab showToast={showToast} />}
         {activeTab === 'status' && <StatusTab showToast={showToast} />}
         {activeTab === 'promocoes' && <PromocoesTab showToast={showToast} />}
@@ -112,6 +122,7 @@ function AppShell() {
 
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onToast={showToast} />
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        <MobileNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
       </div>
     </PrivacyProvider>
   );
