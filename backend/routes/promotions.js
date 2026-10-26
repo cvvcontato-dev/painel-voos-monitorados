@@ -33,7 +33,7 @@ router.post('/extract', upload.single('print'), async (req, res) => {
       workspace: { promo_id, print_url: ws.publicUrl(promo_id, `print.${ext}`) }
     });
   } catch (err) {
-    if (err.code === 'unavailable') return res.status(503).json({ error: 'Serviço de extração indisponível. Tente novamente.' });
+    if (err.code === 'unavailable') return res.status(503).json({ error: err.publicMessage || 'Serviço de extração indisponível. Tente novamente.' });
     if (err.code === 'unprocessable') return res.status(422).json({ error: 'Não foi possível ler o print. Preencha manualmente.' });
     return res.status(500).json({ error: err.message });
   }

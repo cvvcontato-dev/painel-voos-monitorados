@@ -57,6 +57,23 @@ function toPromotion(parsed) {
   return { promotion, _meta };
 }
 
+// Erros que vale repetir (alta demanda, instabilidade, limite temporário). 4xx de configuração NÃO.
+function isTransientGeminiError(err) {
+  const msg = String(err && err.message || '').toLowerCase();
+  return /\b(429|500|502|503|504)\b/.test(msg)
+      || /service unavailable|high demand|temporar|overload|fetch failed|timeout|econnreset/i.test(msg);
+}
+
+// Mensagem para a operadora, sem vazar detalhes internos: diferencia "tente de novo" de "precisa de ajuste".
+function publicMessageFor(err) {
+  const msg = String(err && err.message || '').toLowerCase();
+  if (/\b(401|403)\b|api key|permission|unauthenticated/.test(msg)) return 'Serviço de extração sem acesso (chave da IA inválida ou sem permissão). Avise o suporte técnico.';
+  if (/\b404\b|not found|model/.test(msg) && !isTransientGeminiError(err)) return 'Modelo da IA indisponível (nome do modelo inválido ou descontinuado). Avise o suporte técnico.';
+  if (/\b429\b|quota|rate/.test(msg)) return 'Limite de uso da IA atingido. Aguarde um pouco e tente novamente.';
+  if (isTransientGeminiError(err)) return 'A IA está com alta demanda agora. Tente novamente em alguns instantes.';
+  return null;
+}
+
 async function extract(imageBuffer, mimeType) {
   if ((process.env.EXTRACTION_MODE || 'stub') === 'stub') {
     return toPromotion({ ...STUB });
@@ -66,10 +83,22 @@ async function extract(imageBuffer, mimeType) {
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.5-flash' });
-    const result = await model.generateContent([
-      PROMPT,
-      { inlineData: { data: imageBuffer.toString('base64'), mimeType } }
-    ]);
+    // Alta demanda/instabilidade do Gemini é comum: tenta de novo (como na leitura de vouchers).
+    const delays = [0, 2000, 5000];
+    let result;
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]));
+      try {
+        result = await model.generateContent([
+          PROMPT,
+          { inlineData: { data: imageBuffer.toString('base64'), mimeType } }
+        ]);
+        break;
+      } catch (err) {
+        if (!isTransientGeminiError(err) || attempt === delays.length - 1) throw err;
+        console.warn(`[GEMINI-PROMO] tentativa ${attempt + 1}/${delays.length} falhou (transitório): ${err.message}. Retentando…`);
+      }
+    }
     const text = result.response.text();
     const jsonStr = (text.match(/\{[\s\S]*\}/) || [null])[0];
     if (!jsonStr) { const e = new Error('no json'); e.code = 'unprocessable'; throw e; }
@@ -79,7 +108,10 @@ async function extract(imageBuffer, mimeType) {
     return toPromotion(parsed);
   } catch (err) {
     if (err.code === 'unprocessable') throw err;
-    const e = new Error(`Gemini indisponível: ${err.message}`); e.code = 'unavailable'; throw e;
+    console.error(`[GEMINI-PROMO] falha ao ler o print: ${err.message}`);
+    const e = new Error(`Gemini indisponível: ${err.message}`); e.code = 'unavailable';
+    e.publicMessage = publicMessageFor(err);
+    throw e;
   }
 }
 
