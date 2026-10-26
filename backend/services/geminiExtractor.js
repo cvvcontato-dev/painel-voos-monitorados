@@ -67,6 +67,7 @@ function isTransientGeminiError(err) {
 // Mensagem para a operadora, sem vazar detalhes internos: diferencia "tente de novo" de "precisa de ajuste".
 function publicMessageFor(err) {
   const msg = String(err && err.message || '').toLowerCase();
+  if (/\b402\b|payment required|credits are depleted/.test(msg)) return 'Créditos da IA esgotados. Recarregue o saldo no Google AI Studio (ai.studio) e tente novamente.';
   if (/\b(401|403)\b|api key|permission|unauthenticated/.test(msg)) return 'Serviço de extração sem acesso (chave da IA inválida ou sem permissão). Avise o suporte técnico.';
   if (/\b404\b|is not found|not supported for generatecontent/.test(msg) && !isTransientGeminiError(err)) return 'Modelo da IA indisponível (nome do modelo inválido ou descontinuado). Avise o suporte técnico.';
   if (/\b429\b|quota|rate/.test(msg)) return 'Limite de uso da IA atingido. Aguarde um pouco e tente novamente.';

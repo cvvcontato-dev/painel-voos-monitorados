@@ -55,4 +55,11 @@ describe('modo real (Gemini simulado)', () => {
     });
     expect(generate).toHaveBeenCalledTimes(1);
   });
+  test('créditos esgotados (402) não são repetidos e orientam a recarregar o saldo', async () => {
+    generate.mockRejectedValue(new Error('[402 Payment Required] Your prepaid credits are depleted.'));
+    await expect(extractReal(Buffer.from('x'), 'image/png')).rejects.toMatchObject({
+      code: 'unavailable', publicMessage: expect.stringMatching(/créditos.*esgotados/i)
+    });
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
 });

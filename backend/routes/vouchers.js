@@ -60,6 +60,9 @@ router.post('/', upload.single('file'), async (req, res) => {
         retryable: true
       });
     }
+    if (/\b402\b|payment required|credits are depleted/i.test(err.message)) {
+      return res.status(402).json({ error: 'Créditos da IA esgotados. Recarregue o saldo no Google AI Studio (ai.studio) e tente novamente.', retryable: false });
+    }
     if (/quota|exceeded/i.test(err.message)) {
       return res.status(429).json({
         error: 'Cota da API Gemini esgotada. Aguarde alguns minutos e tente novamente.',
@@ -144,6 +147,9 @@ router.post('/combine', uploadMulti, async (req, res) => {
     console.error('[VOUCHERS] erro ao processar combine', err.message);
     if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
       return res.status(503).json({ error: `Serviço de extração (Gemini) com alta demanda ao ler o voucher${idxInfo}. Tente em instantes.`, retryable: true });
+    }
+    if (/\b402\b|payment required|credits are depleted/i.test(err.message)) {
+      return res.status(402).json({ error: 'Créditos da IA esgotados. Recarregue o saldo no Google AI Studio (ai.studio) e tente novamente.', retryable: false });
     }
     if (/quota|exceeded/i.test(err.message)) {
       return res.status(429).json({ error: `Cota da API Gemini esgotada ao ler o voucher${idxInfo}.`, retryable: true });
