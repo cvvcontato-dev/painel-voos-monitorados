@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 
 /**
  * Folha que sobe da parte de baixo (só no celular: `md:hidden`).
@@ -10,6 +11,11 @@ export default function BottomSheet({ open, onClose, title, children }) {
   const anterior = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;           // evita re-rodar o efeito (e roubar foco) a cada render do pai
+  const mobile = useIsMobile();
+
+  // A folha só existe no celular: se a tela passar de 768 px (girar o aparelho) com ela aberta, fecha,
+  // senão o fundo ficaria sem rolagem e o Esc preso por uma folha invisível.
+  useEffect(() => { if (open && !mobile) onCloseRef.current(); }, [open, mobile]);
 
   useEffect(() => {
     if (!open) return undefined;

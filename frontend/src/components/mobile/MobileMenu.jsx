@@ -5,7 +5,7 @@ import ChangePasswordModal from '../ChangePasswordModal';
 import { usePrivacy } from '../../hooks/usePrivacy';
 import { logout } from '../../api/authClient';
 
-const iniciais = (nome) => nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+const iniciais = (nome) => String(nome || '?').split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?';
 
 /** Menu do cabeçalho no celular: reúne privacidade, tema, configurações, senha e sair. */
 export default function MobileMenu({ user, theme, onToggleTheme, onOpenSettings, onToast }) {
@@ -25,7 +25,7 @@ export default function MobileMenu({ user, theme, onToggleTheme, onOpenSettings,
         {iniciais(user.nome)}
       </button>
 
-      <BottomSheet open={aberto} onClose={() => setAberto(false)} title={user.nome.split(' ')[0]}>
+      <BottomSheet open={aberto} onClose={() => setAberto(false)} title={String(user.nome || 'Usuário').split(' ')[0]}>
         <div className="px-3 pb-2 text-xs text-slate-500 dark:text-slate-400">{user.role === 'admin' ? 'Administrador' : 'Usuário'}</div>
         <SheetItem icon={enabled ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                    label={enabled ? 'Mostrar dados dos clientes' : 'Ocultar dados dos clientes'}

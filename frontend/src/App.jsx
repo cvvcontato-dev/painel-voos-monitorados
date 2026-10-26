@@ -80,7 +80,7 @@ function AppShell() {
   // o voucher real do cliente sairia borrado na exportação.
   return (
     <PrivacyProvider>
-      <div className="max-w-7xl mx-auto px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 lg:p-8">
         {sessionExpired && <SessionExpiredModal />}
 
         <header className="md:hidden flex items-center justify-between gap-3 mb-3 min-h-[44px]">

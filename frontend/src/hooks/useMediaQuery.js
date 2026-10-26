@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 
 /** true enquanto a media query casa; reage a mudanças (girar a tela, redimensionar). */
 export function useMediaQuery(query) {
-  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  const suportado = typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+  const [matches, setMatches] = useState(() => suportado && window.matchMedia(query).matches);
   useEffect(() => {
+    if (!suportado) return undefined;
     const mql = window.matchMedia(query);
     const onChange = () => setMatches(mql.matches);
     onChange();
