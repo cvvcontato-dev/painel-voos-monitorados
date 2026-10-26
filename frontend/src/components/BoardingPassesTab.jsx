@@ -197,8 +197,8 @@ export default function BoardingPassesTab({ showToast }) {
   }
 
   const radio = (name, value, current, label, onPick) => (
-    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-      <input type="radio" name={name} checked={current === value} onChange={() => onPick(value)} /> {label}
+    <label className="flex items-center gap-2 min-h-[44px] md:min-h-0 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+      <input type="radio" className="w-5 h-5 md:w-auto md:h-auto" name={name} checked={current === value} onChange={() => onPick(value)} /> {label}
     </label>
   );
 

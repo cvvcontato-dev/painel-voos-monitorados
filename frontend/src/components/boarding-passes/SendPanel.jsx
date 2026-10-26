@@ -27,8 +27,8 @@ export default function SendPanel({
         <p className="text-xs text-slate-500 dark:text-slate-400">Uma cópia oculta de cada e-mail vai para a agência.</p>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
-        <input type="checkbox" checked={useOriginal} onChange={e => onToggleOriginal(e.target.checked)} />
+      <label className="flex items-center gap-2 min-h-[44px] md:min-h-0 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
+        <input type="checkbox" className="w-5 h-5 shrink-0 md:w-auto md:h-auto md:shrink" checked={useOriginal} onChange={e => onToggleOriginal(e.target.checked)} />
         Usar links originais (se o painel estiver fora do ar)
       </label>
 

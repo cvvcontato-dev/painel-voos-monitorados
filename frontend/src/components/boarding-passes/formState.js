@@ -1,7 +1,7 @@
 // Estado do formulário da aba Cartões de Embarque + helpers puros.
 
 export const inputCls =
-  "w-full px-3 py-2.5 md:py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
+  "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
   "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
   "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 
