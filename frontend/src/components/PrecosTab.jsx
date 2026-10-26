@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
+import FlightCard from './precos/FlightCard';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 const API_URL = '/api/flights';
 const PRIORIDADES = ['Urgente', 'Alta', 'Média', 'Baixa'];
@@ -42,6 +44,7 @@ function timeAgo(dateStr) {
 }
 
 export default function PrecosTab({ showToast }) {
+  const isMobile = useIsMobile();
   const [flights, setFlights] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState(null);
@@ -283,6 +286,17 @@ export default function PrecosTab({ showToast }) {
   };
   const handleDragEnd = async () => { setDraggedIndex(null); try { await api.put(`${API_URL}/reorder`, { ids: flights.map(f => f.id) }); } catch (e) { console.error(e); } };
 
+  // Reordenar no celular (arrastar não funciona com o dedo): sobe/desce uma posição na ordenação manual.
+  const moveFlight = async (index, dir) => {
+    const j = index + dir;
+    if (!dragEnabled || j < 0 || j >= sortedFlights.length) return;
+    const n = [...sortedFlights];
+    [n[index], n[j]] = [n[j], n[index]];
+    setFlights(n);
+    try { await api.put(`${API_URL}/reorder`, { ids: n.map(f => f.id) }); }
+    catch (e) { console.error(e); fetchFlights(); }
+  };
+
   const priorityRank = { 'Urgente': 4, 'Alta': 3, 'Média': 2, 'Baixa': 1 };
   const parseTravelDate = (s) => {
     if (!s) return new Date(0);
@@ -370,24 +384,24 @@ export default function PrecosTab({ showToast }) {
       : 'minmax(0,1.8fr) minmax(0,0.9fr) 80px 130px minmax(0,1.1fr) 44px 232px',
   };
 
-  const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border " +
+  const inputCls = "w-full px-4 py-3 md:py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border " +
     "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
     "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 
   return (
     <>
       {/* ── Toolbar ── */}
-      <div className="flex justify-end gap-3 flex-wrap mb-4">
+      <div className="grid grid-cols-2 gap-2 md:flex md:justify-end md:gap-3 md:flex-wrap mb-4">
         <button onClick={checkAll}
           disabled={startingAll || checkingId !== null || priceJob?.running || !flights.some(f => f.status === 'ativo')}
-          className="flex items-center gap-2 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-2 min-h-[44px] md:min-h-0 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 px-3 md:px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           title="Atualiza todos os voos ativos, um por vez. Os alertas seguem as regras habituais.">
           <RefreshCw className={`w-4 h-4 ${priceJob?.running || startingAll ? 'animate-spin' : ''}`} />
           {priceJob?.running ? `Atualizando ${priceJob.completed}/${priceJob.total}` : 'Atualizar todos'}
         </button>
         <button
           onClick={() => openModal()}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
+          className="flex items-center justify-center gap-2 min-h-[44px] md:min-h-0 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95"
         >
           <Plus className="w-4 h-4" /> Novo Voo
         </button>
@@ -397,24 +411,24 @@ export default function PrecosTab({ showToast }) {
       {priceJob && !priceJob.running && priceJob.source !== 'individual' && <p role="status" className="text-sm text-slate-600 dark:text-slate-300 mb-4">{priceJob.error || `Última atualização: ${priceJob.success} sucesso(s), ${priceJob.failed} falha(s), ${priceJob.skipped} ignorado(s).`}</p>}
       {queueError && <p role="status" className="text-sm text-amber-600 mb-4">Não foi possível consultar o progresso. Tentando novamente…</p>}
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3 mb-4 md:mb-6">
         {/* Total */}
-        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><Plane className="w-4 h-4" /></div>
+        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3">
+          <div className="hidden md:block bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><Plane className="w-4 h-4" /></div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total</div>
             <div className="text-lg font-bold text-slate-900 dark:text-white">{flights.filter(f => f.status === 'ativo').length}</div>
           </div>
         </div>
         {/* Compradas */}
-        <div className="bg-white/80 border border-emerald-200/60 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-emerald-800/30 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-emerald-500/10 p-2.5 rounded-lg text-emerald-500 border border-emerald-500/20 shrink-0"><ShoppingBag className="w-4 h-4" /></div>
+        <div className="bg-white/80 border border-emerald-200/60 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-emerald-800/30 p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3">
+          <div className="hidden md:block bg-emerald-500/10 p-2.5 rounded-lg text-emerald-500 border border-emerald-500/20 shrink-0"><ShoppingBag className="w-4 h-4" /></div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Compradas</div>
             <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{comprados.length}</div>
             {compradosComPreco.length > 0 && (
               <div
-                className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400/80 mt-0.5"
+                className="flex items-center gap-1 text-[11px] md:text-[10px] font-semibold text-emerald-600/80 dark:text-emerald-400/80 mt-0.5"
                 title={`Soma de (preço-alvo − preço pago) × pax em ${compradosComPreco.length} de ${comprados.length} compra(s) com preço registrado`}
               >
                 <PiggyBank className="w-2.5 h-2.5 shrink-0" />
@@ -424,26 +438,26 @@ export default function PrecosTab({ showToast }) {
           </div>
         </div>
         {/* Desistências */}
-        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-slate-500/10 p-2.5 rounded-lg text-slate-400 border border-slate-500/20 shrink-0"><XCircle className="w-4 h-4" /></div>
+        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3">
+          <div className="hidden md:block bg-slate-500/10 p-2.5 rounded-lg text-slate-400 border border-slate-500/20 shrink-0"><XCircle className="w-4 h-4" /></div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Desistências</div>
             <div className="text-lg font-bold text-slate-600 dark:text-slate-300">{flights.filter(f => f.status === 'encerrado').length}</div>
           </div>
         </div>
         {/* Checks */}
-        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><CheckCircle2 className="w-4 h-4" /></div>
+        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3">
+          <div className="hidden md:block bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><CheckCircle2 className="w-4 h-4" /></div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Checks</div>
             <div className="text-lg font-bold text-slate-900 dark:text-white">{flights.filter(f => f.check_diario).length}<span className="text-xs font-normal text-slate-400 dark:text-slate-500">/{flights.length}</span></div>
           </div>
         </div>
         {/* Com falha */}
-        <div className={`bg-white/80 dark:bg-slate-900/40 dark:backdrop-blur-xl p-4 rounded-xl flex items-center gap-3 border ${
+        <div className={`bg-white/80 dark:bg-slate-900/40 dark:backdrop-blur-xl p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3 border ${
           comFalha > 0 ? 'border-red-200/70 dark:border-red-800/40' : 'border-slate-200 dark:border-slate-800/50'
         }`}>
-          <div className={`p-2.5 rounded-lg border shrink-0 ${
+          <div className={`hidden md:block p-2.5 rounded-lg border shrink-0 ${
             comFalha > 0 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
           }`}><AlertTriangle className="w-4 h-4" /></div>
           <div>
@@ -452,12 +466,12 @@ export default function PrecosTab({ showToast }) {
           </div>
         </div>
         {/* Ordenar */}
-        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-          <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><span className="text-xs font-bold font-mono">ORD</span></div>
+        <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-2.5 md:p-4 rounded-xl flex flex-col items-start md:flex-row md:items-center gap-1 md:gap-3 col-span-3 md:col-span-1">
+          <div className="hidden md:block bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0"><span className="text-xs font-bold font-mono">ORD</span></div>
           <div className="w-full">
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Ordenar por</div>
-            <select value={sortBy} onChange={e => changeSort(e.target.value)}
-              className="bg-transparent border-0 text-sm font-bold text-slate-900 dark:text-white focus:ring-0 focus:outline-none cursor-pointer w-full mt-0.5">
+            <label htmlFor="precos-ordenar" className="block text-xs text-slate-500 dark:text-slate-400 font-medium">Ordenar por</label>
+            <select id="precos-ordenar" value={sortBy} onChange={e => changeSort(e.target.value)}
+              className="min-h-[44px] md:min-h-0 bg-transparent border-0 text-sm font-bold text-slate-900 dark:text-white focus:ring-0 focus:outline-none cursor-pointer w-full mt-0.5">
               <option value="proximidade" className="bg-white dark:bg-slate-900">Proximidade da meta 🎯</option>
               <option value="manual" className="bg-white dark:bg-slate-900">Manual ↕</option>
               <option value="priority" className="bg-white dark:bg-slate-900">Prioridade ★</option>
@@ -468,8 +482,8 @@ export default function PrecosTab({ showToast }) {
       </div>
 
       {/* Filtro por prioridade */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+      <div className="flex items-center gap-2 mb-3 overflow-x-auto md:overflow-visible md:flex-wrap -mx-3 px-3 md:mx-0 md:px-0 py-1 md:py-0">
+        <span className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
           <Filter className="w-3.5 h-3.5" /> Prioridade
         </span>
         {PRIORIDADES.map(p => {
@@ -479,7 +493,7 @@ export default function PrecosTab({ showToast }) {
             <button
               key={p}
               onClick={() => togglePriority(p)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+              className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1 text-xs md:text-[11px] min-h-[40px] md:min-h-0 font-semibold rounded-md transition-all cursor-pointer ${
                 active
                   ? `${getPriorityColor(p)} ring-2 ring-indigo-400/50 dark:ring-indigo-500/40`
                   : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-600'
@@ -494,25 +508,34 @@ export default function PrecosTab({ showToast }) {
           <>
             <button
               onClick={clearPriorityFilter}
-              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+              className="shrink-0 whitespace-nowrap inline-flex items-center gap-1 px-3 py-2 md:px-2 md:py-1 text-xs md:text-[11px] min-h-[40px] md:min-h-0 font-medium rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
             >
               <X className="w-3 h-3" /> Limpar
             </button>
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+            <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-400 dark:text-slate-500">
               {sortedFlights.length} de {flights.length} voos
             </span>
           </>
         )}
         {sortBy === 'manual' && priorityFilter.size > 0 && (
-          <span className="text-[11px] text-amber-600 dark:text-amber-400">
+          <span className="shrink-0 whitespace-nowrap text-[11px] text-amber-600 dark:text-amber-400">
             Reordenação manual desativada com filtro ativo
           </span>
         )}
       </div>
+
+      {/* Atalho dos checks (celular): no computador fica no cabeçalho da coluna Check */}
+      <div className="md:hidden mb-3">
+        <button onClick={toggleAllChecks} disabled={flights.length === 0}
+                className="w-full min-h-[44px] text-sm font-medium rounded-lg border border-indigo-300 text-indigo-600 dark:border-indigo-700 dark:text-indigo-300 disabled:opacity-50">
+          {allChecked ? 'Desmarcar todos os checks' : 'Marcar todos os checks'}
+        </button>
+      </div>
       {/* ── Card Table ── */}
       <div className="space-y-1.5">
 
-        {/* Column Headers */}
+        {/* Column Headers (só no computador: o estilo inline força display:grid, então não dá para esconder por classe) */}
+        {!isMobile && (
         <div style={gridStyle} className="px-4 py-2">
           {dragEnabled && <div />}
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Cliente</div>
@@ -533,6 +556,7 @@ export default function PrecosTab({ showToast }) {
           </div>
           <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-right">Ações</div>
         </div>
+        )}
 
         {/* Rows */}
         {isLoading ? (
@@ -568,6 +592,51 @@ export default function PrecosTab({ showToast }) {
           // voo recém-cadastrado ainda não passou pelo agendador.
           const desatualizado = flight.status === 'ativo' && falhas === 0
             && diasSemCheck !== null && diasSemCheck >= DIAS_DESATUALIZADO;
+
+          // Celular: cartão no lugar da linha da tabela (mesmos handlers e valores já calculados acima).
+          if (isMobile) {
+            return (
+              <FlightCard
+                key={flight.id}
+                flight={flight}
+                fmt={fmt}
+                d={{
+                  hasPrice, isAlert, isBought, isClosed, chartOpen, falhas, desatualizado, diasSemCheck, statusStyle,
+                  priorityCls: getPriorityColor(flight.prioridade),
+                  economia: isBought ? economiaDoVoo(flight) : null,
+                  timeAgoText: flight.ultima_verificacao ? timeAgo(flight.ultima_verificacao) : null,
+                  ultimoErro: flight.ultimo_erro || '',
+                  ultimaFalhaTexto: flight.ultima_falha ? `última tentativa ${tempoAtras(flight.ultima_falha)}` : ''
+                }}
+                busy={{
+                  checking: checkingId === flight.id,
+                  anyChecking: checkingId !== null || startingAll || !!priceJob?.running,
+                  testing: testingNotifId === flight.id
+                }}
+                on={{
+                  toggleChart: () => toggleChart(flight.id),
+                  toggleCheck: () => toggleCheck(flight),
+                  checkNow: () => checkNow(flight.id),
+                  testNotification: () => testNotification(flight.id),
+                  setStatus: (s) => setStatus(flight, s),
+                  edit: () => openModal(flight),
+                  remove: () => deleteFlight(flight.id)
+                }}
+                move={dragEnabled ? {
+                  up: index > 0 ? () => moveFlight(index, -1) : null,
+                  down: index < sortedFlights.length - 1 ? () => moveFlight(index, 1) : null
+                } : null}
+                chart={chartOpen ? (
+                  <PriceHistoryChart
+                    data={historyData[flight.id]}
+                    targetPrice={flight.preco_esperado}
+                    loading={historyState[flight.id] === 'loading'}
+                    error={typeof historyState[flight.id] === 'string' && historyState[flight.id].startsWith('error:') ? historyState[flight.id].slice(6) : null}
+                  />
+                ) : null}
+              />
+            );
+          }
 
           return (
             <div
@@ -832,18 +901,18 @@ export default function PrecosTab({ showToast }) {
 
       {/* ── Modal ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:p-4">
           <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full max-w-lg bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden modal-animate max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700/50">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+          <div className="relative w-full md:max-w-lg bg-white border border-slate-200 dark:bg-slate-900 md:dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl md:rounded-2xl overflow-hidden modal-animate h-[100dvh] md:h-auto md:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 z-10 md:static bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent flex justify-between items-center px-4 py-2 md:p-6 border-b border-slate-200 dark:border-slate-700/50">
+              <h2 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white">
                 {editingFlight ? 'Editar Voo' : 'Adicionar Novo Voo'}
               </h2>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer">
+              <button onClick={closeModal} aria-label="Fechar" className="w-11 h-11 -mr-2 md:w-auto md:h-auto md:mr-0 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-4 md:p-6 space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2 space-y-1">
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><User className="w-4 h-4" /> Cliente</label>
@@ -875,7 +944,7 @@ export default function PrecosTab({ showToast }) {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><DollarSign className="w-4 h-4" /> Preço Esperado (R$)</label>
-                <input type="number" step="0.01" {...register('preco_esperado', { required: true, min: 0 })} className={inputCls} placeholder="2500.00" />
+                <input type="number" step="0.01" inputMode="decimal" {...register('preco_esperado', { required: true, min: 0 })} className={inputCls} placeholder="2500.00" />
                 {errors.preco_esperado && <span className="text-xs text-red-700 dark:text-red-400">Preço inválido</span>}
 
                 {editingFlight && temSugestao && (
@@ -893,7 +962,7 @@ export default function PrecosTab({ showToast }) {
                       <button
                         type="button"
                         onClick={() => setValue('preco_esperado', priceStats.sugerido, { shouldDirty: true, shouldValidate: true })}
-                        className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer active:scale-95"
+                        className="min-h-[44px] md:min-h-0 px-2.5 py-1 text-xs md:text-[11px] font-semibold rounded-md bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer active:scale-95"
                       >
                         Usar {fmt(priceStats.sugerido)}
                       </button>
@@ -922,7 +991,7 @@ export default function PrecosTab({ showToast }) {
               </div>
               <div className="border-t border-slate-200 dark:border-slate-700/50 pt-4 mt-2">
                 <p className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold mb-3">Notificações & Status</p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"><Mail className="w-4 h-4" /> E-mail</label>
                     <input type="email" {...register('email_cliente', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ })} className={inputCls} placeholder="email@exemplo.com" />
@@ -942,11 +1011,11 @@ export default function PrecosTab({ showToast }) {
                   </select>
                 </div>
               </div>
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700/50 mt-6">
-                <button type="button" onClick={closeModal} className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
+              <div className="sticky bottom-0 md:static -mx-4 px-4 md:mx-0 md:px-0 -mb-4 md:mb-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pt-4 md:pb-0 flex gap-3 md:justify-end border-t border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent mt-6">
+                <button type="button" onClick={closeModal} className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:hover:text-white dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">
                   Cancelar
                 </button>
-                <button type="submit" className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
+                <button type="submit" className="flex-1 md:flex-none min-h-[44px] md:min-h-0 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-all shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
                   {editingFlight ? 'Salvar Alterações' : 'Adicionar Voo'}
                 </button>
               </div>
