@@ -45,17 +45,17 @@ export default function UserModal({ isOpen, onClose, editTarget, onSuccess, onTo
     }
   }
 
-  const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm bg-white border-slate-300 text-slate-900 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+  const inputCls = 'w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg border text-sm bg-white border-slate-300 text-slate-900 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500';
   const labelCls = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-slate-950/80 px-0 md:px-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-none md:rounded-2xl p-4 md:p-6 w-full max-w-none md:max-w-sm h-[100dvh] md:h-auto overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {editTarget ? 'Editar usuário' : 'Novo usuário'}
           </h2>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button onClick={onClose} aria-label="Fechar" className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 -mr-2 md:mr-0 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -97,13 +97,13 @@ export default function UserModal({ isOpen, onClose, editTarget, onSuccess, onTo
             <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className={inputCls} placeholder="Confirme com sua senha de admin" />
           </div>
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-3 pt-1 sticky bottom-0 md:static bg-white dark:bg-slate-900 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-0">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded-lg border text-sm font-medium bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+              className="flex-1 py-2 min-h-[44px] md:min-h-0 rounded-lg border text-sm font-medium bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
               Cancelar
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium transition-colors">
+              className="flex-1 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium transition-colors">
               {loading ? 'Salvando…' : 'Salvar'}
             </button>
           </div>
