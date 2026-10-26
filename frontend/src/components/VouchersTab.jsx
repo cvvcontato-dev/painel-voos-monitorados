@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 
 const inputCls =
-  "w-full px-3 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
+  "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
   "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
   "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 
@@ -40,6 +40,7 @@ export default function VouchersTab({ showToast }) {
   const [combining, setCombining] = useState(false);
   const [errorIndex, setErrorIndex] = useState(-1);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const iframeRef = useRef(null);
 
   const { register, control, handleSubmit, reset } = useForm({
@@ -130,6 +131,7 @@ export default function VouchersTab({ showToast }) {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   }
 
@@ -253,7 +255,7 @@ export default function VouchersTab({ showToast }) {
           <button
             type="button"
             onClick={() => setSettingsOpen(o => !o)}
-            className="w-full flex items-center justify-between text-left cursor-pointer"
+            className="w-full flex items-center justify-between text-left cursor-pointer min-h-[44px] md:min-h-0"
           >
             <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <SettingsIcon className="w-4 h-4" /> Configurações da agência
@@ -308,7 +310,7 @@ export default function VouchersTab({ showToast }) {
                   type="button"
                   onClick={saveSettings}
                   disabled={savingSettings}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg text-white text-sm font-medium transition-all
                               ${savingSettings ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
                 >
                   <Save className="w-4 h-4" />
@@ -332,10 +334,11 @@ export default function VouchersTab({ showToast }) {
                 </p>
               </div>
               {/* Modo */}
-              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+              <div className="flex flex-col items-start md:flex-row md:items-center gap-0 md:gap-3 text-xs text-slate-600 dark:text-slate-300">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer min-h-[44px] md:min-h-0">
                   <input
                     type="radio"
+                    className="w-5 h-5 md:w-auto md:h-auto"
                     name="uploadMode"
                     value="single"
                     checked={uploadMode === 'single'}
@@ -344,9 +347,10 @@ export default function VouchersTab({ showToast }) {
                   />
                   Voucher único
                 </label>
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer min-h-[44px] md:min-h-0">
                   <input
                     type="radio"
+                    className="w-5 h-5 md:w-auto md:h-auto"
                     name="uploadMode"
                     value="multi"
                     checked={uploadMode === 'multi'}
@@ -359,9 +363,27 @@ export default function VouchersTab({ showToast }) {
             </div>
 
             {uploadMode === 'single' ? (
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium disabled:opacity-50 border-indigo-300 text-indigo-600 dark:border-indigo-700 dark:text-indigo-300"
+                >
+                  <Camera className="w-4 h-4" /> Tirar foto
+                </button>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={onUpload}
+                  disabled={uploading}
+                  className="hidden"
+                  aria-label="Fotografar o voucher"
+                />
                 <label
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
+                  className={`inline-flex items-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg text-white text-sm font-medium cursor-pointer transition-all
                               ${uploading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25'}`}
                 >
                   <UploadCloud className="w-4 h-4" />
@@ -396,13 +418,13 @@ export default function VouchersTab({ showToast }) {
                           accept="application/pdf,image/png,image/jpeg,image/webp"
                           onChange={(e) => setMultiItemFile(it.id, e.target.files?.[0] || null)}
                           disabled={combining}
-                          className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[160px]"
+                          className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[160px] min-h-[44px] md:min-h-0"
                         />
                         <select
                           value={isIda ? 'ida' : it.role}
                           onChange={(e) => setMultiItemRole(it.id, e.target.value)}
                           disabled={combining || isIda}
-                          className={inputCls + ' !w-auto !py-1 text-xs'}
+                          className={inputCls + ' !w-auto !py-2.5 md:!py-1 text-xs'}
                           title={isIda ? 'A primeira linha é sempre a ida' : 'Tipo do voucher'}
                         >
                           {isIda ? (
@@ -416,16 +438,16 @@ export default function VouchersTab({ showToast }) {
                         </select>
                         <div className="flex items-center gap-1">
                           <button type="button" onClick={() => moveMultiItem(it.id, -1)} disabled={combining || idx === 0}
-                            className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir">
+                            className="p-3.5 md:p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir">
                             <ChevronUp className="w-4 h-4" />
                           </button>
                           <button type="button" onClick={() => moveMultiItem(it.id, 1)} disabled={combining || idx === multiItems.length - 1}
-                            className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer">
+                            className="p-3.5 md:p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer">
                             <ChevronDown className="w-4 h-4" />
                           </button>
                           {!isIda && (
                             <button type="button" onClick={() => removeMultiItem(it.id)} disabled={combining}
-                              className="p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover">
+                              className="p-3.5 md:p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
@@ -439,7 +461,7 @@ export default function VouchersTab({ showToast }) {
                     type="button"
                     onClick={addMultiItem}
                     disabled={combining || multiItems.length >= 8}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] md:min-h-0 rounded-lg text-xs font-medium border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Adicionar voucher
                   </button>
@@ -450,7 +472,7 @@ export default function VouchersTab({ showToast }) {
                     type="button"
                     onClick={onCombineUpload}
                     disabled={!multiValid || combining}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg text-white text-sm font-medium transition-all
                                 ${(!multiValid || combining)
                                   ? 'bg-indigo-300 cursor-not-allowed'
                                   : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}
@@ -472,7 +494,7 @@ export default function VouchersTab({ showToast }) {
             </h3>
             <button
               onClick={refresh}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white transition-colors cursor-pointer"
+              className="p-3.5 md:p-1.5 -my-2 md:my-0 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white transition-colors cursor-pointer"
               title="Atualizar"
             >
               <RefreshCw className="w-4 h-4" />
@@ -486,7 +508,7 @@ export default function VouchersTab({ showToast }) {
                 <button
                   key={v.id}
                   onClick={() => select(v.id)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 min-h-[44px] md:min-h-0 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
                     selectedId === v.id
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/25'
                       : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700 dark:hover:border-indigo-500'
@@ -510,7 +532,7 @@ export default function VouchersTab({ showToast }) {
           <form onSubmit={handleSubmit(onSave)} className="space-y-4">
             <div className={sectionCls}>
               <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 text-sm">Reserva</h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Localizador</label>
                   <input {...register('reservation.locator')} className={inputCls} />
@@ -528,7 +550,7 @@ export default function VouchersTab({ showToast }) {
                 <button
                   type="button"
                   onClick={() => passengers.append({ order: passengers.fields.length + 1, name: '', type: 'adulto' })}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" /> adicionar
                 </button>
@@ -538,13 +560,13 @@ export default function VouchersTab({ showToast }) {
               )}
               <div className="space-y-2">
                 {passengers.fields.map((f, i) => (
-                  <div key={f.id} className="flex gap-2 items-center">
+                  <div key={f.id} className="flex flex-wrap md:flex-nowrap gap-2 items-center">
                     <input
                       {...register(`passengers.${i}.order`, { valueAsNumber: true })}
                       type="number"
                       className={`${inputCls} w-16`}
                     />
-                    <input {...register(`passengers.${i}.name`)} className={`${inputCls} flex-1`} placeholder="Nome completo" />
+                    <input {...register(`passengers.${i}.name`)} className={`${inputCls} flex-1 min-w-[10rem] md:min-w-[auto]`} placeholder="Nome completo" />
                     <select {...register(`passengers.${i}.type`)} className={`${inputCls} w-32`}>
                       <option value="adulto">adulto</option>
                       <option value="crianca">criança</option>
@@ -553,7 +575,7 @@ export default function VouchersTab({ showToast }) {
                     <button
                       type="button"
                       onClick={() => passengers.remove(i)}
-                      className="p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
+                      className="p-3.5 md:p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
                       title="Remover"
                     >
                       <X className="w-4 h-4" />
@@ -573,7 +595,7 @@ export default function VouchersTab({ showToast }) {
                     departure: { airport: '', datetime: '' },
                     arrival: { airport: '', datetime: '' },
                   })}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" /> adicionar
                 </button>
@@ -584,24 +606,24 @@ export default function VouchersTab({ showToast }) {
               <div className="space-y-3">
                 {trips.fields.map((f, i) => (
                   <div key={f.id} className="border border-slate-200 dark:border-slate-700/60 rounded-lg p-3 space-y-2">
-                    <div className="flex gap-2 items-center">
+                    <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
                       <select {...register(`trips.${i}.direction`)} className={`${inputCls} w-28`}>
                         <option value="ida">ida</option>
                         <option value="volta">volta</option>
                         <option value="multi">multi</option>
                       </select>
-                      <input {...register(`trips.${i}.dateLabel`)} className={`${inputCls} flex-1`} placeholder="12 SET 2026" />
+                      <input {...register(`trips.${i}.dateLabel`)} className={`${inputCls} flex-1 min-w-[8rem] md:min-w-[auto]`} placeholder="12 SET 2026" />
                       <input {...register(`trips.${i}.flightNumber`)} className={`${inputCls} w-28`} placeholder="AD 4001" />
                       <button
                         type="button"
                         onClick={() => trips.remove(i)}
-                        className="p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
+                        className="p-3.5 md:p-2 rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 cursor-pointer"
                         title="Remover trecho"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
                         <label className={labelCls}>Origem (IATA)</label>
                         <input {...register(`trips.${i}.departure.airport`)} className={inputCls} placeholder="GRU" />
@@ -636,7 +658,7 @@ export default function VouchersTab({ showToast }) {
               </select>
               <button
                 type="submit"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all"
               >
                 <Save className="w-4 h-4" /> Salvar
               </button>
@@ -644,7 +666,7 @@ export default function VouchersTab({ showToast }) {
                 href={api.exportUrl(selectedId, 'pdf')}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
               >
                 <Download className="w-4 h-4" /> PDF
               </a>
@@ -652,21 +674,21 @@ export default function VouchersTab({ showToast }) {
                 href={api.exportUrl(selectedId, 'png')}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-lg shadow-teal-500/25 cursor-pointer transition-all"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-lg shadow-teal-500/25 cursor-pointer transition-all"
               >
                 <Download className="w-4 h-4" /> PNG
               </a>
               <button
                 type="button"
                 onClick={() => setEmailModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all ml-auto"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all ml-auto"
               >
                 <Mail className="w-4 h-4" /> Enviar por e-mail
               </button>
               <button
                 type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium shadow-lg shadow-rose-500/25 cursor-pointer transition-all"
               >
                 <Trash2 className="w-4 h-4" /> Excluir
               </button>
@@ -677,7 +699,7 @@ export default function VouchersTab({ showToast }) {
 
       {/* Coluna direita: preview */}
       <div className="lg:w-1/2 min-w-0">
-        <div className="sticky top-4 h-[calc(100vh-180px)] rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-100 dark:bg-slate-900/40">
+        <div className="sticky top-4 h-[70vh] md:h-[calc(100vh-180px)] rounded-xl border border-slate-200 dark:border-slate-700/60 overflow-hidden bg-slate-100 dark:bg-slate-900/40">
           {selectedId ? (
             <iframe
               ref={iframeRef}
@@ -697,9 +719,19 @@ export default function VouchersTab({ showToast }) {
       </div>
 
       {emailModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !sendingEmail && setEmailModalOpen(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Enviar voucher por e-mail</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-stretch md:items-center justify-center z-50 p-0 md:p-4" onClick={() => !sendingEmail && setEmailModalOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-none md:rounded-lg shadow-xl max-w-lg w-full h-[100dvh] md:h-auto overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Enviar voucher por e-mail</h3>
+              <button
+                type="button"
+                onClick={() => !sendingEmail && setEmailModalOpen(false)}
+                aria-label="Fechar"
+                className="md:hidden -mt-2 -mr-3 p-3 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <div className="space-y-3">
               <div>
                 <label className="block text-sm text-slate-700 dark:text-slate-300 mb-1">Destinatários</label>
@@ -709,7 +741,7 @@ export default function VouchersTab({ showToast }) {
                   onChange={e => setEmailRecipients(e.target.value)}
                   placeholder="cliente@exemplo.com, outro@exemplo.com"
                   disabled={sendingEmail}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                  className="w-full px-3 py-2.5 md:py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
                 />
                 <p className="text-xs text-slate-500 mt-1">Múltiplos e-mails separados por vírgula.</p>
               </div>
@@ -721,21 +753,21 @@ export default function VouchersTab({ showToast }) {
                   placeholder="Olá! Segue o voucher conforme combinado…"
                   rows={5}
                   disabled={sendingEmail}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
+                  className="w-full px-3 py-2.5 md:py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded text-sm"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 sticky bottom-0 md:static bg-white dark:bg-slate-800 -mx-6 px-6 md:mx-0 md:px-0 pb-4 md:pb-0 border-t border-slate-200 dark:border-slate-700 md:border-t-0">
                 <button
                   type="button"
                   onClick={() => setEmailModalOpen(false)}
                   disabled={sendingEmail}
-                  className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
+                  className="px-4 py-2 min-h-[44px] md:min-h-0 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
                 >Cancelar</button>
                 <button
                   type="button"
                   onClick={handleSendEmail}
                   disabled={sendingEmail || !emailRecipients.trim()}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 min-h-[44px] md:min-h-0 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >{sendingEmail ? 'Enviando…' : 'Enviar'}</button>
               </div>
             </div>
