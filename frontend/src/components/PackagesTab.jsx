@@ -5,7 +5,7 @@ import {
 import * as api from '../api/packageClient';
 
 const inputCls =
-  "w-full px-3 py-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
+  "w-full px-3 py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
   "bg-white text-slate-900 placeholder-slate-400 border-slate-300 " +
   "dark:bg-slate-800/50 dark:text-slate-100 dark:placeholder-slate-400 dark:border-slate-700";
 const labelCls = "block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1";
@@ -147,12 +147,12 @@ export default function PackagesTab({ showToast }) {
                     type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
                     onChange={(e) => setFile(it.id, e.target.files?.[0] || null)}
                     disabled={combining}
-                    className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[150px]"
+                    className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[150px] min-h-[44px] md:min-h-0"
                   />
                   <select
                     value={it.kind} onChange={(e) => setKind(it.id, e.target.value)}
                     disabled={combining || it.fixed}
-                    className={inputCls + ' !w-auto !py-1 text-xs'}
+                    className={inputCls + ' !w-auto !py-2.5 md:!py-1 min-h-[44px] md:min-h-0 text-xs'}
                     title={it.fixed ? 'Serviço obrigatório' : 'Tipo do serviço'}
                   >
                     {it.fixed
@@ -160,10 +160,10 @@ export default function PackagesTab({ showToast }) {
                       : ALL_OPTS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
                   </select>
                   <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => move(it.id, -1)} disabled={combining || idx === 0} className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir"><ChevronUp className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => move(it.id, 1)} disabled={combining || idx === items.length - 1} className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer"><ChevronDown className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => move(it.id, -1)} disabled={combining || idx === 0} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir"><ChevronUp className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => move(it.id, 1)} disabled={combining || idx === items.length - 1} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer"><ChevronDown className="w-4 h-4" /></button>
                     {!it.fixed && (
-                      <button type="button" onClick={() => removeItem(it.id)} disabled={combining} className="p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover"><Trash2 className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => removeItem(it.id)} disabled={combining} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </div>
                 </div>
@@ -172,11 +172,11 @@ export default function PackagesTab({ showToast }) {
           </div>
           <div className="flex items-center justify-between gap-3 flex-wrap mt-3">
             <button type="button" onClick={addItem} disabled={combining || items.length >= 12}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 cursor-pointer">
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] md:min-h-0 rounded-lg text-xs font-medium border border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 cursor-pointer">
               <Plus className="w-3.5 h-3.5" /> Adicionar serviço
             </button>
             <button type="button" onClick={onCombine} disabled={!valid || combining}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all ${(!valid || combining) ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}>
+              className={`inline-flex items-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg text-white text-sm font-medium transition-all ${(!valid || combining) ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 cursor-pointer'}`}>
               <UploadCloud className="w-4 h-4" /> {combining ? 'Processando…' : 'Gerar pacote'}
             </button>
           </div>
@@ -186,7 +186,7 @@ export default function PackagesTab({ showToast }) {
         <div className={sectionCls}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2"><FileText className="w-4 h-4" /> Pacotes ({list.length})</h3>
-            <button onClick={refresh} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer" title="Atualizar"><RefreshCw className="w-4 h-4" /></button>
+            <button onClick={refresh} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer" title="Atualizar"><RefreshCw className="w-4 h-4" /></button>
           </div>
           <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto">
             {list.length === 0 && <p className="text-xs text-slate-400">Nenhum pacote ainda.</p>}
@@ -198,7 +198,7 @@ export default function PackagesTab({ showToast }) {
                     <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate pii">{p.title || `Pacote #${p.id}`}</div>
                     <div className="text-[11px] text-slate-500"><span className="pii">{p.holder}</span> · {p.summary?.hotels || 0} hotel(s) · {p.summary?.addons || 0} adicional(is)</div>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} className="p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded shrink-0 text-slate-400 hover:text-red-600 cursor-pointer" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             ))}
@@ -217,10 +217,10 @@ export default function PackagesTab({ showToast }) {
                 <label className={labelCls}>Título do pacote</label>
                 <input className={inputCls} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} />
               </div>
-              <button onClick={saveTitle} disabled={savingTitle} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm cursor-pointer disabled:opacity-50"><Save className="w-4 h-4" /> {savingTitle ? '…' : 'Salvar'}</button>
+              <button onClick={saveTitle} disabled={savingTitle} className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm cursor-pointer disabled:opacity-50"><Save className="w-4 h-4" /> {savingTitle ? '…' : 'Salvar'}</button>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium cursor-pointer"><Mail className="w-4 h-4" /> Enviar por e-mail</button>
+              <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium cursor-pointer"><Mail className="w-4 h-4" /> Enviar por e-mail</button>
             </div>
             <div className="border border-slate-200 dark:border-slate-700/60 rounded-lg overflow-hidden bg-white" style={{ height: 620 }}>
               <iframe ref={iframeRef} title="preview" src={`/api/packages/${current.id}/preview`} className="w-full h-full" />
@@ -231,19 +231,19 @@ export default function PackagesTab({ showToast }) {
 
       {/* Modal de e-mail */}
       {emailOpen && current && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setEmailOpen(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-5 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 flex items-stretch md:items-center justify-center z-50 p-0 md:p-4" onClick={() => setEmailOpen(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-none md:rounded-xl p-5 w-full max-w-none md:max-w-md h-[100dvh] md:h-auto overflow-y-auto flex flex-col md:block shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-slate-800 dark:text-slate-200">Enviar pacote por e-mail</h3>
-              <button onClick={() => setEmailOpen(false)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"><X className="w-4 h-4" /></button>
+              <button onClick={() => setEmailOpen(false)} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 text-slate-400 hover:text-slate-700 cursor-pointer" aria-label="Fechar"><X className="w-4 h-4" /></button>
             </div>
             <label className={labelCls}>Destinatários (separados por vírgula)</label>
             <input className={inputCls + ' mb-3'} value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="cliente@email.com" />
             <label className={labelCls}>Mensagem (opcional)</label>
-            <textarea className={inputCls + ' mb-4'} rows={3} value={emailMsg} onChange={(e) => setEmailMsg(e.target.value)} />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEmailOpen(false)} className="px-4 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">Cancelar</button>
-              <button onClick={onSendEmail} disabled={sending || !emailTo.trim()} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium cursor-pointer disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar'}</button>
+            <textarea className={inputCls + ' mb-4 md:mb-4 flex-1 md:flex-none'} rows={3} value={emailMsg} onChange={(e) => setEmailMsg(e.target.value)} />
+            <div className="flex justify-end gap-2 sticky bottom-0 md:static bg-white dark:bg-slate-900 pt-2 pb-[env(safe-area-inset-bottom)] md:pt-0 md:pb-0">
+              <button onClick={() => setEmailOpen(false)} className="px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">Cancelar</button>
+              <button onClick={onSendEmail} disabled={sending || !emailTo.trim()} className="px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium cursor-pointer disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar'}</button>
             </div>
           </div>
         </div>
