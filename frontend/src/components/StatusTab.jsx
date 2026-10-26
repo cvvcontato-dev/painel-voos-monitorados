@@ -4,6 +4,8 @@ import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, Al
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
 import { usePrivacy } from '../hooks/usePrivacy';
+import { useIsMobile } from '../hooks/useMediaQuery';
+import StatusFlightCard from './status/StatusFlightCard';
 
 const API_URL = '/api/monitored-flights';
 
@@ -59,6 +61,7 @@ export default function StatusTab({ showToast }) {
   });
 
   const { enabled: privacyOn, pseudonym } = usePrivacy();
+  const isMobile = useIsMobile();
 
   const toggleHideConcluded = () => {
     setHideConcluded(prev => {
@@ -189,11 +192,11 @@ export default function StatusTab({ showToast }) {
 
   return (
     <>
-      <div className="flex justify-end items-center gap-3 mb-4 flex-wrap">
+      <div className="grid grid-cols-2 gap-2 md:flex md:justify-end md:items-center md:gap-3 md:flex-wrap mb-4">
         {groupedByClient.length > 1 && (
           <button
             onClick={() => allCollapsed ? expandAll() : collapseAll(allClientNames)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
+            className="flex items-center justify-center min-h-[44px] md:min-h-0 gap-2 px-3 md:px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
                        bg-white border-slate-200 text-slate-700 hover:bg-slate-50
                        dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             title={allCollapsed ? 'Expandir todos os clientes' : 'Recolher todos os clientes'}
@@ -206,7 +209,7 @@ export default function StatusTab({ showToast }) {
         {concluidosCount > 0 && (
           <button
             onClick={toggleHideConcluded}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
+            className="flex items-center justify-center min-h-[44px] md:min-h-0 gap-2 px-3 md:px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer
                        bg-white border-slate-200 text-slate-700 hover:bg-slate-50
                        dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             title={hideConcluded ? 'Mostrar voos concluídos' : 'Ocultar voos concluídos'}
@@ -217,18 +220,71 @@ export default function StatusTab({ showToast }) {
           </button>
         )}
         <button onClick={() => { setEditing(null); setModalOpen(true); }}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
+                className="col-span-2 order-first md:col-span-1 md:order-none flex items-center justify-center min-h-[44px] md:min-h-0 gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium shadow-lg shadow-indigo-500/25 cursor-pointer active:scale-95">
           <Plus className="w-5 h-5" /> Monitorar Voo
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
         <StatCard icon={<Plane className="w-5 h-5" />} label="Total" value={stats.total} />
         <StatCard icon={<Activity className="w-5 h-5" />} label="Ativos" value={`${stats.ativos} / ${stats.total}`} />
         <StatCard icon={<AlertTriangle className="w-5 h-5" />} label="Alertas (24h)" value={stats.alertas24h} />
         <StatCard icon={<Clock className="w-5 h-5" />} label="Próx. check" value={untilNow(stats.proximaCheck)} />
       </div>
 
+      {isMobile ? (
+        <div className="space-y-3" aria-busy={isLoading}>
+          {isLoading ? (
+            <div className="py-12 text-center text-slate-600 dark:text-slate-400">Carregando...</div>
+          ) : visibleFlights.length === 0 ? (
+            <div className="py-12 text-center text-slate-600 dark:text-slate-400">
+              <Plane className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3 opacity-50" />
+              {hideConcluded && flights.length > 0
+                ? `Nenhum voo ativo — ${concluidosCount} voo(s) concluído(s) ocultos.`
+                : 'Nenhum voo sendo monitorado.'}
+            </div>
+          ) : groupedByClient.map(group => {
+            const collapsed = collapsedGroups.has(group.cliente);
+            return (
+              <section key={group.cliente} className="rounded-xl border overflow-hidden border-slate-200 dark:border-slate-700/60">
+                <button type="button" onClick={() => toggleGroup(group.cliente)} aria-expanded={!collapsed}
+                        className="w-full min-h-[48px] flex items-center gap-2 px-3 py-2 text-left bg-slate-100/70 dark:bg-slate-800/50">
+                  {collapsed ? <ChevronRight className="w-4 h-4 shrink-0 text-slate-500" /> : <ChevronDown className="w-4 h-4 shrink-0 text-slate-500" />}
+                  <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{privacyOn ? pseudonym(group.cliente) : group.cliente}</span>
+                  <span className="ml-auto shrink-0 inline-flex items-center gap-1 text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                    <Plane className="w-3 h-3" /> {group.flights.length} {group.flights.length === 1 ? 'voo' : 'voos'}
+                  </span>
+                </button>
+                {!collapsed && (
+                  <div className="p-2 space-y-2">
+                    {group.flights.map(f => {
+                      const concluded = isConcluded(f);
+                      const style = concluded
+                        ? STATUS_STYLES.concluded
+                        : (STATUS_STYLES[f.status_atual] || { color: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20', icon: '⚪', label: f.status_atual || '—' });
+                      const prog = formatTimeShort(f.partida_programada);
+                      const est = f.partida_estimada && f.partida_estimada !== f.partida_programada ? formatTimeShort(f.partida_estimada) : null;
+                      return (
+                        <StatusFlightCard key={f.id} f={f} style={style}
+                          dataBr={String(f.data_voo || '').split('-').reverse().join('/')}
+                          partida={prog} estimada={est} proxima={untilNow(f.proxima_verificacao)}
+                          busy={{ checking: checkingId === f.id }}
+                          on={{
+                            checkNow: () => handleCheckNow(f.id),
+                            history: () => setHistoryId(f.id),
+                            toggle: () => handleToggle(f.id),
+                            edit: () => { setEditing(f); setModalOpen(true); },
+                            remove: () => handleDelete(f.id)
+                          }} />
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
       <main className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -347,6 +403,7 @@ export default function StatusTab({ showToast }) {
           </table>
         </div>
       </main>
+      )}
 
       <StatusModal isOpen={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} editing={editing} onSubmit={handleSubmit} />
       <StatusHistoryDrawer flightId={historyId} onClose={() => setHistoryId(null)} />
@@ -356,9 +413,9 @@ export default function StatusTab({ showToast }) {
 
 function StatCard({ icon, label, value }) {
   return (
-    <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-4 rounded-xl flex items-center gap-3">
-      <div className="bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">{icon}</div>
-      <div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">{label}</div><div className="text-lg font-bold text-slate-900 dark:text-white">{value}</div></div>
+    <div className="bg-white/80 border border-slate-200 dark:bg-slate-900/40 dark:backdrop-blur-xl dark:border-slate-800/50 p-3 md:p-4 rounded-xl flex items-center gap-3">
+      <div className="hidden sm:block bg-indigo-500/10 p-2.5 rounded-lg text-indigo-400 border border-indigo-500/20">{icon}</div>
+      <div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">{label}</div><div className="text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap">{value}</div></div>
     </div>
   );
 }
