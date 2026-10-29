@@ -396,7 +396,7 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl, isFlightCha
               <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td valign="middle" style="vertical-align:middle;">
-                    <img src="/voucher-assets/agency-logo.png" width="44" height="44" alt="Clube do Voo" style="display:block;border:0;width:44px;height:44px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.06);" onerror="this.style.display='none'">
+                    <img src="/voucher-assets/agency-logo.png" width="46" height="46" alt="Clube do Voo" style="display:block;border:2px solid rgba(0,86,158,0.22);width:46px;height:46px;border-radius:50%;object-fit:cover;box-shadow:0 3px 8px rgba(0,86,158,0.12);" onerror="this.src='/voucher-assets/logo.png'">
                   </td>
                   <td valign="middle" style="vertical-align:middle;padding-left:14px;">
                     <div style="font-size:17px;font-weight:800;color:#0e1726;line-height:1.2;">Clube do Voo Viagens</div>

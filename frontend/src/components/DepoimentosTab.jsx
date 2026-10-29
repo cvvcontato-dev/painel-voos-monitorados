@@ -103,7 +103,7 @@ export default function DepoimentosTab({ showToast }) {
       fallback.src = defaultLogo;
       fallback.onload = () => setLogoImgObj(fallback);
     };
-    img.src = `/voucher-assets/agency-logo.png?v=${Date.now()}`;
+    img.src = `/voucher-assets/agency-logo-white.png?v=${Date.now()}`;
   }, []);
 
   useEffect(() => {
