@@ -173,6 +173,30 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl, isFlightCha
   // Coordenadas para previsão do tempo do destino
   const destCoords = AIRPORT_COORDS[destination] || null;
 
+  // Franquia de bagagem de mão por companhia aérea (Clube do Voo):
+  // - Gol e Latam: até 12kg
+  // - Azul: até 10kg
+  const tripCarriers = trips.map(t => tripCarrier(t, fallbackCarrier).toLowerCase());
+  const allCarriers = Array.from(new Set([fallbackCarrier.toLowerCase(), ...tripCarriers]));
+  const hasGol = allCarriers.includes('gol');
+  const hasLatam = allCarriers.includes('latam');
+  const hasAzul = allCarriers.includes('azul');
+
+  let baggageHandTitle = 'Mala de mão de até 12kg';
+  let baggageHandDesc = 'Dimensões máx. 55×35×25cm (inclui rodinhas e alça). Não leve objetos pontiagudos ou tesouras.';
+
+  if (hasGol && !hasLatam && !hasAzul) {
+    baggageHandTitle = 'Mala de mão de até 12kg (Gol)';
+  } else if (hasLatam && !hasGol && !hasAzul) {
+    baggageHandTitle = 'Mala de mão de até 12kg (Latam)';
+  } else if ((hasGol || hasLatam) && !hasAzul) {
+    baggageHandTitle = 'Mala de mão de até 12kg (Gol e Latam)';
+  } else if (hasAzul && !hasGol && !hasLatam) {
+    baggageHandTitle = 'Mala de mão de até 10kg (Azul)';
+  } else {
+    baggageHandTitle = 'Mala de mão de até 12kg (Gol / Latam) ou 10kg (Azul)';
+  }
+
   const firstDep = trips[0]?.departure?.datetime;
   const lastArr = trips[trips.length - 1]?.arrival?.datetime;
   const periodLeft = fmtDateBR(firstDep);
@@ -695,8 +719,8 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl, isFlightCha
           <div class="chk-item" onclick="toggleChk(2)">
             <div class="chk-box" id="box-2"></div>
             <div>
-              <div class="chk-title">Mala de mão de até 10kg</div>
-              <div class="chk-desc">Dimensões máx. 55x35x25cm. Não leve objetos pontiagudos ou tesouras.</div>
+              <div class="chk-title">${escapeHtml(baggageHandTitle)}</div>
+              <div class="chk-desc">${escapeHtml(baggageHandDesc)}</div>
             </div>
           </div>
 
