@@ -15,9 +15,11 @@ function getCount(sql, params = []) {
 router.get('/summary', async (req, res) => {
   const userId = req.session.userId;
   try {
+    // Voos comprados ou desistentes não devem ser contabilizados no cockpit
+    const activeFlightCond = `(status IS NULL OR status NOT IN ('passagem comprada', 'encerrado', 'comprado', 'desistente'))`;
     const [alertasPreco, voosMonitorados, alteracoesPendentes, statusAtencao, statusAtivos, totalVouchers] = await Promise.all([
-      getCount(`SELECT COUNT(*) as cnt FROM flights WHERE preco_atual > 0 AND preco_atual <= preco_esperado AND status != 'comprado'`),
-      getCount(`SELECT COUNT(*) as cnt FROM flights WHERE status != 'comprado'`),
+      getCount(`SELECT COUNT(*) as cnt FROM flights WHERE preco_atual > 0 AND preco_atual <= preco_esperado AND ${activeFlightCond}`),
+      getCount(`SELECT COUNT(*) as cnt FROM flights WHERE ${activeFlightCond}`),
       getCount(`SELECT COUNT(*) as cnt FROM flight_changes WHERE user_id = ? AND status != 'confirmado'`, [userId]),
       getCount(`SELECT COUNT(*) as cnt FROM monitored_flights_status WHERE monitoramento_ativo = 1 AND status_atual IS NOT NULL AND status_atual NOT IN ('Programado', 'programado', 'Concluído', 'concluido', 'Pousou', 'pousou')`),
       getCount(`SELECT COUNT(*) as cnt FROM monitored_flights_status WHERE monitoramento_ativo = 1`),

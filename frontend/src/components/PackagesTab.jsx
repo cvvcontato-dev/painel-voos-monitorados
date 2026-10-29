@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  UploadCloud, FileText, Trash2, Plus, X, RefreshCw, Mail, ChevronDown, ChevronUp, Save, Package as PackageIcon
+  UploadCloud, FileText, Trash2, Plus, X, RefreshCw, Mail, ChevronDown, ChevronUp, Save, Check, Package as PackageIcon
 } from 'lucide-react';
 import * as api from '../api/packageClient';
 import useBackClose from '../hooks/useBackClose';
@@ -41,10 +41,11 @@ export default function PackagesTab({ showToast }) {
   const [sending, setSending] = useState(false);
   const smartProgress = useSmartProgress();
   const [items, setItems] = useState([
-    { id: newId(), file: null, kind: 'flight', fixed: true },
-    { id: newId(), file: null, kind: 'hotel', fixed: true },
+    { id: newId(), file: null, kind: 'flight' },
+    { id: newId(), file: null, kind: 'hotel' },
   ]);
   const iframeRef = useRef(null);
+  const fileInputRefs = useRef({});
 
   useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,8 +95,8 @@ export default function PackagesTab({ showToast }) {
       smartProgress.complete();
       showToast?.('Pacote gerado com sucesso', 'success');
       setItems([
-        { id: newId(), file: null, kind: 'flight', fixed: true },
-        { id: newId(), file: null, kind: 'hotel', fixed: true },
+        { id: newId(), file: null, kind: 'flight' },
+        { id: newId(), file: null, kind: 'hotel' },
       ]);
     } catch (err) {
       const msg = err?.response?.data?.error || err?.response?.data?.detail;
@@ -158,29 +159,78 @@ export default function PackagesTab({ showToast }) {
             {items.map((it, idx) => {
               const rowErr = errorIndex === idx;
               return (
-                <div key={it.id} className={`flex items-center gap-2 flex-wrap p-2 rounded-lg border ${rowErr ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-200 dark:border-slate-700/60'}`}>
-                  <span className="text-[11px] font-mono text-slate-400 w-5 text-center">{idx + 1}</span>
+                <div key={it.id} className={`flex items-center gap-2 flex-wrap p-2.5 rounded-xl border transition-all ${rowErr ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-200 dark:border-slate-700/60 bg-white/60 dark:bg-slate-800/40'}`}>
+                  <span className="text-xs font-mono font-bold text-slate-400 w-5 text-center shrink-0">{idx + 1}</span>
+
+                  {/* Botão explícito para anexar o voucher */}
+                  {!it.file ? (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRefs.current[it.id]?.click()}
+                      disabled={combining}
+                      className="flex-1 min-w-[210px] flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-blue-300 hover:border-[#00569e] bg-blue-50/60 hover:bg-blue-50/90 text-xs font-semibold text-[#00569e] dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-950/70 dark:text-blue-300 transition-all cursor-pointer min-h-[44px] md:min-h-[38px]"
+                    >
+                      <UploadCloud className="w-4 h-4 shrink-0 text-[#00569e] dark:text-blue-400" />
+                      <span className="truncate">Clique para anexar voucher ({KIND_LABEL[it.kind] || 'Serviço'})</span>
+                    </button>
+                  ) : (
+                    <div className="flex-1 min-w-[210px] flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/40 text-xs text-emerald-800 dark:text-emerald-300 min-h-[44px] md:min-h-[38px]">
+                      <div className="flex items-center gap-2 min-w-0 truncate font-medium">
+                        <Check className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <span className="truncate">{it.file.name}</span>
+                        <span className="text-[10px] text-emerald-600/80 font-mono shrink-0">({Math.round(it.file.size / 1024)} KB)</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRefs.current[it.id]?.click()}
+                          className="px-2 py-0.5 rounded text-[11px] font-semibold text-[#00569e] hover:bg-blue-100/60 dark:text-blue-300 cursor-pointer"
+                          title="Trocar arquivo"
+                        >
+                          Trocar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFile(it.id, null)}
+                          className="p-1 rounded hover:bg-emerald-200/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 cursor-pointer"
+                          title="Remover arquivo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Input de arquivo real oculto */}
                   <input
-                    type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
+                    ref={el => (fileInputRefs.current[it.id] = el)}
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
                     onChange={(e) => setFile(it.id, e.target.files?.[0] || null)}
                     disabled={combining}
-                    className="text-xs text-slate-700 dark:text-slate-300 flex-1 min-w-[150px] min-h-[44px] md:min-h-0"
+                    className="hidden"
                   />
+
+                  {/* Dropdown de tipo de serviço 100% interativo e funcional */}
                   <select
-                    value={it.kind} onChange={(e) => setKind(it.id, e.target.value)}
-                    disabled={combining || it.fixed}
-                    className={inputCls + ' !w-auto !py-2.5 md:!py-1 min-h-[44px] md:min-h-0 text-xs'}
-                    title={it.fixed ? 'Serviço obrigatório' : 'Tipo do serviço'}
+                    value={it.kind}
+                    onChange={(e) => setKind(it.id, e.target.value)}
+                    disabled={combining}
+                    className={inputCls + ' !w-auto !py-2 md:!py-1 min-h-[44px] md:min-h-[38px] text-xs font-semibold cursor-pointer border-slate-300 dark:border-slate-700'}
+                    title="Alterar tipo do serviço"
                   >
-                    {it.fixed
-                      ? <option value={it.kind}>{KIND_LABEL[it.kind]}</option>
-                      : ALL_OPTS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                    {ALL_OPTS.map(k => (
+                      <option key={k} value={k}>
+                        {KIND_LABEL[k]}
+                      </option>
+                    ))}
                   </select>
+
                   <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => move(it.id, -1)} disabled={combining || idx === 0} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Subir"><ChevronUp className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => move(it.id, 1)} disabled={combining || idx === items.length - 1} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer" title="Descer"><ChevronDown className="w-4 h-4" /></button>
-                    {!it.fixed && (
-                      <button type="button" onClick={() => removeItem(it.id)} disabled={combining} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded text-slate-400 hover:text-red-600 cursor-pointer" title="Remover"><Trash2 className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => move(it.id, -1)} disabled={combining || idx === 0} className="flex items-center justify-center min-w-[36px] min-h-[36px] p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 cursor-pointer" title="Subir"><ChevronUp className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => move(it.id, 1)} disabled={combining || idx === items.length - 1} className="flex items-center justify-center min-w-[36px] min-h-[36px] p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 cursor-pointer" title="Descer"><ChevronDown className="w-4 h-4" /></button>
+                    {items.length > 2 && (
+                      <button type="button" onClick={() => removeItem(it.id)} disabled={combining} className="flex items-center justify-center min-w-[36px] min-h-[36px] p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer" title="Remover"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </div>
                 </div>
