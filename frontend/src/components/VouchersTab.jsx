@@ -709,6 +709,23 @@ export default function VouchersTab({ showToast }) {
               </a>
               <button
                 type="button"
+                onClick={handleCopyLink}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium shadow-md cursor-pointer transition-all"
+                title="Copiar link público do itinerário para o cliente"
+              >
+                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Link2 className="w-4 h-4" />}
+                {copiedLink ? 'Copiado!' : 'Copiar link'}
+              </button>
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+                title="Enviar itinerário via WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4" /> WhatsApp
+              </button>
+              <button
+                type="button"
                 onClick={() => setEmailModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium shadow-lg shadow-indigo-500/25 cursor-pointer transition-all ml-auto"
               >
