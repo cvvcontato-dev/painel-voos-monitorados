@@ -65,7 +65,7 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
       }}
       className={`group relative text-left rounded-2xl transition-all duration-200 cursor-pointer overflow-hidden border select-none min-h-[68px] ${
         isSelected
-          ? 'bg-gradient-to-r from-blue-50/80 via-white to-white dark:from-slate-800/90 dark:to-slate-900 border-[#00569e] ring-2 ring-[#00569e]/30 shadow-md shadow-[#00569e]/15 -translate-y-1'
+          ? 'bg-gradient-to-r from-blue-50/80 via-white to-white dark:from-slate-800/90 dark:to-slate-900 border-indigo-600 ring-2 ring-indigo-600/30 shadow-md shadow-indigo-600/15 -translate-y-1'
           : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/70 hover:border-[#3871c1] hover:shadow-md hover:-translate-y-0.5'
       }`}
     >
@@ -81,12 +81,12 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
           <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold tracking-wider">
             {routeParts && routeParts.length >= 2 ? (
               <>
-                <span className="text-[#00569e] dark:text-[#3871c1] font-bold">{routeParts[0]}</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{routeParts[0]}</span>
                 <Plane className="w-3.5 h-3.5 text-slate-400 rotate-90 shrink-0" />
-                <span className="text-[#00569e] dark:text-[#3871c1] font-bold">{routeParts[1]}</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{routeParts[1]}</span>
               </>
             ) : route ? (
-              <span className="text-[#00569e] dark:text-[#3871c1] font-bold">{route}</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-bold">{route}</span>
             ) : (
               <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1 font-sans font-semibold">
                 <Hash className="w-3.5 h-3.5 text-slate-400" />
@@ -127,7 +127,7 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
 
           <div className="flex items-center gap-2 shrink-0">
             {locator && (
-              <span className="font-mono text-[10.5px] font-bold text-[#00569e] dark:text-[#3871c1] bg-blue-50/80 dark:bg-slate-700/60 px-1.5 py-0.5 rounded border border-blue-100 dark:border-slate-600">
+              <span className="font-mono text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-blue-50/80 dark:bg-slate-700/60 px-1.5 py-0.5 rounded border border-blue-100 dark:border-slate-600">
                 {locator}
               </span>
             )}

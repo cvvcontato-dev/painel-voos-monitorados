@@ -68,7 +68,7 @@ export default function DashboardSummary({ onTabChange }) {
       icon: RefreshCw,
       color: alteracoesPendentes > 0 ? 'amber' : 'brand',
       progress: alteracoesPendentes > 0 ? 100 : 100,
-      progressBarColor: alteracoesPendentes > 0 ? 'bg-amber-500 animate-pulse' : 'bg-[#00569e]',
+      progressBarColor: alteracoesPendentes > 0 ? 'bg-amber-500 animate-pulse' : 'bg-indigo-600',
       hasAlert: alteracoesPendentes > 0,
       alertBadge: 'Aviso Pendente',
       badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
@@ -94,7 +94,7 @@ export default function DashboardSummary({ onTabChange }) {
       icon: Ticket,
       color: 'brand',
       progress: 100,
-      progressBarColor: 'bg-gradient-to-r from-[#00569e] to-[#3871c1]',
+      progressBarColor: 'bg-gradient-to-r from-indigo-600 to-indigo-400',
       hasAlert: false
     }
   ];
@@ -120,7 +120,7 @@ export default function DashboardSummary({ onTabChange }) {
                 card.color === 'amber' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-100 dark:border-amber-900' :
                 card.color === 'rose' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-100 dark:border-rose-900' :
                 card.color === 'sky' ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400 border border-sky-100 dark:border-sky-900' :
-                'bg-blue-50 text-[#00569e] dark:bg-blue-950/60 dark:text-sky-300 border border-blue-100 dark:border-blue-900'
+                'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900'
               }`}>
                 <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
               </div>
@@ -141,7 +141,7 @@ export default function DashboardSummary({ onTabChange }) {
             {/* Detalhe e Seta */}
             <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               <span className="truncate font-medium">{card.detail}</span>
-              <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-[#00569e] dark:text-sky-400" />
+              <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-indigo-600 dark:text-indigo-400" />
             </div>
 
             {/* Micro-barra de Progresso estilo Stripe/Linear */}

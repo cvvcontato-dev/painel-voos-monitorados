@@ -168,9 +168,9 @@ export default function PackagesTab({ showToast }) {
                       type="button"
                       onClick={() => fileInputRefs.current[it.id]?.click()}
                       disabled={combining}
-                      className="flex-1 min-w-[210px] flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-blue-300 hover:border-[#00569e] bg-blue-50/60 hover:bg-blue-50/90 text-xs font-semibold text-[#00569e] dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-950/70 dark:text-blue-300 transition-all cursor-pointer min-h-[44px] md:min-h-[38px]"
+                      className="flex-1 min-w-[210px] flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-blue-300 hover:border-indigo-600 bg-blue-50/60 hover:bg-blue-50/90 text-xs font-semibold text-indigo-600 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-950/70 dark:text-blue-300 transition-all cursor-pointer min-h-[44px] md:min-h-[38px]"
                     >
-                      <UploadCloud className="w-4 h-4 shrink-0 text-[#00569e] dark:text-blue-400" />
+                      <UploadCloud className="w-4 h-4 shrink-0 text-indigo-600 dark:text-blue-400" />
                       <span className="truncate">Clique para anexar voucher ({KIND_LABEL[it.kind] || 'Serviço'})</span>
                     </button>
                   ) : (
@@ -184,7 +184,7 @@ export default function PackagesTab({ showToast }) {
                         <button
                           type="button"
                           onClick={() => fileInputRefs.current[it.id]?.click()}
-                          className="px-2 py-0.5 rounded text-[11px] font-semibold text-[#00569e] hover:bg-blue-100/60 dark:text-blue-300 cursor-pointer"
+                          className="px-2 py-0.5 rounded text-[11px] font-semibold text-indigo-600 hover:bg-blue-100/60 dark:text-blue-300 cursor-pointer"
                           title="Trocar arquivo"
                         >
                           Trocar
@@ -266,7 +266,7 @@ export default function PackagesTab({ showToast }) {
             ) : (
               list.map(p => (
                 <div key={p.id} onClick={() => select(p.id)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedId === p.id ? 'border-[#00569e] bg-blue-50/70 dark:bg-slate-800/90 shadow-sm ring-1 ring-[#00569e]/30' : 'border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 hover:border-[#3871c1]/50'}`}>
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedId === p.id ? 'border-indigo-600 bg-blue-50/70 dark:bg-slate-800/90 shadow-sm ring-1 ring-indigo-600/30' : 'border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 hover:border-indigo-400/50'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate pii">{p.title || `Pacote #${p.id}`}</div>

@@ -259,9 +259,9 @@ function Stepper({ step }) {
         <div key={s.id} className="flex items-center gap-2 md:gap-3">
           <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-semibold border transition-all ${
             i === idx
-              ? 'bg-gradient-to-r from-[#00569e] to-[#3871c1] text-white border-[#00569e] shadow-md shadow-[#00569e]/25'
+              ? 'bg-gradient-to-r from-indigo-600 to-indigo-400 text-white border-indigo-600 shadow-md shadow-indigo-600/25'
               : i < idx
-                ? 'bg-blue-50 text-[#00569e] border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                ? 'bg-blue-50 text-indigo-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
                 : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/50'
           }`}>
             <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-white/20">{i + 1}</span>
@@ -284,22 +284,22 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
         onDrop={onDrop}
         className="relative overflow-hidden flex flex-col items-center justify-center gap-4 py-12 md:py-16 px-6 md:px-10 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#3871c1] dark:hover:border-[#3871c1] transition-all cursor-pointer text-center bg-gradient-to-b from-slate-50/50 to-white dark:from-slate-900/30 dark:to-slate-800/20"
       >
-        <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#00569e]/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -top-10 -left-10 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-[#3871c1]/10 rounded-full blur-2xl pointer-events-none" />
         {loading ? (
           <>
-            <div className="w-9 h-9 border-3 border-[#00569e]/30 border-t-[#00569e] rounded-full animate-spin" />
+            <div className="w-9 h-9 border-3 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Lendo os dados da promoção com IA...</p>
           </>
         ) : (
           <>
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00569e]/15 to-[#3871c1]/20 dark:from-[#00569e]/30 dark:to-[#3871c1]/40 border border-[#00569e]/25 flex items-center justify-center text-[#00569e] dark:text-[#3871c1] shadow-lg shadow-[#00569e]/10">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600/15 to-indigo-400/20 dark:from-indigo-600/30 dark:to-indigo-400/40 border border-indigo-600/25 flex items-center justify-center text-indigo-600 dark:text-[#3871c1] shadow-lg shadow-indigo-600/10">
                 <UploadCloud className="w-8 h-8" />
               </div>
               <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3871c1] opacity-60" />
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00569e]" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-indigo-600" />
               </span>
             </div>
             <div>
@@ -312,7 +312,7 @@ function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); cameraRef.current?.click(); }}
-              className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium border-[#3871c1]/40 text-[#00569e] dark:text-sky-300"
+              className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium border-indigo-400/40 text-indigo-600 dark:text-sky-300"
             >
               <Camera className="w-4 h-4" /> Tirar foto
             </button>

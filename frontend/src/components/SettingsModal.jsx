@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Settings, Eye, EyeOff, UploadCloud, Image as ImageIcon, Check } from 'lucide-react';
+import { X, Settings, Eye, EyeOff, UploadCloud, Image as ImageIcon, Check, Palette } from 'lucide-react';
 import api from '../hooks/useApi';
 import { useAuth } from '../hooks/useAuth';
 import UsersTab from './UsersTab';
 import BackupsPanel from './BackupsPanel';
 import useBackClose from '../hooks/useBackClose';
+import { applyBrandColor, getSavedBrandColor, PRESET_BRAND_COLORS } from '../utils/brandTheme';
 
 export default function SettingsModal({ isOpen, onClose, onToast }) {
   useBackClose(isOpen, onClose);
@@ -19,6 +20,8 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [savingLogo, setSavingLogo] = useState(false);
+  const [brandColor, setBrandColor] = useState(getSavedBrandColor);
+  const [savingColor, setSavingColor] = useState(false);
   const logoInputRef = useRef(null);
 
   const fetchLogo = useCallback(() => {
@@ -32,6 +35,10 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
       fetchLogo();
       api.get('/api/settings').then(r => {
         setSettings(r.data);
+        if (r.data?.brand_color) {
+          setBrandColor(r.data.brand_color);
+          applyBrandColor(r.data.brand_color);
+        }
         setForm({
           check_interval_hours: r.data.check_interval_hours,
           max_concurrent_scrapers: r.data.max_concurrent_scrapers,
@@ -49,6 +56,25 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
       });
     }
   }, [isOpen]);
+
+  const handleColorChange = (newColor) => {
+    setBrandColor(newColor);
+    applyBrandColor(newColor);
+  };
+
+  const handleSaveBrandColor = async () => {
+    setSavingColor(true);
+    try {
+      await api.put('/api/settings', { brand_color: brandColor });
+      applyBrandColor(brandColor);
+      onToast('Cor padrão da agência salva com sucesso!', 'success');
+      window.dispatchEvent(new CustomEvent('agency:theme-updated', { detail: { color: brandColor } }));
+    } catch (err) {
+      onToast('Erro ao salvar cor da marca', 'error');
+    } finally {
+      setSavingColor(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -86,7 +112,6 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
       setLogoUrl(res.data.url || `/voucher-assets/agency-logo.png?v=${Date.now()}`);
       setLogoFile(null);
       setLogoPreview(null);
-      // Dispara evento global para que outros componentes atualizem o logo se necessário
       window.dispatchEvent(new CustomEvent('agency:logo-updated'));
     } catch (err) {
       onToast(err.response?.data?.error || 'Erro ao atualizar logo', 'error');
@@ -105,7 +130,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
   return (
     <div className="fixed inset-0 z-50 flex md:items-center md:justify-center md:p-4">
       <div className="absolute inset-0 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative w-full md:max-w-lg bg-white border border-slate-200 dark:bg-slate-900 md:dark:bg-slate-900/90 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl md:rounded-2xl overflow-hidden modal-animate h-[100dvh] md:h-auto md:max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full md:max-w-xl bg-white border border-slate-200 dark:bg-slate-900 md:dark:bg-slate-900/90 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl md:rounded-2xl overflow-hidden modal-animate h-[100dvh] md:h-auto md:max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 z-10 md:static bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent flex justify-between items-center px-4 py-2 md:p-6 border-b border-slate-200 dark:border-slate-700/50">
           <h2 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <Settings className="w-5 h-5 text-indigo-400" /> Configurações do Sistema
@@ -117,22 +142,22 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
 
         <div className="flex gap-1 px-4 md:px-6 pt-2 md:pt-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto md:overflow-visible">
           <button onClick={() => setInnerTab('geral')}
-            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'geral' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'geral' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
             Geral
           </button>
           <button onClick={() => setInnerTab('marca')}
-            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'marca' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'marca' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
             Marca & Logo
           </button>
           {currentUser?.role === 'admin' && (
             <button onClick={() => setInnerTab('usuarios')}
-              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'usuarios' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'usuarios' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
               Usuários
             </button>
           )}
           {currentUser?.role === 'admin' && (
             <button onClick={() => setInnerTab('backups')}
-              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'backups' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'backups' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
               Backup
             </button>
           )}
@@ -144,16 +169,22 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
               <div className="p-6 text-center text-slate-400 text-sm">Carregando…</div>
             ) : (
               <div className="p-4 md:p-6 space-y-6">
-                {/* Scheduler */}
+                {/* Scheduler - Inputs perfeitamente alinhados na base */}
                 <div>
                   <h3 className="text-sm font-semibold text-indigo-400 mb-3 uppercase tracking-wider">Agendador</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div><label className={labelCls}>Intervalo (h)</label>
-                      <input type="number" min="1" value={form.check_interval_hours || ''} onChange={e => setForm({...form, check_interval_hours: e.target.value})} className={inputCls} /></div>
-                    <div><label className={labelCls}>Consultas simultâneas</label>
-                      <input type="number" min="1" max="10" value={1} readOnly title="Os preços são consultados um por vez para reduzir a carga e evitar sobreposição." className={inputCls} /></div>
-                    <div><label className={labelCls}>Reset %</label>
-                      <input type="number" step="0.01" value={form.alert_reset_threshold || ''} onChange={e => setForm({...form, alert_reset_threshold: e.target.value})} className={inputCls} /></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="flex flex-col justify-end">
+                      <label className={`${labelCls} mb-1.5 min-h-[30px] flex items-end`}>Intervalo (h)</label>
+                      <input type="number" min="1" value={form.check_interval_hours || ''} onChange={e => setForm({...form, check_interval_hours: e.target.value})} className={inputCls} />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className={`${labelCls} mb-1.5 min-h-[30px] flex items-end`}>Consultas simultâneas</label>
+                      <input type="number" min="1" max="10" value={1} readOnly title="Os preços são consultados um por vez para reduzir a carga e evitar sobreposição." className={inputCls} />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className={`${labelCls} mb-1.5 min-h-[30px] flex items-end`}>Reset %</label>
+                      <input type="number" step="0.01" value={form.alert_reset_threshold || ''} onChange={e => setForm({...form, alert_reset_threshold: e.target.value})} className={inputCls} />
+                    </div>
                   </div>
                 </div>
 
@@ -204,6 +235,7 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
           </>
         ) : innerTab === 'marca' ? (
           <div className="p-4 md:p-6 space-y-6">
+            {/* Seção 1: Logo */}
             <div>
               <h3 className="text-sm font-semibold text-indigo-400 mb-1 uppercase tracking-wider">Identidade Visual da Agência</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
@@ -269,6 +301,118 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
                       </button>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Linha Divisória */}
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-6">
+              {/* Seção 2: Cor Principal da Marca (White-Label) */}
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-indigo-500" /> Cor Principal da Marca (White-Label)
+                </h3>
+                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  {brandColor}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                Personalize a cor tema do sistema para combinar com a identidade visual da sua agência. Toda a interface (botões, abas, badges e degradês) se adaptará instantaneamente mantendo a sofisticação visual.
+              </p>
+
+              {/* Grid de Paletas Pré-Testadas */}
+              <div className="space-y-4">
+                <div>
+                  <label className={labelCls}>Paletas Sugeridas</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                    {PRESET_BRAND_COLORS.map(p => {
+                      const isSelected = (brandColor || '').toLowerCase() === p.hex.toLowerCase();
+                      return (
+                        <button
+                          key={p.hex}
+                          type="button"
+                          onClick={() => handleColorChange(p.hex)}
+                          className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/30'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
+                          }`}
+                        >
+                          <span
+                            className="w-5 h-5 rounded-lg shrink-0 shadow-sm border border-black/10 flex items-center justify-center text-white"
+                            style={{ backgroundColor: p.hex }}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{p.name}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{p.hex}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Seletor Customizado Hex + Color Input */}
+                <div>
+                  <label className={labelCls}>Ou escolha uma cor personalizada</label>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <div className="relative">
+                      <input
+                        type="color"
+                        value={brandColor}
+                        onChange={e => handleColorChange(e.target.value)}
+                        className="w-11 h-11 rounded-xl border border-slate-300 dark:border-slate-700 cursor-pointer p-0.5 bg-white dark:bg-slate-800"
+                        title="Abrir seletor de cores"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={brandColor}
+                      onChange={e => handleColorChange(e.target.value)}
+                      maxLength={7}
+                      placeholder="#00569e"
+                      className={`${inputCls} font-mono uppercase text-xs !py-2.5 max-w-[140px]`}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveBrandColor}
+                      disabled={savingColor}
+                      className="min-h-[44px] md:min-h-0 px-4 py-2.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {savingColor ? 'Salvando...' : 'Salvar Cor da Agência'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mini Preview em tempo real */}
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: brandColor }} />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: brandColor }} />
+                    </span>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Preview dinâmico:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white shadow-sm"
+                      style={{ backgroundColor: brandColor }}
+                    >
+                      Botão Ativo
+                    </span>
+                    <span
+                      className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border"
+                      style={{
+                        borderColor: brandColor,
+                        color: brandColor,
+                        backgroundColor: `${brandColor}18`
+                      }}
+                    >
+                      Badge Suave
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

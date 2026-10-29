@@ -19,6 +19,11 @@
   --color-brand-accent: #0a73b0;
 }
 
+:root {
+  --brand-rgb: 0, 86, 158;
+  --brand-light-rgb: 56, 113, 193;
+}
+
 
 /* Enable .dark class-based dark mode (Tailwind v4 syntax). */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -31,8 +36,8 @@
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(circle at 15% 50%, rgba(0, 86, 158, 0.06) 0%, transparent 50%),
-      radial-gradient(circle at 85% 30%, rgba(56, 113, 193, 0.06) 0%, transparent 50%);
+      radial-gradient(circle at 15% 50%, rgba(var(--brand-rgb), 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(var(--brand-light-rgb), 0.06) 0%, transparent 50%);
     background-attachment: fixed;
   }
 
@@ -40,12 +45,12 @@
     background-color: theme(colors.slate.950);
     color: theme(colors.slate.100);
     background-image:
-      radial-gradient(circle at 15% 50%, rgba(0, 86, 158, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 85% 30%, rgba(56, 113, 193, 0.08) 0%, transparent 50%);
+      radial-gradient(circle at 15% 50%, rgba(var(--brand-rgb), 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(var(--brand-light-rgb), 0.08) 0%, transparent 50%);
   }
 
   ::selection {
-    background-color: rgba(0, 86, 158, 0.25);
+    background-color: rgba(var(--brand-rgb), 0.25);
   }
 }
 
