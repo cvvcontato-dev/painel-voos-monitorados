@@ -180,7 +180,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 - [ ] **Leitura real do Gemini do print só de voos** (caso 5 da usuária — Gol): esperado ida G3 1922 (17/11 14:45→16:05) e volta G3 1925 (22/11 07:10→08:30), passageiros inalterados, **sem** "passageiros adicionados/removidos". Requer `EXTRACTION_MODE=real` + `GEMINI_API_KEY`. Se a leitura errar, pedir o print e ajustar `FLIGHTS_PROMPT` em `services/voucherExtractor.js`.
 - [x] **Chromium do servidor gerando o PDF** guardado: validado em produção pela usuária em 2026-10-29 (botão "BAIXAR VOUCHER (PDF)" na página pública do itinerário baixou com sucesso).
 - [x] **Envio real de e-mail**: validado em produção pela usuária em 2026-10-29 (recebido com PDF anexado e link direto para o itinerário online).
-- [ ] **Backup:** rodar "fazer backup agora" e ver "N foto(s) de fundo" na cópia; lembrar que a restauração das fotos é manual (copiar `backups/fundos-*` de volta para `<DB_PATH>/promo-backgrounds/`).
+- [x] **Backup:** validado em produção pela usuária em 2026-10-29 ("Fazer backup agora" gerou snapshot `database-20261029-092629.sqlite` com sucesso).
 
 ### 9.1b Validações novas que só a usuária pode fazer (após o deploy da Etapa 4)
 - [ ] No celular real: instalar na tela inicial (Android Chrome "Instalar app"; iPhone Safari "Adicionar à Tela de Início") e conferir ícone/tela cheia; "Tirar foto" (voucher, print de promoção, import de voucher); teclado nos formulários; botão Voltar físico; rodapé "Salvar" das Configurações. Se o Android não oferecer instalar → service worker mínimo sem cache.
