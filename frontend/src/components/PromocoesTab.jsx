@@ -257,11 +257,11 @@ function Stepper({ step }) {
     <div className="flex items-center justify-center gap-2 md:gap-3 mb-6">
       {steps.map((s, i) => (
         <div key={s.id} className="flex items-center gap-2 md:gap-3">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${
+          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-semibold border transition-all ${
             i === idx
-              ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-500/25'
+              ? 'bg-gradient-to-r from-[#00569e] to-[#3871c1] text-white border-[#00569e] shadow-md shadow-[#00569e]/25'
               : i < idx
-                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20'
+                ? 'bg-blue-50 text-[#00569e] border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
                 : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/50'
           }`}>
             <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-white/20">{i + 1}</span>
@@ -278,31 +278,41 @@ function Stepper({ step }) {
 function UploadStep({ loading, fileInputRef, onSelect, onDrop }) {
   const cameraRef = useRef(null);
   return (
-    <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-2xl rounded-2xl p-4 md:p-8">
+    <div className="bg-white border border-slate-200 dark:bg-slate-900/60 dark:backdrop-blur-xl dark:border-slate-700/50 shadow-xl rounded-2xl p-4 md:p-8">
       <label
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
-        className="flex flex-col items-center justify-center gap-4 py-10 md:py-16 px-4 md:px-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500/60 transition-colors cursor-pointer text-center"
+        className="relative overflow-hidden flex flex-col items-center justify-center gap-4 py-12 md:py-16 px-6 md:px-10 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#3871c1] dark:hover:border-[#3871c1] transition-all cursor-pointer text-center bg-gradient-to-b from-slate-50/50 to-white dark:from-slate-900/30 dark:to-slate-800/20"
       >
+        <div className="absolute -top-10 -left-10 w-32 h-32 bg-[#00569e]/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-[#3871c1]/10 rounded-full blur-2xl pointer-events-none" />
         {loading ? (
           <>
-            <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-            <p className="text-sm text-slate-600 dark:text-slate-400">Lendo o print da promoção...</p>
+            <div className="w-9 h-9 border-3 border-[#00569e]/30 border-t-[#00569e] rounded-full animate-spin" />
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Lendo os dados da promoção com IA...</p>
           </>
         ) : (
           <>
-            <div className="bg-indigo-500/10 p-4 rounded-2xl text-indigo-400 border border-indigo-500/20">
-              <UploadCloud className="w-8 h-8" />
+            <div className="relative">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00569e]/15 to-[#3871c1]/20 dark:from-[#00569e]/30 dark:to-[#3871c1]/40 border border-[#00569e]/25 flex items-center justify-center text-[#00569e] dark:text-[#3871c1] shadow-lg shadow-[#00569e]/10">
+                <UploadCloud className="w-8 h-8" />
+              </div>
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3871c1] opacity-60" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#00569e]" />
+              </span>
             </div>
             <div>
-              <p className="text-base font-semibold text-slate-900 dark:text-white">Envie o print da promoção</p>
-              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mt-1">Cole (Ctrl+V), arraste uma imagem aqui ou clique para selecionar (PNG ou JPG)</p>
+              <p className="text-lg font-bold text-slate-800 dark:text-slate-100">Envie o print da promoção</p>
+              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md leading-relaxed">
+                Arraste uma imagem aqui, clique para selecionar ou aperte <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300">Ctrl+V</kbd> para colar da área de transferência.
+              </p>
               <p className="md:hidden text-sm text-slate-500 dark:text-slate-400 mt-1">Toque para escolher uma imagem (PNG ou JPG)</p>
             </div>
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); cameraRef.current?.click(); }}
-              className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium border-indigo-300 text-indigo-600 dark:border-indigo-700 dark:text-indigo-300"
+              className="md:hidden min-h-[44px] px-4 inline-flex items-center gap-2 rounded-lg border text-sm font-medium border-[#3871c1]/40 text-[#00569e] dark:text-sky-300"
             >
               <Camera className="w-4 h-4" /> Tirar foto
             </button>
