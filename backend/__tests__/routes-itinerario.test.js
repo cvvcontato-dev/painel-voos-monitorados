@@ -142,4 +142,16 @@ describe('GET /itinerario/:token (botão do PDF)', () => {
   test('token inválido continua 403', async () => {
     expect((await request(app).get('/itinerario/lixo')).status).toBe(403);
   });
+
+  test('voucher vinculado como new_voucher_id em flight_changes exibe variante Voo reajustado', async () => {
+    const json = unified('CHG123');
+    const id = await novoVoucher(json); created.push(id);
+    await q.run(`INSERT INTO flight_changes (user_id, client_name, locator, old_json, new_voucher_id, new_json) VALUES (?, 'Cliente Teste', 'CHG123', '{}', ?, ?)`, [userId, id, json]);
+    const token = sign(id);
+    const res = await request(app).get(`/itinerario/${token}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Voo reajustado');
+    expect(res.text).toContain('Seu voo foi reajustado; veja abaixo o voucher atualizado.');
+    expect(res.text).not.toContain('Sua viagem está pronta.');
+  });
 });

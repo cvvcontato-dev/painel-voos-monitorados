@@ -107,3 +107,29 @@ describe('SVG dos QR Codes é bem formado', () => {
     void orig;
   });
 });
+
+describe('variante de voo reajustado', () => {
+  test('padrão (sem flag): exibe Confirmação de reserva e Sua viagem está pronta', async () => {
+    const html = await renderItinerarioPage({ voucherData: voucher(), settings: {} });
+    expect(html).toContain('Reserva confirmada');
+    expect(html).toContain('Confirmação de reserva');
+    expect(html).toContain('Sua viagem está pronta.');
+    expect(html).not.toContain('Voo reajustado');
+    expect(html).not.toContain('Seu voo foi reajustado');
+  });
+
+  test('com isFlightChange=true: exibe Voo reajustado e texto específico', async () => {
+    const html = await renderItinerarioPage({ voucherData: voucher(), settings: {}, isFlightChange: true });
+    expect(html).toContain('Voo reajustado');
+    expect(html).toContain('Seu voo foi reajustado; veja abaixo o voucher atualizado.');
+    expect(html).not.toContain('Reserva confirmada');
+    expect(html).not.toContain('Confirmação de reserva');
+    expect(html).not.toContain('Sua viagem está pronta.');
+  });
+
+  test('com variant=flight_change: exibe Voo reajustado', async () => {
+    const html = await renderItinerarioPage({ voucherData: voucher(), settings: {}, variant: 'flight_change' });
+    expect(html).toContain('Voo reajustado');
+    expect(html).toContain('Seu voo foi reajustado; veja abaixo o voucher atualizado.');
+  });
+});

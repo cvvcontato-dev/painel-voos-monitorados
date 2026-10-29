@@ -139,7 +139,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 
 ## 6. Testes e verificação
 
-- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje (2026-10-29): 736 passando em 61 suítes (100% passando — as 19 falhas de CSRF em `auth.test.js` e `users.test.js` foram corrigidas)**. Qualquer falha é regressão e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
+- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje (2026-10-29): 740 passando em 61 suítes (100% passando — suíte completa verde)**. Qualquer falha é regressão e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
 - **Frontend:** `cd frontend && npm run build` (não há runner de teste nem lint). O aviso de chunk >500 kB já existe. Para telas: auditoria `frontend/scripts/mobile-audit.js` + navegador (seção 5.1).
 - **Método usado nesta fase (recomendado):** TDD + **sabotagem** (quebrar de propósito a proteção e ver o teste falhar) + revisão de conformidade e de qualidade por subagentes + **verificação no navegador** com o backend real em modo stub.
 - **Verificação E2E local (padrão que funcionou):** NÃO use a porta 3000 (outro projeto da usuária, Proagenda, usa Vite lá). Suba o backend em `PORT=3100` com `DB_PATH` temporário, `EXTRACTION_MODE=stub` (sem `GEMINI_API_KEY` o extrator devolve voucher fixo STUB01), `ADMIN_EMAIL=admin@test.com`/senha de teste só local e `BACKUP_ENABLED=0`; suba o Vite numa porta própria (5180) com um arquivo de config temporário (fora do repo) apontando o proxy `/api` para 3100. `/itinerario` e `/voucher-preview` **não** passam pelo proxy do Vite (só em produção o Express serve tudo) — para a página do itinerário abra direto `localhost:3100`. Encerre **só** os seus processos depois.
@@ -187,12 +187,12 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 - [ ] **Recarregar créditos do Gemini** (AI Studio) e testar de novo: gerar promoção, ler voucher. Ver seção 5.3.
 
 ### 9.2 Decisões em aberto (perguntar à usuária)
-- [ ] **Texto do e-mail de confirmação e da página do cliente:** hoje diz "RESERVA CONFIRMADA — Sua viagem está pronta" (template de reserva nova). Proposta já feita: "VOO REAJUSTADO — Seu voo foi reajustado; veja abaixo o voucher atualizado". Exige um parâmetro/variante em `buildVoucherEmailHtml` (`services/notifier.js`) e em `helpers/itinerarioPage.js`, com testes.
+- [x] **Texto do e-mail de confirmação e da página do cliente:** ajustado de "RESERVA CONFIRMADA — Sua viagem está pronta" para "VOO REAJUSTADO — Seu voo foi reajustado; veja abaixo o voucher atualizado" para alterações de voo (variante implementada em `buildVoucherEmailHtml`, `itinerarioPage` e rota `/itinerario/:token`, 100% coberta por testes).
 - [ ] **Apagar a branch antiga `feat/banco-fundos-promo` do remote `fork`** (memória `project-fork-branch-cleanup`): `git push fork --delete feat/banco-fundos-promo` — **só com confirmação**.
 
 ### 9.2b Tarefas que a usuária pediu para **deixar para depois** (não fazer sem ela pedir)
 - [ ] Alinhar os argumentos do Chromium em `backend/services/voucherRenderer.js` ao scraper (`--disable-dev-shm-usage`, `--disable-gpu`; o scraper já removeu `--single-process`).
-- [ ] Texto "RESERVA CONFIRMADA — Sua viagem está pronta" → "VOO REAJUSTADO…" (já listado em 9.2; ainda sem resposta dela).
+- [x] Texto "RESERVA CONFIRMADA — Sua viagem está pronta" → "VOO REAJUSTADO…" (concluído em 9.2).
 - [ ] Apagar a branch `feat/banco-fundos-promo` no remote `fork` (já em 9.2; só com confirmação).
 - [ ] Reduzir o `pagefile.sys` (27 GB) / decidir sobre a VM do app Claude (7,9 GB) no disco C: — assunto da máquina dela, ver memória `project_pagefile_reduzir`.
 - [ ] Melhorias de UX mobile não feitas: modo "Resultado" de Promoções não foi auditado no celular; Banco de fundos/BackgroundPicker só passaram em build; auditar a página pública `/itinerario/:token` ao vivo (já tem CSS responsivo, breakpoint 560 px).

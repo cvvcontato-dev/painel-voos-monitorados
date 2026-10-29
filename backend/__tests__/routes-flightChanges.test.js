@@ -526,6 +526,10 @@ describe('link do voucher novo e preview do e-mail', () => {
     }
     expect(sent.html).toContain('Seu voo foi reajustado. Veja o que mudou:');
     expect(sent.html).toContain('Partida: 12/09/2026 08:30');
+    expect(sent.html).toContain('Voo Reajustado');
+    expect(sent.html).toContain('Seu voo foi reajustado; veja abaixo o voucher atualizado.');
+    expect(sent.html).not.toContain('Reserva Confirmada');
+    expect(sent.html).not.toContain('Sua viagem está pronta.');
   });
 
   test('preview: kind inválido 400, sem voucher novo 409, outro usuário 404, sem login 401', async () => {

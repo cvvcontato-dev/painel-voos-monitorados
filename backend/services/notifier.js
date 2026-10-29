@@ -284,7 +284,8 @@ const SOCIAL_WHATSAPP_URL  = 'https://wa.me/5575992020012';
 // E-mail no formato do MODELO COMPACTADO do usuário (header azul, route overview,
 // cards de voo, CTA, próximos passos numerados, support card com QR, footer escuro).
 // 100% inline styles + tables — email-safe (Gmail/Outlook/Apple Mail).
-async function buildVoucherEmailHtml({ voucherData, settings, customMessage, itinerarioUrl }) {
+async function buildVoucherEmailHtml({ voucherData, settings, customMessage, itinerarioUrl, isFlightChange, variant }) {
+    const isChange = variant === 'flight_change' || Boolean(isFlightChange);
     const vd = voucherData || {};
     const s = settings || {};
     const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -370,7 +371,7 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, iti
                 </td>
                 <td valign="middle" style="font-family:Inter,Arial,Helvetica,sans-serif;color:#ffffff;">
                   <div style="font-size:20px;font-weight:700;line-height:1.2;letter-spacing:0.025em;">Clube do Voo Viagens</div>
-                  <div style="font-size:14px;opacity:0.9;margin-top:4px;">Confirmação de Reserva</div>
+                  <div style="font-size:14px;opacity:0.9;margin-top:4px;">${isChange ? 'Voo Reajustado' : 'Confirmação de Reserva'}</div>
                 </td>
               </tr>
             </table>
@@ -383,9 +384,9 @@ async function buildVoucherEmailHtml({ voucherData, settings, customMessage, iti
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:32px;">
         <tr>
           <td valign="top" style="font-family:Inter,Arial,Helvetica,sans-serif;">
-            <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Reserva Confirmada</div>
+            <div style="color:#00539C;font-weight:600;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">${isChange ? 'Voo Reajustado' : 'Reserva Confirmada'}</div>
             <h2 style="font-size:36px;font-weight:700;color:#2D3748;margin:0 0 16px;line-height:1.1;">Olá, ${escapeHtml(firstPaxName)}.</h2>
-            <p style="color:#718096;font-size:14px;line-height:1.625;margin:0;max-width:380px;">Sua viagem está pronta. Use este email como referência — todos os dados do seu voo, contatos e próximos passos estão abaixo.</p>
+            <p style="color:#718096;font-size:14px;line-height:1.625;margin:0;max-width:380px;">${isChange ? 'Seu voo foi reajustado; veja abaixo o voucher atualizado.' : 'Sua viagem está pronta. Use este email como referência — todos os dados do seu voo, contatos e próximos passos estão abaixo.'}</p>
           </td>
           <td valign="top" align="right" width="140" style="padding-left:12px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E5E7EB;border-radius:4px;">
@@ -926,7 +927,7 @@ function _legacy({ voucherData, settings, customMessage, bookingUrl }) {
 }
 */
 
-async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, itinerarioUrl, subject: subjectOverride }) {
+async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath, customMessage, itinerarioUrl, subject: subjectOverride, isFlightChange, variant }) {
     try {
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
             return { sucesso: false, erro: 'Credenciais de e-mail não configuradas' };
@@ -955,7 +956,7 @@ async function sendVoucherEmail({ to, bcc, voucherData, settings, attachmentPath
             to: to.join(', '),
             bcc: bcc || undefined,
             subject,
-            html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, itinerarioUrl }),
+            html: await buildVoucherEmailHtml({ voucherData: vd, settings, customMessage, itinerarioUrl, isFlightChange, variant }),
             attachments
         };
 

@@ -19,7 +19,7 @@ const verifyItinerarioToken = (token) => { const v = verify(token); return v.ok 
 router.get('/:token/voucher.pdf', (req, res) => {
   const v = verifyItinerarioToken(req.params.token);
   if (!v) return res.status(403).send(invalidLinkHtml);
-  db.get(`SELECT unified_json FROM vouchers WHERE id = ?`, [v.voucherId], (err, row) => {
+  db.get(`SELECT v.unified_json, (SELECT 1 FROM flight_changes fc WHERE fc.new_voucher_id = v.id LIMIT 1) AS is_flight_change FROM vouchers v WHERE v.id = ?`, [v.voucherId], (err, row) => {
     if (err || !row) return res.status(404).send(pdfMissingHtml);
     let loc = '';
     try { loc = String(JSON.parse(row.unified_json)?.reservation?.locator || ''); } catch { /* sem localizador */ }
@@ -45,7 +45,7 @@ router.get('/:token', (req, res) => {
   // Rejeita tokens tipados (ex.: 'pkg') — o itinerário só aceita o token legado de voucher.
   const v = verifyItinerarioToken(req.params.token);
   if (!v) return res.status(403).send(invalidLinkHtml);
-  db.get(`SELECT unified_json FROM vouchers WHERE id = ?`, [v.voucherId], (err, row) => {
+  db.get(`SELECT v.unified_json, (SELECT 1 FROM flight_changes fc WHERE fc.new_voucher_id = v.id LIMIT 1) AS is_flight_change FROM vouchers v WHERE v.id = ?`, [v.voucherId], (err, row) => {
     if (err || !row) {
       return res.status(404).send(`<!doctype html><meta charset="utf-8"><body style="font-family:Arial;text-align:center;padding:60px 20px;color:#5b6878"><h1 style="color:#00569e">Reserva não encontrada</h1></body>`);
     }
@@ -59,7 +59,7 @@ router.get('/:token', (req, res) => {
         // Botão de download só quando o PDF da versão atual já está guardado.
         let pdfUrl = '';
         try { if (pdfStore.exists(v.voucherId, row.unified_json)) pdfUrl = `/itinerario/${encodeURIComponent(req.params.token)}/voucher.pdf`; } catch { /* sem botão */ }
-        const html = await renderItinerarioPage({ voucherData: unified, settings, pdfUrl });
+        const html = await renderItinerarioPage({ voucherData: unified, settings, pdfUrl, isFlightChange: Boolean(row.is_flight_change) });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Robots-Tag', 'noindex,nofollow');

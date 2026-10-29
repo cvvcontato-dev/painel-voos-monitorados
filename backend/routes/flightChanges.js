@@ -98,7 +98,9 @@ function confirmationEmailArgs(novo, diff, settings, itinerarioUrl) {
     subject: 'Seu voo foi reajustado ✈️ Novo voucher em anexo',
     voucherData: novo, settings,
     customMessage: ['Seu voo foi reajustado. Veja o que mudou:', '', ...buildChangeSummaryLines(diff)].join('\n'),
-    itinerarioUrl
+    itinerarioUrl,
+    isFlightChange: true,
+    variant: 'flight_change'
   };
 }
 
@@ -422,7 +424,7 @@ router.get('/:id/email-preview', async (req, res) => {
     const diff = diffVouchers(old, novo, { affected: Res.restrictionOf(row, old) });
     if (!diff.hasChanges) return res.status(409).json({ error: 'nada_mudou' });
     const args = confirmationEmailArgs(novo, diff, await loadSettings(), itinerarioUrlOf(row.new_voucher_id, publicBaseUrl()));
-    const html = await buildVoucherEmailHtml({ voucherData: args.voucherData, settings: args.settings, customMessage: args.customMessage, itinerarioUrl: args.itinerarioUrl });
+    const html = await buildVoucherEmailHtml({ voucherData: args.voucherData, settings: args.settings, customMessage: args.customMessage, itinerarioUrl: args.itinerarioUrl, isFlightChange: args.isFlightChange, variant: args.variant });
     res.json({ subject: args.subject, html: inlineLogo(html) });
   } catch (e) { fail(req, res, e); }
 });

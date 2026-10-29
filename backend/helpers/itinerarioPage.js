@@ -76,7 +76,8 @@ async function qrSvg(target) {
 
 const CALENDAR_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#8a93a4" style="vertical-align:-2px;margin-right:6px;"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>';
 
-async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
+async function renderItinerarioPage({ voucherData, settings, pdfUrl, isFlightChange, variant }) {
+  const isChange = variant === 'flight_change' || Boolean(isFlightChange);
   const vd = voucherData || {};
   const s = settings || {};
   const trips = Array.isArray(vd.trips) ? vd.trips : [];
@@ -319,7 +320,7 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
                   </td>
                   <td valign="middle" style="vertical-align:middle;padding-left:12px;">
                     <div style="font-size:16px;font-weight:700;color:#0e1726;line-height:1.2;">Clube do Voo Viagens</div>
-                    <div style="font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:1px;margin-top:2px;">Confirmação de reserva</div>
+                    <div style="font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:1px;margin-top:2px;">${isChange ? 'Voo reajustado' : 'Confirmação de reserva'}</div>
                   </td>
                 </tr>
               </table>
@@ -338,9 +339,9 @@ async function renderItinerarioPage({ voucherData, settings, pdfUrl }) {
 
       <!-- Section 2: Greeting -->
       <div class="section-pad" style="padding:0 28px 28px;">
-        <span style="display:inline-block;background:#e8f5ee;color:#1f9d55;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;margin-bottom:16px;"><span style="color:#1f9d55;">&#9679;</span> Reserva confirmada</span>
+        <span style="display:inline-block;background:#e8f5ee;color:#1f9d55;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;margin-bottom:16px;"><span style="color:#1f9d55;">&#9679;</span> ${isChange ? 'Voo reajustado' : 'Reserva confirmada'}</span>
         <h1 style="font-size:26px;font-weight:600;color:#0e1726;margin:0 0 10px;line-height:1.2;">Olá, ${escapeHtml(firstPaxName)}.</h1>
-        <p style="font-size:13.5px;color:#6c757d;line-height:1.65;max-width:480px;margin:0;">Sua viagem está pronta. Use este email como referência — todos os dados do seu voo, contatos e próximos passos estão abaixo.</p>
+        <p style="font-size:13.5px;color:#6c757d;line-height:1.65;max-width:480px;margin:0;">${isChange ? 'Seu voo foi reajustado; veja abaixo o voucher atualizado.' : 'Sua viagem está pronta. Use este email como referência — todos os dados do seu voo, contatos e próximos passos estão abaixo.'}</p>
         ${pdfUrl ? `<div style="margin-top:20px;"><a href="${escapeHtml(pdfUrl)}" download rel="noopener" style="display:inline-block;background:#00569e;color:#ffffff;padding:13px 28px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;letter-spacing:0.5px;box-shadow:0 4px 14px rgba(0,86,158,0.25);">BAIXAR VOUCHER (PDF) &darr;</a></div>` : ''}
       </div>
 
