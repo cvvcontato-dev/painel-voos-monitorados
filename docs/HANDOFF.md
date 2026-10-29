@@ -178,8 +178,8 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 
 ### 9.1 Validações pós-deploy que só a produção permite (fazer com a usuária)
 - [ ] **Leitura real do Gemini do print só de voos** (caso 5 da usuária — Gol): esperado ida G3 1922 (17/11 14:45→16:05) e volta G3 1925 (22/11 07:10→08:30), passageiros inalterados, **sem** "passageiros adicionados/removidos". Requer `EXTRACTION_MODE=real` + `GEMINI_API_KEY`. Se a leitura errar, pedir o print e ajustar `FLIGHTS_PROMPT` em `services/voucherExtractor.js`.
-- [ ] **Chromium do servidor gerando o PDF** guardado (botão "BAIXAR VOUCHER (PDF)" no link do cliente; arquivos em `/data/voucher-pdfs`; log `[FLIGHT-CHANGES] pdf:` mostra falhas).
-- [ ] **Envio real de e-mail** (aviso e confirmação) para o endereço da própria usuária, antes de usar com clientes. Conferir `PUBLIC_BASE_URL` e o telefone de contato em Vouchers → Configurações (sem ele, o aviso sai sem o botão de WhatsApp e o QR cai no site).
+- [x] **Chromium do servidor gerando o PDF** guardado: validado em produção pela usuária em 2026-10-29 (botão "BAIXAR VOUCHER (PDF)" na página pública do itinerário baixou com sucesso).
+- [x] **Envio real de e-mail**: validado em produção pela usuária em 2026-10-29 (recebido com PDF anexado e link direto para o itinerário online).
 - [ ] **Backup:** rodar "fazer backup agora" e ver "N foto(s) de fundo" na cópia; lembrar que a restauração das fotos é manual (copiar `backups/fundos-*` de volta para `<DB_PATH>/promo-backgrounds/`).
 
 ### 9.1b Validações novas que só a usuária pode fazer (após o deploy da Etapa 4)
