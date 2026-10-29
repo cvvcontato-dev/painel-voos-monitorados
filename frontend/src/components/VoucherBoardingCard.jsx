@@ -31,9 +31,13 @@ const CARRIER_STYLES = {
 function formatDateShort(dateStr) {
   if (!dateStr) return '';
   try {
-    const parts = String(dateStr).split('T')[0].split('-');
+    // Trata tanto ISO (YYYY-MM-DDTHH:mm:ss) quanto SQLite (YYYY-MM-DD HH:mm:ss) ou apenas data (YYYY-MM-DD)
+    const cleaned = String(dateStr).trim().split(/[T ]/)[0];
+    const parts = cleaned.split('-');
     if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}`;
+      const day = parts[2].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      return `${day}/${month}`;
     }
   } catch (_) {}
   return '';
@@ -46,6 +50,8 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
   const passenger = voucher.passenger || '';
   const locator = voucher.locator || '';
   const dateFormatted = formatDateShort(voucher.departureDate || voucher.created_at);
+
+  const routeParts = route && (route.includes('→') ? route.split('→') : (route.includes('->') ? route.split('->') : null));
 
   return (
     <div
@@ -74,16 +80,18 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
         {/* Linha superior: Rota / Cia / ID */}
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-            {route ? (
+            {routeParts && routeParts.length >= 2 ? (
               <>
-                <span className="text-[#00569e] dark:text-[#3871c1]">{route.split('→')[0]?.trim()}</span>
+                <span className="text-[#00569e] dark:text-[#3871c1]">{routeParts[0].trim()}</span>
                 <Plane className="w-3 h-3 text-slate-400 rotate-90" />
-                <span className="text-[#00569e] dark:text-[#3871c1]">{route.split('→')[1]?.trim()}</span>
+                <span className="text-[#00569e] dark:text-[#3871c1]">{routeParts[1].trim()}</span>
               </>
+            ) : route ? (
+              <span className="text-[#00569e] dark:text-[#3871c1]">{route}</span>
             ) : (
-              <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <span className="text-slate-700 dark:text-slate-200 flex items-center gap-1 font-sans font-semibold">
                 <Hash className="w-3 h-3 text-slate-400" />
-                {voucher.id}
+                Voo #{voucher.id}
               </span>
             )}
           </div>
@@ -96,10 +104,12 @@ export default function VoucherBoardingCard({ voucher, isSelected, onClick }) {
               {carrierInfo.name}
             </span>
 
-            {/* ID discreto */}
-            <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-              #{voucher.id}
-            </span>
+            {/* ID discreto se rota exibida */}
+            {route && (
+              <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                #{voucher.id}
+              </span>
+            )}
           </div>
         </div>
 

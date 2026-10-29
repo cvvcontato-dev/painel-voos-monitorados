@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import PriceHistoryChart from './PriceHistoryChart';
+import EmptyState from './EmptyState';
 import FlightCard from './precos/FlightCard';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import useBackClose from '../hooks/useBackClose';
@@ -567,18 +568,14 @@ export default function PrecosTab({ showToast }) {
             Carregando...
           </div>
         ) : sortedFlights.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
-            <Plane className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm">
-              {flights.length === 0
-                ? 'Nenhum voo sendo monitorado.'
-                : 'Nenhum voo com a prioridade selecionada.'}
-            </p>
-            {flights.length > 0 && (
-              <button onClick={clearPriorityFilter} className="mt-2 text-xs text-indigo-500 hover:text-indigo-400 underline cursor-pointer">
-                Limpar filtro
-              </button>
-            )}
+          <div className="py-8">
+            <EmptyState
+              icon={Plane}
+              title={flights.length === 0 ? 'Nenhum voo sendo monitorado' : 'Nenhum voo com essa prioridade'}
+              description={flights.length === 0 ? 'Cadastre voos com origem, destino e preço alvo para que o sistema monitore automaticamente as tarifas.' : 'Nenhum voo corresponde à prioridade selecionada no filtro.'}
+              actionLabel={flights.length > 0 ? 'Limpar filtro' : null}
+              onAction={flights.length > 0 ? clearPriorityFilter : null}
+            />
           </div>
         ) : sortedFlights.map((flight, index) => {
           const hasPrice = flight.preco_atual != null;

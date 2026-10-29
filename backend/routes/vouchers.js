@@ -160,13 +160,13 @@ router.get('/', (req, res) => {
             const p0 = parsed.passengers?.[0]?.name || '';
             const t0 = parsed.trips?.[0];
             const tLast = parsed.trips?.[parsed.trips.length - 1];
-            const orig = t0?.origin || '';
-            const dest = tLast?.destination || t0?.destination || '';
-            const depDate = t0?.departureDate || (t0?.departureTime ? String(t0.departureTime).split('T')[0] : '');
+            const orig = parsed.route?.origin || t0?.departure?.airport || t0?.origin || '';
+            const dest = parsed.route?.destination || tLast?.arrival?.airport || t0?.destination || '';
+            const depDate = t0?.departure?.datetime || t0?.departureDate || (t0?.departureTime ? String(t0.departureTime).split('T')[0] : '');
             meta = {
               locator: parsed.reservation?.locator || '',
               passenger: p0,
-              route: (orig && dest) ? `${orig} → ${dest}` : '',
+              route: (orig && dest) ? `${orig} → ${dest}` : (orig || dest || ''),
               origin: orig,
               destination: dest,
               departureDate: depDate,

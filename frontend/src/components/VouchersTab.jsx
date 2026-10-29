@@ -839,11 +839,14 @@ export default function VouchersTab({ showToast }) {
               title="Preview do voucher"
             />
           ) : (
-            <div className="h-full flex items-center justify-center p-8 text-center">
-              <div className="text-slate-500 dark:text-slate-400 text-sm">
-                <FileText className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                Faça upload de um voucher para começar.
-              </div>
+            <div className="h-full flex items-center justify-center p-4 min-h-[360px]">
+              <EmptyState
+                icon={Ticket}
+                title="Selecione um voucher"
+                description="Escolha um voucher na lista ao lado para ver o preview detalhado, emitir o PDF oficial, compartilhar no WhatsApp ou enviar por e-mail."
+                hint="Ou envie um novo voucher em PDF ou imagem no painel ao lado."
+                className="w-full max-w-md my-auto"
+              />
             </div>
           )}
         </div>

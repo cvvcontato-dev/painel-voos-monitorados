@@ -3,6 +3,7 @@ import api from '../hooks/useApi';
 import { Plane, Plus, Edit2, Trash2, RefreshCw, Pause, Play, Clock, Activity, AlertTriangle, History, ExternalLink, Eye, EyeOff, CheckCircle2, Hand, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import StatusModal from './StatusModal';
 import StatusHistoryDrawer from './StatusHistoryDrawer';
+import EmptyState from './EmptyState';
 import { usePrivacy } from '../hooks/usePrivacy';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import StatusFlightCard from './status/StatusFlightCard';

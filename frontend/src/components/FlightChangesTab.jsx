@@ -250,7 +250,14 @@ export default function FlightChangesTab({ showToast }) {
         ) : selected ? (
           <CaseView key={selected.id} id={selected.id} initial={selected.initial} showToast={showToast} onChanged={reload} />
         ) : (
-          <div className={`${sectionCls} hidden md:block text-sm text-slate-500 dark:text-slate-400`}>Selecione uma alteração na lista ou crie uma nova.</div>
+          <div className="hidden md:block">
+            <EmptyState
+              icon={RefreshCw}
+              title="Selecione uma alteração de voo"
+              description="Escolha um caso na lista ao lado para conferir os novos horários, comparar as diferenças de trecho ou gerar a mensagem de aviso para o cliente."
+              hint="Ou clique no botão '+ Nova alteração' para registrar um novo caso."
+            />
+          </div>
         )}
       </div>
     </div>
