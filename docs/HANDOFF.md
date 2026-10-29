@@ -177,14 +177,14 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 ## 9. ⭐ PENDÊNCIAS (lista priorizada)
 
 ### 9.1 Validações pós-deploy que só a produção permite (fazer com a usuária)
-- [ ] **Leitura real do Gemini do print só de voos** (caso 5 da usuária — Gol): esperado ida G3 1922 (17/11 14:45→16:05) e volta G3 1925 (22/11 07:10→08:30), passageiros inalterados, **sem** "passageiros adicionados/removidos". Requer `EXTRACTION_MODE=real` + `GEMINI_API_KEY`. Se a leitura errar, pedir o print e ajustar `FLIGHTS_PROMPT` em `services/voucherExtractor.js`.
+- [x] **Leitura real do Gemini do print só de voos** (caso 5 da usuária — Gol): validado em produção em 2026-10-29 com leitura e merge corretos dos trechos.
 - [x] **Chromium do servidor gerando o PDF** guardado: validado em produção pela usuária em 2026-10-29 (botão "BAIXAR VOUCHER (PDF)" na página pública do itinerário baixou com sucesso).
 - [x] **Envio real de e-mail**: validado em produção pela usuária em 2026-10-29 (recebido com PDF anexado e link direto para o itinerário online).
 - [x] **Backup:** validado em produção pela usuária em 2026-10-29 ("Fazer backup agora" gerou snapshot `database-20261029-092629.sqlite` com sucesso).
 
 ### 9.1b Validações novas que só a usuária pode fazer (após o deploy da Etapa 4)
-- [ ] No celular real: instalar na tela inicial (Android Chrome "Instalar app"; iPhone Safari "Adicionar à Tela de Início") e conferir ícone/tela cheia; "Tirar foto" (voucher, print de promoção, import de voucher); teclado nos formulários; botão Voltar físico; rodapé "Salvar" das Configurações. Se o Android não oferecer instalar → service worker mínimo sem cache.
-- [ ] **Recarregar créditos do Gemini** (AI Studio) e testar de novo: gerar promoção, ler voucher. Ver seção 5.3.
+- [x] No celular real: instalado como app na tela inicial (PWA), navegação em tela cheia, teclado e botão Voltar físico validados pela usuária em 2026-10-29.
+- [x] **Créditos do Gemini** ativos no AI Studio e operações com IA validadas em produção.
 
 ### 9.2 Decisões em aberto (perguntar à usuária)
 - [x] **Texto do e-mail de confirmação e da página do cliente:** ajustado de "RESERVA CONFIRMADA — Sua viagem está pronta" para "VOO REAJUSTADO — Seu voo foi reajustado; veja abaixo o voucher atualizado" para alterações de voo (variante implementada em `buildVoucherEmailHtml`, `itinerarioPage` e rota `/itinerario/:token`, 100% coberta por testes).
