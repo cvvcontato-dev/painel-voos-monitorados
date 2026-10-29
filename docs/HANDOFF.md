@@ -188,12 +188,12 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 
 ### 9.2 Decisões em aberto (perguntar à usuária)
 - [x] **Texto do e-mail de confirmação e da página do cliente:** ajustado de "RESERVA CONFIRMADA — Sua viagem está pronta" para "VOO REAJUSTADO — Seu voo foi reajustado; veja abaixo o voucher atualizado" para alterações de voo (variante implementada em `buildVoucherEmailHtml`, `itinerarioPage` e rota `/itinerario/:token`, 100% coberta por testes).
-- [ ] **Apagar a branch antiga `feat/banco-fundos-promo` do remote `fork`** (memória `project-fork-branch-cleanup`): `git push fork --delete feat/banco-fundos-promo` — **só com confirmação**.
+- [x] **Apagar a branch antiga `feat/banco-fundos-promo` do remote `fork`** (memória `project-fork-branch-cleanup`): executado `git push fork --delete feat/banco-fundos-promo` com confirmação da usuária em 2026-10-29.
 
 ### 9.2b Tarefas que a usuária pediu para **deixar para depois** (não fazer sem ela pedir)
 - [ ] Alinhar os argumentos do Chromium em `backend/services/voucherRenderer.js` ao scraper (`--disable-dev-shm-usage`, `--disable-gpu`; o scraper já removeu `--single-process`).
 - [x] Texto "RESERVA CONFIRMADA — Sua viagem está pronta" → "VOO REAJUSTADO…" (concluído em 9.2).
-- [ ] Apagar a branch `feat/banco-fundos-promo` no remote `fork` (já em 9.2; só com confirmação).
+- [x] Apagar a branch `feat/banco-fundos-promo` no remote `fork` (concluído em 9.2).
 - [ ] Reduzir o `pagefile.sys` (27 GB) / decidir sobre a VM do app Claude (7,9 GB) no disco C: — assunto da máquina dela, ver memória `project_pagefile_reduzir`.
 - [ ] Melhorias de UX mobile não feitas: modo "Resultado" de Promoções não foi auditado no celular; Banco de fundos/BackgroundPicker só passaram em build; auditar a página pública `/itinerario/:token` ao vivo (já tem CSS responsivo, breakpoint 560 px).
 
