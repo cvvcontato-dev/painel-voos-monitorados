@@ -383,6 +383,19 @@ function runMigrations() {
         }
     });
 
+    // --- Vendedores para mensagens WhatsApp e atendimento ---
+    db.run(`CREATE TABLE IF NOT EXISTS voucher_sellers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`, (err) => {
+        if (err) console.error('Error creating voucher_sellers', err.message);
+        else {
+            console.log('voucher_sellers table created or already exists.');
+            db.run(`INSERT OR IGNORE INTO voucher_sellers (id, name) VALUES (1, 'Joabh Souza')`);
+        }
+    });
+
     // --- Banco de fundos das promocoes ---
     // Metadados das fotos de destino; os arquivos ficam em <DB_PATH>/promo-backgrounds/
     // (volume persistente — o diretorio static/ e recriado a cada deploy).

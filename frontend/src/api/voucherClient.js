@@ -34,3 +34,7 @@ export const updateSettings = (s) => api.put('/api/vouchers/settings', s).then(r
 
 export const sendEmail = (id, emails, message) =>
   api.post(`/api/vouchers/${id}/send-email`, { emails, message }).then(r => r.data);
+
+export const getSellers = () => api.get('/api/vouchers/sellers').then(r => r.data);
+export const addSeller = (name) => api.post('/api/vouchers/sellers', { name }).then(r => r.data);
+export const removeSeller = (id) => api.delete('/api/vouchers/sellers/' + id).then(r => r.data);

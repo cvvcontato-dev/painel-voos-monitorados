@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 import useBackClose from '../hooks/useBackClose';
+import WhatsAppMessageModal from './WhatsAppMessageModal';
 
 const inputCls =
   "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -37,6 +38,7 @@ export default function VouchersTab({ showToast }) {
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
 
   const [itinerarioUrl, setItinerarioUrl] = useState('');
 
@@ -741,9 +743,9 @@ export default function VouchersTab({ showToast }) {
               </button>
               <button
                 type="button"
-                onClick={handleShareWhatsApp}
+                onClick={() => setWhatsAppModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
-                title="Enviar itinerário via WhatsApp"
+                title="Gerar e personalizar mensagem formatada para WhatsApp"
               >
                 <MessageCircle className="w-4 h-4" /> WhatsApp
               </button>
@@ -843,6 +845,15 @@ export default function VouchersTab({ showToast }) {
           </div>
         </div>
       )}
+
+      {/* Modal Gerador de Mensagem WhatsApp */}
+      <WhatsAppMessageModal
+        isOpen={whatsAppModalOpen}
+        onClose={() => setWhatsAppModalOpen(false)}
+        voucher={current}
+        itinerarioUrl={itinerarioUrl}
+        showToast={showToast}
+      />
     </div>
   );
 }

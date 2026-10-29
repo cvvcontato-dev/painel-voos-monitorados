@@ -177,6 +177,33 @@ router.put('/settings', (req, res) => {
   );
 });
 
+// --- Vendedores para mensagens de atendimento / WhatsApp ---
+router.get('/sellers', (req, res) => {
+  db.all('SELECT id, name FROM voucher_sellers ORDER BY id ASC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'erro ao listar vendedores' });
+    res.json(rows || []);
+  });
+});
+
+router.post('/sellers', (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'nome obrigatório' });
+  db.run('INSERT OR IGNORE INTO voucher_sellers (name) VALUES (?)', [name], function(err) {
+    if (err) return res.status(500).json({ error: 'erro ao salvar vendedor' });
+    db.get('SELECT id, name FROM voucher_sellers WHERE name = ?', [name], (gErr, row) => {
+      if (gErr || !row) return res.status(500).json({ error: 'erro ao recuperar vendedor' });
+      res.json(row);
+    });
+  });
+});
+
+router.delete('/sellers/:id', (req, res) => {
+  db.run('DELETE FROM voucher_sellers WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: 'erro ao excluir vendedor' });
+    res.json({ success: true });
+  });
+});
+
 router.get('/:id', (req, res) => {
   db.get(
     `SELECT * FROM vouchers WHERE id = ? AND user_id = ?`,
