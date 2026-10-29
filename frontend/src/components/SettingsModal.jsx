@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Settings, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Settings, Eye, EyeOff, UploadCloud, Image as ImageIcon, Check } from 'lucide-react';
 import api from '../hooks/useApi';
 import { useAuth } from '../hooks/useAuth';
 import UsersTab from './UsersTab';
@@ -15,9 +15,21 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
   const [saving, setSaving] = useState(false);
   const { currentUser } = useAuth();
   const [innerTab, setInnerTab] = useState('geral');
+  const [logoUrl, setLogoUrl] = useState('/voucher-assets/agency-logo.png');
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [savingLogo, setSavingLogo] = useState(false);
+  const logoInputRef = useRef(null);
+
+  const fetchLogo = useCallback(() => {
+    api.get('/api/settings/logo').then(r => {
+      if (r.data?.url) setLogoUrl(r.data.url);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
+      fetchLogo();
       api.get('/api/settings').then(r => {
         setSettings(r.data);
         setForm({
@@ -61,6 +73,28 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
     }
   };
 
+  const handleSaveLogo = async () => {
+    if (!logoFile) return;
+    setSavingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('logo', logoFile);
+      const res = await api.post('/api/settings/logo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      onToast('Logo da agência atualizada com sucesso!', 'success');
+      setLogoUrl(res.data.url || `/voucher-assets/agency-logo.png?v=${Date.now()}`);
+      setLogoFile(null);
+      setLogoPreview(null);
+      // Dispara evento global para que outros componentes atualizem o logo se necessário
+      window.dispatchEvent(new CustomEvent('agency:logo-updated'));
+    } catch (err) {
+      onToast(err.response?.data?.error || 'Erro ao atualizar logo', 'error');
+    } finally {
+      setSavingLogo(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const inputCls = "w-full px-4 py-2.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -85,6 +119,10 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
           <button onClick={() => setInnerTab('geral')}
             className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'geral' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
             Geral
+          </button>
+          <button onClick={() => setInnerTab('marca')}
+            className={`min-h-[44px] md:min-h-0 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors -mb-px border-b-2 ${innerTab === 'marca' ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300'}`}>
+            Marca & Logo
           </button>
           {currentUser?.role === 'admin' && (
             <button onClick={() => setInnerTab('usuarios')}
@@ -164,6 +202,77 @@ export default function SettingsModal({ isOpen, onClose, onToast }) {
               </button>
             </div>
           </>
+        ) : innerTab === 'marca' ? (
+          <div className="p-4 md:p-6 space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-indigo-400 mb-1 uppercase tracking-wider">Identidade Visual da Agência</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                Esta logo é utilizada automaticamente nos Stories de depoimentos, nos Vouchers, nos e-mails e nos itinerários públicos.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
+                {/* Visualizador da Logo */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-36 h-36 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden shadow-inner">
+                    <img
+                      src={logoPreview || logoUrl}
+                      alt="Logo da Agência"
+                      className="max-w-full max-h-full object-contain"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-400">Visualização em fundo escuro</span>
+                </div>
+
+                {/* Ações de Upload */}
+                <div className="flex-1 space-y-3 w-full">
+                  <div
+                    onClick={() => logoInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-4 text-center cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-800/30"
+                  >
+                    <UploadCloud className="w-6 h-6 mx-auto text-indigo-500 mb-1.5" />
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {logoFile ? logoFile.name : 'Clique para selecionar nova imagem de logo'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">PNG com fundo transparente (recomendado), JPG, WebP ou SVG</p>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setLogoFile(file);
+                          setLogoPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {logoFile && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveLogo}
+                        disabled={savingLogo}
+                        className="flex-1 min-h-[44px] py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {savingLogo ? 'Enviando...' : 'Salvar Nova Logo'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoFile(null); setLogoPreview(null); }}
+                        className="min-h-[44px] py-2.5 px-3 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         ) : innerTab === 'backups' ? (
           <div className="p-4 md:p-6">
             <BackupsPanel onToast={onToast} />

@@ -3,6 +3,68 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { startScheduler } = require('../services/scheduler');
+const multer = require('multer');
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (/^image\/(png|jpe?g|webp|svg\+xml)$/i.test(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Formato inválido. Envie uma imagem PNG, JPG, WebP ou SVG.'));
+        }
+    }
+});
+
+// GET /api/settings/logo
+router.get('/logo', (req, res) => {
+    try {
+        const logoPath = path.resolve(__dirname, '../static/agency-logo.png');
+        if (!fs.existsSync(logoPath)) {
+            return res.json({ exists: false, url: null });
+        }
+        const stat = fs.statSync(logoPath);
+        res.json({
+            exists: true,
+            url: `/voucher-assets/agency-logo.png?v=${stat.mtimeMs}`
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/settings/logo
+router.post('/logo', (req, res) => {
+    upload.single('logo')(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ error: err.message });
+        }
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+            }
+            const staticDir = path.resolve(__dirname, '../static');
+            if (!fs.existsSync(staticDir)) {
+                fs.mkdirSync(staticDir, { recursive: true });
+            }
+            const agencyLogoPath = path.join(staticDir, 'agency-logo.png');
+            const defaultLogoPath = path.join(staticDir, 'logo.png');
+
+            fs.writeFileSync(agencyLogoPath, req.file.buffer);
+            fs.writeFileSync(defaultLogoPath, req.file.buffer);
+
+            const stat = fs.statSync(agencyLogoPath);
+            res.json({
+                message: 'Logo da agência atualizada com sucesso',
+                url: `/voucher-assets/agency-logo.png?v=${stat.mtimeMs}`
+            });
+        } catch (error) {
+            console.error('[SETTINGS] Erro ao salvar logo:', error.message);
+            res.status(500).json({ error: error.message });
+        }
+    });
+});
 
 // GET /api/settings
 router.get('/', (req, res) => {

@@ -1,98 +1,39 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  UploadCloud, Download, Copy, Check, Sparkles, RefreshCw, Star,
-  HeartHandshake, Image as ImageIcon, Trash2, Camera, Palette, MessageSquare,
-  ArrowLeft, ArrowRight, Eye
+  UploadCloud, Download, Copy, Check, Sparkles, Image as ImageIcon,
+  Trash2, Camera, Palette, ArrowLeft, ArrowRight, Eye, Settings, Sliders
 } from 'lucide-react';
-import logoImg from '../assets/logo.png';
+import defaultLogo from '../assets/logo-oficial.png';
 
-// Coleção categorizada de frases de acolhimento humanizadas
-const PRESET_PHRASES = [
+// Sugestões de Títulos com 1 clique (estilo humanizado & afetuoso)
+const PRESET_TITLES = [
+  'Que alegria receber esse feedback! ✈️',
+  'Mais um sonho realizado com sucesso! 💙✨',
+  'Gratidão imensa pela confiança! 🌴✈️',
+  'Viajar sem preocupação não tem preço! 🧳💫'
+];
+
+// Sugestões de Mensagens de Acolhimento
+const PRESET_MESSAGES = [
   {
-    category: 'Sonhos & Família',
-    phrases: [
-      'Fazer parte da realização do seu sonho é o que nos move todos os dias! 💙✈️',
-      'Mais uma família que viajou com tranquilidade e suporte do início ao fim! 👨‍👩‍👧‍👦✨',
-      'Ver a alegria de vocês ao embarcar não tem preço. Obrigado pelo carinho! 🌟',
-      'Viajar é colecionar memórias que ficam para sempre no coração! 🌏💫'
+    category: 'Gratidão & Sonhos',
+    items: [
+      'Muito obrigado pela confiança! Estamos sempre aqui para tornar cada viagem especial.',
+      'Fazer parte da realização do seu sonho é o que nos move todos os dias! Obrigado pelo carinho.',
+      'Mais uma família que viajou com tranquilidade, carinho e suporte humanizado do início ao fim!'
     ]
   },
   {
-    category: 'Cuidado & Confiança',
-    phrases: [
-      'Cuidar de cada detalhe da sua viagem é a nossa verdadeira paixão. Obrigado pela confiança! 🌏✨',
-      'Nosso compromisso é estar ao seu lado antes, durante e depois do embarque. 💬✈️',
-      'Nada nos enche mais de orgulho do que ver nossos passageiros tão bem acolhidos! 💙',
-      'A sua tranquilidade é a nossa prioridade absoluta em cada roteiro! 🌟'
-    ]
-  },
-  {
-    category: 'Sem Perrengue & Tranquilidade',
-    phrases: [
-      'Viagem sem dor de cabeça e com suporte humanizado de verdade. Até a próxima aventura! 🧳✨',
-      'Viajar com assessoria especializada faz toda a diferença. Gratidão pelo retorno tão especial! 🌴✈️',
-      'Sensação de dever cumprido quando tudo sai exatamente como planejado! 🌟✈️',
-      'Obrigado por nos escolher para cuidar de um momento tão especial da sua vida! 💫'
+    category: 'Cuidado & Assessoria',
+    items: [
+      'Cuidar de cada detalhe da sua viagem é a nossa verdadeira paixão. Até a próxima aventura!',
+      'Nosso compromisso é estar ao seu lado antes, durante e depois do embarque. Gratidão!',
+      'Viajar com assessoria especializada faz toda a diferença. Sensação de dever cumprido!'
     ]
   }
 ];
 
-const THEMES = [
-  {
-    id: 'azul-institucional',
-    name: 'Azul Institucional',
-    bgGradient: ['#021b38', '#003366', '#004f8c'],
-    accentColor: '#38bdf8',
-    textColor: '#ffffff',
-    subTextColor: '#94a3b8',
-    bubbleBg: '#ffffff',
-    cardBorder: 'rgba(255, 255, 255, 0.15)',
-    starColor: '#fbbf24'
-  },
-  {
-    id: 'clean-perola',
-    name: 'Clean Pérola',
-    bgGradient: ['#f8fafc', '#f1f5f9', '#e2e8f0'],
-    accentColor: '#0284c7',
-    textColor: '#0f172a',
-    subTextColor: '#475569',
-    bubbleBg: '#ffffff',
-    cardBorder: 'rgba(15, 23, 42, 0.08)',
-    starColor: '#d97706'
-  },
-  {
-    id: 'dark-luxury',
-    name: 'Dark Luxury',
-    bgGradient: ['#090d16', '#0f172a', '#1e293b'],
-    accentColor: '#38bdf8',
-    textColor: '#f8fafc',
-    subTextColor: '#94a3b8',
-    bubbleBg: '#ffffff',
-    cardBorder: 'rgba(255, 255, 255, 0.12)',
-    starColor: '#fbbf24'
-  },
-  {
-    id: 'sunset-dourado',
-    name: 'Sunset Dourado',
-    bgGradient: ['#1e1b4b', '#312e81', '#3730a3'],
-    accentColor: '#f59e0b',
-    textColor: '#ffffff',
-    subTextColor: '#cbd5e1',
-    bubbleBg: '#ffffff',
-    cardBorder: 'rgba(245, 158, 11, 0.25)',
-    starColor: '#fbbf24'
-  }
-];
-
-const BADGES = [
-  { id: '5stars', label: '⭐ Atendimento 5 Estrelas' },
-  { id: 'trip', label: '✈️ Viagem Realizada' },
-  { id: 'client', label: '💙 Cliente Clube do Voo' },
-  { id: 'real', label: '💬 Depoimento Real' },
-  { id: 'none', label: 'Nenhum' }
-];
-
-// Helper seguro para desenhar cantos arredondados no Canvas (com fallback)
+// Helper seguro para desenhar cantos arredondados no Canvas
 function drawRoundRect(ctx, x, y, w, h, r) {
   if (typeof ctx.roundRect === 'function') {
     ctx.roundRect(x, y, w, h, r);
@@ -110,34 +51,73 @@ function drawRoundRect(ctx, x, y, w, h, r) {
   }
 }
 
+// Helper para desenhar texto com espaçamento uniforme entre letras (watermark FEEDBACK)
+function drawSpacedText(ctx, text, x, y, spacing) {
+  if ('letterSpacing' in ctx) {
+    ctx.letterSpacing = `${spacing}px`;
+    ctx.fillText(text, x, y);
+    ctx.letterSpacing = '0px';
+  } else {
+    const chars = text.split('');
+    const charWidths = chars.map(c => ctx.measureText(c).width);
+    const totalW = charWidths.reduce((a, b) => a + b, 0) + (chars.length - 1) * spacing;
+    let curX = x - totalW / 2;
+    for (let i = 0; i < chars.length; i++) {
+      ctx.fillText(chars[i], curX + charWidths[i] / 2, y);
+      curX += charWidths[i] + spacing;
+    }
+  }
+}
+
 export default function DepoimentosTab({ showToast }) {
-  // Estado para alternância mobile entre Edição e Prévia
+  // Alternância mobile entre Personalização e Prévia
   const [mobileView, setMobileView] = useState('editor'); // 'editor' | 'preview'
 
-  // Estado da imagem do print do cliente
-  const [printImage, setPrintImage] = useState(null);
-  const [clientName, setClientName] = useState('');
-  const [selectedPhrase, setSelectedPhrase] = useState(PRESET_PHRASES[0].phrases[0]);
-  const [selectedThemeId, setSelectedThemeId] = useState('azul-institucional');
-  const [selectedBadge, setSelectedBadge] = useState('5stars');
-  const [imageScale, setImageScale] = useState(100); // 70 a 120%
-  const [copiedCaption, setCopiedCaption] = useState(false);
+  // Estados dos Arquivos e Imagens
+  const [printImage, setPrintImage] = useState(null); // Print do WhatsApp
+  const [bgImage, setBgImage] = useState(null);       // Foto de fundo dos clientes
+  const [logoImgObj, setLogoImgObj] = useState(null); // Logo oficial da agência
+
+  // Estados dos Textos e Controles
+  const [storyTitle, setStoryTitle] = useState(PRESET_TITLES[0]);
+  const [storyMessage, setStoryMessage] = useState(PRESET_MESSAGES[0].items[0]);
+  const [imageScale, setImageScale] = useState(100);       // 70 a 120%
+  const [blueIntensity, setBlueIntensity] = useState(82);  // 60 a 95% de opacidade do azul sobre a foto
   const [generating, setGenerating] = useState(false);
+  const [copiedCaption, setCopiedCaption] = useState(false);
 
-  const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  // Refs para inputs
+  const printInputRef = useRef(null);
+  const printCameraRef = useRef(null);
+  const bgInputRef = useRef(null);
+  const bgCameraRef = useRef(null);
   const canvasRef = useRef(null);
-  const dropZoneRef = useRef(null);
 
-  const currentTheme = useMemo(() => {
-    return THEMES.find(t => t.id === selectedThemeId) || THEMES[0];
-  }, [selectedThemeId]);
+  // Carrega a logo oficial do backend (ou fallback local)
+  const loadLogo = useCallback(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setLogoImgObj(img);
+    img.onerror = () => {
+      const fallback = new Image();
+      fallback.src = defaultLogo;
+      fallback.onload = () => setLogoImgObj(fallback);
+    };
+    img.src = `/voucher-assets/agency-logo.png?v=${Date.now()}`;
+  }, []);
 
-  // Carrega imagem selecionada
-  const handleFile = useCallback((file) => {
+  useEffect(() => {
+    loadLogo();
+    const onLogoUpdated = () => loadLogo();
+    window.addEventListener('agency:logo-updated', onLogoUpdated);
+    return () => window.removeEventListener('agency:logo-updated', onLogoUpdated);
+  }, [loadLogo]);
+
+  // Carrega imagem do print
+  const handlePrintFile = useCallback((file) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      showToast?.('Por favor selecione uma imagem (PNG, JPEG, WebP)', 'error');
+      showToast?.('Selecione uma imagem válida (PNG, JPG, WebP)', 'error');
       return;
     }
     const reader = new FileReader();
@@ -145,14 +125,33 @@ export default function DepoimentosTab({ showToast }) {
       const img = new Image();
       img.onload = () => {
         setPrintImage(img);
-        showToast?.('Print do depoimento carregado com sucesso!', 'success');
+        showToast?.('Print do depoimento carregado!', 'success');
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   }, [showToast]);
 
-  // Suporte a colar imagem (Ctrl+V) em qualquer lugar da tela
+  // Carrega foto de fundo dos clientes
+  const handleBgFile = useCallback((file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast?.('Selecione uma imagem válida (PNG, JPG, WebP)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        setBgImage(img);
+        showToast?.('Foto de fundo dos clientes aplicada!', 'success');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }, [showToast]);
+
+  // Suporte a colar print com Ctrl+V
   useEffect(() => {
     const handlePaste = (e) => {
       const items = e.clipboardData?.items;
@@ -160,16 +159,16 @@ export default function DepoimentosTab({ showToast }) {
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith('image/')) {
           const file = items[i].getAsFile();
-          handleFile(file);
+          handlePrintFile(file);
           break;
         }
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [handleFile]);
+  }, [handlePrintFile]);
 
-  // Renderizador no Canvas (1080 x 1920)
+  // ── Renderizador do Story no Canvas (1080 × 1920) ────────────────────────
   const drawStory = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -179,48 +178,158 @@ export default function DepoimentosTab({ showToast }) {
     canvas.width = W;
     canvas.height = H;
 
-    // 1. Fundo com degradê refinado
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, currentTheme.bgGradient[0]);
-    grad.addColorStop(0.5, currentTheme.bgGradient[1]);
-    grad.addColorStop(1, currentTheme.bgGradient[2]);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    // 1. FUNDO: Foto dos clientes com overlay azul OU degradê institucional (#00569e, #3871c1, #0a73b0)
+    if (bgImage) {
+      // Desenha foto preenchendo a tela (cover)
+      const canvasRatio = W / H;
+      const photoRatio = bgImage.width / bgImage.height;
+      let sW, sH, sX, sY;
 
-    // Efeito de brilho / glow suave no topo
-    const glow = ctx.createRadialGradient(W / 2, 280, 50, W / 2, 280, 550);
-    glow.addColorStop(0, currentTheme.id === 'clean-perola' ? 'rgba(2, 132, 199, 0.08)' : 'rgba(56, 189, 248, 0.15)');
-    glow.addColorStop(1, 'transparent');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, 800);
+      if (photoRatio > canvasRatio) {
+        sH = bgImage.height;
+        sW = bgImage.height * canvasRatio;
+        sX = (bgImage.width - sW) / 2;
+        sY = 0;
+      } else {
+        sW = bgImage.width;
+        sH = bgImage.width / canvasRatio;
+        sX = 0;
+        sY = (bgImage.height - sH) / 2;
+      }
+      ctx.drawImage(bgImage, sX, sY, sW, sH, 0, 0, W, H);
 
-    // 2. Elementos Decorativos no Topo (Aspas e Citação)
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+      // Camada de tonalização azul da marca sobre a foto (efeito monocromático elegante)
+      const alpha = blueIntensity / 100;
+      const overlayGrad = ctx.createLinearGradient(0, 0, 0, H);
+      overlayGrad.addColorStop(0, `rgba(0, 86, 158, ${alpha})`);           // #00569e
+      overlayGrad.addColorStop(0.5, `rgba(56, 113, 193, ${alpha * 0.95})`); // #3871c1
+      overlayGrad.addColorStop(1, `rgba(10, 115, 176, ${alpha})`);          // #0a73b0
+      ctx.fillStyle = overlayGrad;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // Degradê institucional com as cores oficiais: #00569e, #3871c1, #0a73b0
+      const brandGrad = ctx.createLinearGradient(0, 0, 0, H);
+      brandGrad.addColorStop(0, '#00569e');
+      brandGrad.addColorStop(0.48, '#2563ab');
+      brandGrad.addColorStop(0.78, '#3871c1');
+      brandGrad.addColorStop(1, '#0a73b0');
+      ctx.fillStyle = brandGrad;
+      ctx.fillRect(0, 0, W, H);
 
-    // Aspas douradas / citação elegante
-    ctx.font = 'bold 72px "Georgia", serif';
-    ctx.fillStyle = currentTheme.accentColor;
-    ctx.fillText('“', W / 2, 140);
-
-    // 3. Frase de Acolhimento Humanizada
-    let displayPhrase = selectedPhrase.trim();
-    if (clientName.trim()) {
-      displayPhrase = `“Obrigado pelo carinho, ${clientName.trim()}! ${displayPhrase}”`;
+      // Glow suave de iluminação no topo
+      const glow = ctx.createRadialGradient(W / 2, 450, 60, W / 2, 450, 650);
+      glow.addColorStop(0, 'rgba(56, 189, 248, 0.20)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
     }
 
-    ctx.font = '600 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillStyle = currentTheme.textColor;
+    // 2. MARCAS D'ÁGUA "FEEDBACK" (Topo e Rodapé, idêntico à referência profissional)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 115px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.17)';
 
-    // Quebra de linha inteligente para a frase de acolhimento
-    const maxPhraseWidth = 860;
-    const words = displayPhrase.split(' ');
+    // FEEDBACK no Topo
+    drawSpacedText(ctx, 'FEEDBACK', W / 2, 130, 24);
+
+    // FEEDBACK no Rodapé
+    drawSpacedText(ctx, 'FEEDBACK', W / 2, 1830, 24);
+
+    // 3. CARD CENTRAL DO PRINT DO WHATSAPP (Posicionado no terço superior)
+    const printTopY = 270;
+    const maxCardW = 900;
+    const maxCardH = 760;
+    let cardBottomY = printTopY + 450;
+
+    if (printImage) {
+      const scale = imageScale / 100;
+      let drawW = maxCardW * scale;
+      let drawH = (printImage.height / printImage.width) * drawW;
+
+      if (drawH > maxCardH * scale) {
+        drawH = maxCardH * scale;
+        drawW = (printImage.width / printImage.height) * drawH;
+      }
+
+      const drawX = (W - drawW) / 2;
+      const drawY = printTopY;
+      cardBottomY = drawY + drawH;
+
+      // Sombra realista flutuante
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
+      ctx.shadowBlur = 40;
+      ctx.shadowOffsetY = 22;
+
+      // Fundo branco do card
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
+      ctx.fill();
+      ctx.restore();
+
+      // Recorte com cantos arredondados para a imagem do print
+      ctx.save();
+      ctx.beginPath();
+      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
+      ctx.clip();
+      ctx.drawImage(printImage, drawX, drawY, drawW, drawH);
+      ctx.restore();
+
+      // Borda suave de acabamento
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
+      ctx.stroke();
+    } else {
+      // Placeholder se ainda não enviou o print
+      const pw = 860;
+      const ph = 460;
+      const px = (W - pw) / 2;
+      const py = printTopY;
+      cardBottomY = py + ph;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([16, 12]);
+      ctx.beginPath();
+      drawRoundRect(ctx, px, py, pw, ph, 28);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      ctx.font = 'bold 36px -apple-system, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('Envie o print do WhatsApp aqui', W / 2, py + ph / 2 - 18);
+
+      ctx.font = '24px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillText('(O depoimento aparecerá nesta posição)', W / 2, py + ph / 2 + 26);
+    }
+
+    // 4. TEXTOS HUMANIZADOS ABAIXO DO PRINT (Título + Frase de Acolhimento em fonte Serif elegante)
+    const textStartY = Math.max(cardBottomY + 70, 1120);
+
+    // Título em destaque (Ex: "Que alegria receber esse feedback! ✈️")
+    ctx.font = 'bold 44px "Georgia", "Times New Roman", serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(storyTitle.trim(), W / 2, textStartY);
+
+    // Mensagem de acolhimento em corpo de texto harmonioso
+    ctx.font = 'bold 32px "Georgia", "Times New Roman", serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+
+    const maxTextWidth = 840;
+    const words = storyMessage.trim().split(' ');
     const lines = [];
     let curLine = '';
 
     for (let w of words) {
       const testLine = curLine ? `${curLine} ${w}` : w;
-      if (ctx.measureText(testLine).width > maxPhraseWidth && curLine) {
+      if (ctx.measureText(testLine).width > maxTextWidth && curLine) {
         lines.push(curLine);
         curLine = w;
       } else {
@@ -229,142 +338,41 @@ export default function DepoimentosTab({ showToast }) {
     }
     if (curLine) lines.push(curLine);
 
-    const phraseStartY = 230;
-    const lineHeight = 54;
+    const messageStartY = textStartY + 64;
+    const lineHeight = 50;
     lines.forEach((line, idx) => {
-      ctx.fillText(line, W / 2, phraseStartY + (idx * lineHeight));
+      ctx.fillText(line, W / 2, messageStartY + (idx * lineHeight));
     });
 
-    // 4. Selo de Prova Social (Abaixo da frase)
-    const phraseBottomY = phraseStartY + (lines.length * lineHeight) + 20;
-    if (selectedBadge !== 'none') {
-      const badgeObj = BADGES.find(b => b.id === selectedBadge);
-      if (badgeObj) {
-        const badgeText = badgeObj.label;
-        ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, sans-serif';
-        const badgeWidth = ctx.measureText(badgeText).width + 48;
-        const badgeHeight = 46;
-        const badgeX = (W - badgeWidth) / 2;
-        const badgeY = phraseBottomY + 10;
+    const textBottomY = messageStartY + (lines.length * lineHeight);
 
-        // Fundo do selo com borda suave
-        ctx.fillStyle = currentTheme.id === 'clean-perola' ? 'rgba(2, 132, 199, 0.1)' : 'rgba(255, 255, 255, 0.12)';
-        ctx.beginPath();
-        drawRoundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 23);
-        ctx.fill();
+    // 5. LOGO OFICIAL DA AGÊNCIA (Centralizada na parte inferior antes do FEEDBACK)
+    const logoAreaCenterY = Math.min(Math.max(textBottomY + 90, 1530), 1640);
+    const logoSize = 150;
 
-        ctx.strokeStyle = currentTheme.id === 'clean-perola' ? 'rgba(2, 132, 199, 0.3)' : 'rgba(255, 255, 255, 0.25)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        ctx.fillStyle = currentTheme.accentColor;
-        ctx.fillText(badgeText, W / 2, badgeY + badgeHeight / 2 + 1);
-      }
-    }
-
-    // 5. Card Central do Print do Cliente (Sombra flutuante realista + cantos arredondados)
-    const cardTopY = 480;
-    const cardBottomY = 1680;
-    const availableHeight = cardBottomY - cardTopY;
-    const maxCardWidth = 920;
-
-    if (printImage) {
-      // Calcula dimensões preservando proporção
-      const scaleMultiplier = imageScale / 100;
-      let drawW = maxCardWidth * scaleMultiplier;
-      let drawH = (printImage.height / printImage.width) * drawW;
-
-      if (drawH > availableHeight) {
-        drawH = availableHeight * scaleMultiplier;
-        drawW = (printImage.width / printImage.height) * drawH;
-      }
-
-      const drawX = (W - drawW) / 2;
-      const drawY = cardTopY + (availableHeight - drawH) / 2;
-
-      // Sombra realista
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-      ctx.shadowBlur = 40;
-      ctx.shadowOffsetY = 20;
-
-      // Fundo branco do card (caso o print tenha transparência)
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
-      ctx.fill();
-      ctx.restore();
-
-      // Recorta cantos arredondados para a imagem
-      ctx.save();
-      ctx.beginPath();
-      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
-      ctx.clip();
-      ctx.drawImage(printImage, drawX, drawY, drawW, drawH);
-      ctx.restore();
-
-      // Borda sutil de acabamento
-      ctx.strokeStyle = currentTheme.cardBorder;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      drawRoundRect(ctx, drawX, drawY, drawW, drawH, 28);
-      ctx.stroke();
+    if (logoImgObj && logoImgObj.complete) {
+      const lx = (W - logoSize) / 2;
+      const ly = logoAreaCenterY - logoSize / 2;
+      ctx.drawImage(logoImgObj, lx, ly, logoSize, logoSize);
     } else {
-      // Placeholder quando ainda não enviou print
-      const pw = 840;
-      const ph = 960;
-      const px = (W - pw) / 2;
-      const py = cardTopY + (availableHeight - ph) / 2;
-
-      ctx.strokeStyle = currentTheme.id === 'clean-perola' ? 'rgba(15, 23, 42, 0.2)' : 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([16, 12]);
-      ctx.beginPath();
-      drawRoundRect(ctx, px, py, pw, ph, 28);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.font = '500 32px -apple-system, sans-serif';
-      ctx.fillStyle = currentTheme.subTextColor;
-      ctx.fillText('Envie ou cole o print do WhatsApp aqui', W / 2, py + ph / 2 - 20);
-
-      ctx.font = '24px -apple-system, sans-serif';
-      ctx.fillText('(O print aparecerá aqui em destaque)', W / 2, py + ph / 2 + 30);
+      // Fallback tipográfico caso a imagem ainda não tenha carregado
+      ctx.font = 'bold 28px -apple-system, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('CLUBE DO VOO VIAGENS', W / 2, logoAreaCenterY);
     }
+  }, [printImage, bgImage, logoImgObj, storyTitle, storyMessage, imageScale, blueIntensity]);
 
-    // 6. Rodapé Institucional da Agência
-    const footerY = 1790;
-
-    // Linha divisória sutil
-    ctx.strokeStyle = currentTheme.id === 'clean-perola' ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo((W - 800) / 2, footerY - 50);
-    ctx.lineTo((W + 800) / 2, footerY - 50);
-    ctx.stroke();
-
-    // Nome da agência e @ Instagram
-    ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, sans-serif';
-    ctx.fillStyle = currentTheme.textColor;
-    ctx.fillText('Clube do Voo Viagens', W / 2, footerY - 5);
-
-    ctx.font = '600 24px -apple-system, sans-serif';
-    ctx.fillStyle = currentTheme.accentColor;
-    ctx.fillText('@clubedovooviagens  •  clubedovoo.com.br', W / 2, footerY + 38);
-  }, [printImage, clientName, selectedPhrase, currentTheme, selectedBadge, imageScale]);
-
-  // Redesenha sempre que os parâmetros mudarem
   useEffect(() => {
     drawStory();
   }, [drawStory]);
 
-  // Download do Story em 1080x1920 PNG
+  // Download do Story em 1080 × 1920 PNG
   const handleDownloadStory = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     if (!printImage) {
-      showToast?.('Selecione ou cole um print de depoimento antes de baixar', 'error');
+      showToast?.('Selecione um print do WhatsApp antes de baixar', 'error');
       return;
     }
 
@@ -372,36 +380,34 @@ export default function DepoimentosTab({ showToast }) {
     try {
       canvas.toBlob((blob) => {
         if (!blob) {
-          showToast?.('Falha ao gerar arquivo de imagem', 'error');
+          showToast?.('Erro ao gerar arquivo de imagem', 'error');
           setGenerating(false);
           return;
         }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        const safeName = (clientName.trim() || 'cliente').replace(/[^a-zA-Z0-9_-]/g, '');
-        a.download = `Story-Depoimento-${safeName}-${Date.now()}.png`;
+        a.download = `Story-Feedback-ClubeDoVoo-${Date.now()}.png`;
         a.href = url;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast?.('Story baixado com sucesso em 1080x1920 (alta resolução)!', 'success');
+        showToast?.('Story baixado em altíssima resolução (1080×1920)!', 'success');
         setGenerating(false);
       }, 'image/png');
     } catch {
-      showToast?.('Erro ao processar imagem para download', 'error');
+      showToast?.('Falha ao processar download', 'error');
       setGenerating(false);
     }
   };
 
   // Copia legenda para o Instagram
   const handleCopyCaption = () => {
-    const nameStr = clientName.trim() ? ` da ${clientName.trim()}` : '';
-    const caption = `Mais uma viagem inesquecível realizada com todo suporte e carinho${nameStr}! ✈️🌍✨\n\n` +
-      `"${selectedPhrase}"\n\n` +
-      `Obrigado pela confiança em escolher o Clube do Voo Viagens. Cada mensagem como essa nos enche de orgulho e motivação! 💙\n\n` +
-      `Quer planejar sua próxima viagem com a mesma tranquilidade e os melhores preços? Fale conosco pelo link da bio ou envie uma mensagem no direct! 💬📲\n\n` +
-      `#clubedovoo #depoimento #avaliacaocliente #viagens #passagensaereas #turismo #viajarcomtranquilidade`;
+    const caption = `${storyTitle}\n\n` +
+      `"${storyMessage}"\n\n` +
+      `Cuidar de cada etapa da sua viagem com atenção, carinho e o melhor suporte é a nossa maior satisfação! 💙✈️\n\n` +
+      `Quer viajar com tranquilidade e as melhores tarifas? Fale conosco no link da bio ou envie uma mensagem no direct! 💬📲\n\n` +
+      `#clubedovoo #depoimento #avaliacaocliente #feedback #viagens #passagensaereas #turismo`;
 
     navigator.clipboard.writeText(caption).then(() => {
       setCopiedCaption(true);
@@ -414,7 +420,7 @@ export default function DepoimentosTab({ showToast }) {
 
   return (
     <div className="space-y-4 animate-fade-in pb-8">
-      {/* Segmented Control no Topo para Mobile (Permite alternar entre personalização e prévia) */}
+      {/* Segmented Control Mobile (1. Personalizar vs 2. Prévia & Baixar) */}
       <div className="lg:hidden flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm">
         <button
           type="button"
@@ -425,7 +431,7 @@ export default function DepoimentosTab({ showToast }) {
           className={`flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 min-h-[44px] transition-all cursor-pointer ${
             mobileView === 'editor'
               ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              : 'text-slate-600 dark:text-slate-400'
           }`}
         >
           <Palette className="w-4 h-4" />
@@ -440,26 +446,26 @@ export default function DepoimentosTab({ showToast }) {
           className={`flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-lg flex items-center justify-center gap-2 min-h-[44px] transition-all cursor-pointer relative ${
             mobileView === 'preview'
               ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              : 'text-slate-600 dark:text-slate-400'
           }`}
         >
           <Eye className="w-4 h-4" />
           <span>2. Prévia & Baixar</span>
           {printImage && (
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" title="Print pronto" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
           )}
         </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-220px)]">
-        {/* Coluna 1: Controles e Personalização */}
+        {/* Coluna 1: Controles e Uploads */}
         <div className={`lg:w-1/2 flex flex-col gap-5 min-w-0 ${mobileView === 'preview' ? 'hidden lg:flex' : 'flex'}`}>
-          {/* Bloco 1: Upload do Print */}
+          {/* Bloco 1: Print do Depoimento */}
           <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm">
             <div className="flex items-center justify-between mb-3 min-h-[44px]">
               <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
                 <UploadCloud className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                Print do Depoimento
+                1. Print do Depoimento (WhatsApp)
               </h3>
               {printImage && (
                 <button
@@ -467,213 +473,202 @@ export default function DepoimentosTab({ showToast }) {
                   onClick={() => setPrintImage(null)}
                   className="min-h-[44px] px-2 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 inline-flex items-center gap-1 cursor-pointer font-medium"
                 >
-                  <Trash2 className="w-4 h-4" /> Remover print
+                  <Trash2 className="w-4 h-4" /> Remover
                 </button>
               )}
             </div>
 
             <div
-              ref={dropZoneRef}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-5 sm:p-6 text-center cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-800/30 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20"
+              onClick={() => printInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-5 text-center cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-800/30 hover:bg-indigo-50/30"
             >
               {printImage ? (
                 <div className="flex items-center justify-center gap-3">
-                  <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <Check className="w-5 h-5 text-emerald-600 shrink-0" />
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    Print carregado! Clique para trocar ou selecione uma nova foto.
+                    Print carregado! Clique para trocar ou cole um novo com Ctrl+V.
                   </span>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <ImageIcon className="w-6 h-6" />
-                  </div>
+                <div className="space-y-1.5">
+                  <ImageIcon className="w-8 h-8 mx-auto text-indigo-500" />
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    Clique para selecionar o print da conversa
+                    Selecione o print da conversa
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    No computador: arraste ou cole com <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[11px]">Ctrl+V</kbd>
+                  <p className="text-xs text-slate-400">
+                    Ou arraste / cole com <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[11px]">Ctrl+V</kbd>
                   </p>
                 </div>
               )}
               <input
-                ref={fileInputRef}
+                ref={printInputRef}
                 type="file"
                 accept="image/*"
-                onChange={e => handleFile(e.target.files?.[0])}
+                onChange={e => handlePrintFile(e.target.files?.[0])}
                 className="hidden"
               />
             </div>
 
-            {/* Ações diretas de foto / galeria no Mobile */}
-            <div className="mt-3 md:hidden flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-sm font-medium min-h-[44px] active:bg-indigo-50 dark:active:bg-indigo-950/40 cursor-pointer"
-              >
-                <Camera className="w-4 h-4" /> Tirar foto ou abrir câmera
-              </button>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={e => handleFile(e.target.files?.[0])}
-                className="hidden"
-              />
-            </div>
+            {/* Ajuste de tamanho do print */}
+            {printImage && (
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5" /> Tamanho do Print na Arte
+                  </label>
+                  <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{imageScale}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={70}
+                  max={120}
+                  value={imageScale}
+                  onChange={e => setImageScale(parseInt(e.target.value, 10))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Bloco 2: Frase de Acolhimento Humanizada */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
-                <Sparkles className="w-5 h-5 text-amber-500" />
-                Frase de Acolhimento
-              </h3>
-              <span className="text-xs text-slate-400">Humanizado & Afetuoso</span>
+          {/* Bloco 2: Foto de Fundo dos Clientes (Opcional) */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+            <div className="flex items-center justify-between min-h-[44px]">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+                  <ImageIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  2. Foto dos Clientes de Fundo (Opcional)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {bgImage ? 'Foto ativa com filtro azul da marca' : 'Sem foto: usa as cores oficiais (#00569e, #3871c1, #0a73b0)'}
+                </p>
+              </div>
+              {bgImage && (
+                <button
+                  type="button"
+                  onClick={() => setBgImage(null)}
+                  className="min-h-[44px] px-2 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 inline-flex items-center gap-1 cursor-pointer font-medium"
+                >
+                  <Trash2 className="w-4 h-4" /> Remover foto
+                </button>
+              )}
             </div>
 
-            {/* Nome do Cliente (opcional) */}
+            <div
+              onClick={() => bgInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-xl p-4 text-center cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-800/30"
+            >
+              {bgImage ? (
+                <div className="flex items-center justify-center gap-2 text-emerald-600 text-sm font-medium">
+                  <Check className="w-5 h-5" /> Foto dos clientes aplicada! Clique para trocar.
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    Clique para selecionar uma foto dos clientes ou da viagem
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    A foto receberá o filtro azul profissional com a marca d'água FEEDBACK
+                  </p>
+                </div>
+              )}
+              <input
+                ref={bgInputRef}
+                type="file"
+                accept="image/*"
+                onChange={e => handleBgFile(e.target.files?.[0])}
+                className="hidden"
+              />
+            </div>
+
+            {/* Intensidade do Azul sobre a Foto */}
+            {bgImage && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Intensidade do Azul sobre a Foto
+                  </label>
+                  <span className="text-xs font-mono font-bold text-indigo-600">{blueIntensity}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={60}
+                  max={95}
+                  value={blueIntensity}
+                  onChange={e => setBlueIntensity(parseInt(e.target.value, 10))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Bloco 3: Frases Humanizadas (Título & Mensagem) */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              3. Textos do Story (Abaixo do Print)
+            </h3>
+
+            {/* Título Principal */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                Nome do Cliente (Opcional)
+                Título em Destaque
               </label>
               <input
                 type="text"
-                value={clientName}
-                onChange={e => setClientName(e.target.value)}
-                placeholder="Ex: Mariana, Família Silva, Dr. Roberto"
+                value={storyTitle}
+                onChange={e => setStoryTitle(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
               />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {PRESET_TITLES.map((t, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setStoryTitle(t)}
+                    className="text-[11px] px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-all"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Frase selecionada (editável) */}
+            {/* Mensagem / Frase de Acolhimento */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                Texto da Mensagem
+                Mensagem de Acolhimento
               </label>
               <textarea
                 rows={3}
-                value={selectedPhrase}
-                onChange={e => setSelectedPhrase(e.target.value)}
-                placeholder="Digite a frase de acolhimento para o story..."
+                value={storyMessage}
+                onChange={e => setStoryMessage(e.target.value)}
                 className="w-full p-3 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed min-h-[80px]"
               />
-            </div>
-
-            {/* Banco de Frases Rápidas com 1 clique */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                Sugestões Prontas (Toque para aplicar):
-              </label>
-              <div className="space-y-3">
-                {PRESET_PHRASES.map((group, gIdx) => (
-                  <div key={gIdx} className="space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="space-y-2 mt-2">
+                {PRESET_MESSAGES.map((group, gIdx) => (
+                  <div key={gIdx} className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                       {group.category}
                     </span>
-                    <div className="flex flex-col gap-2">
-                      {group.phrases.map((phrase, pIdx) => (
+                    <div className="flex flex-col gap-1.5">
+                      {group.items.map((item, iIdx) => (
                         <button
-                          key={pIdx}
+                          key={iIdx}
                           type="button"
-                          onClick={() => setSelectedPhrase(phrase)}
-                          className={`text-left p-3 rounded-xl text-xs sm:text-sm transition-all border cursor-pointer min-h-[44px] flex items-center ${
-                            selectedPhrase === phrase
-                              ? 'bg-indigo-50 border-indigo-400 text-indigo-900 dark:bg-indigo-950/60 dark:border-indigo-600 dark:text-indigo-200 font-semibold shadow-xs ring-1 ring-indigo-400/30'
-                              : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-800/40 dark:border-slate-700/60 dark:text-slate-300 dark:hover:bg-slate-800'
+                          onClick={() => setStoryMessage(item)}
+                          className={`text-left p-2.5 rounded-lg text-xs transition-all border cursor-pointer min-h-[40px] flex items-center ${
+                            storyMessage === item
+                              ? 'bg-indigo-50 border-indigo-400 text-indigo-900 dark:bg-indigo-950/60 dark:border-indigo-600 dark:text-indigo-200 font-semibold'
+                              : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-800/40 dark:border-slate-700/60 dark:text-slate-300'
                           }`}
                         >
-                          {phrase}
+                          {item}
                         </button>
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Bloco 3: Estilo Visual & Selo */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-base">
-              <Palette className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              Tema & Detalhes Visuais
-            </h3>
-
-            {/* Seletor de Tema / Fundo */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-                Fundo do Story
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {THEMES.map(theme => (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => setSelectedThemeId(theme.id)}
-                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-2 min-h-[72px] justify-center ${
-                      selectedThemeId === theme.id
-                        ? 'border-indigo-600 ring-2 ring-indigo-500/30 shadow-md bg-indigo-50/20 dark:bg-indigo-950/30'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                    }`}
-                  >
-                    <div
-                      className="w-full h-8 rounded-lg shadow-inner"
-                      style={{
-                        background: `linear-gradient(135deg, ${theme.bgGradient[0]}, ${theme.bgGradient[2]})`
-                      }}
-                    />
-                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
-                      {theme.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Selo de Prova Social */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-                Selo de Prova Social
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {BADGES.map(b => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setSelectedBadge(b.id)}
-                    className={`px-3.5 py-2.5 text-xs rounded-xl border font-medium transition-all cursor-pointer min-h-[44px] flex items-center justify-center ${
-                      selectedBadge === b.id
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                    }`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Ajuste de tamanho do print */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                  Tamanho do Print na Arte
-                </label>
-                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{imageScale}%</span>
-              </div>
-              <input
-                type="range"
-                min={70}
-                max={120}
-                value={imageScale}
-                onChange={e => setImageScale(parseInt(e.target.value, 10))}
-                className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600 py-2"
-              />
             </div>
           </div>
 
@@ -685,7 +680,7 @@ export default function DepoimentosTab({ showToast }) {
                 setMobileView('preview');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="w-full min-h-[48px] inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-lg shadow-indigo-600/25 cursor-pointer transition-all"
+              className="w-full min-h-[48px] inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/25 cursor-pointer transition-all"
             >
               <span>Ver Prévia & Baixar Story</span>
               <ArrowRight className="w-4 h-4" />
@@ -696,7 +691,7 @@ export default function DepoimentosTab({ showToast }) {
         {/* Coluna 2: Prévia ao Vivo em Formato Story (9:16) */}
         <div className={`lg:w-1/2 flex flex-col items-center ${mobileView === 'editor' ? 'hidden lg:flex' : 'flex'}`}>
           <div className="w-full max-w-sm lg:sticky lg:top-4 space-y-4">
-            {/* Botão de voltar para personalização no Mobile */}
+            {/* Topbar da Prévia no Mobile */}
             <div className="lg:hidden flex items-center justify-between">
               <button
                 type="button"
@@ -716,7 +711,7 @@ export default function DepoimentosTab({ showToast }) {
                 <Sparkles className="w-4 h-4 text-amber-500" />
                 Prévia do Story (9:16)
               </span>
-              <span className="text-[11px] text-slate-400">1080 × 1920 px</span>
+              <span className="text-[11px] text-slate-400 font-mono">1080 × 1920 px</span>
             </div>
 
             {/* Smartphone Mockup Frame */}
@@ -724,7 +719,7 @@ export default function DepoimentosTab({ showToast }) {
               {/* Notch / Speaker */}
               <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-slate-800 rounded-full z-20" />
 
-              {/* Canvas visível escalonado em proporção 9:16 */}
+              {/* Canvas 9:16 */}
               <div className="relative rounded-[26px] overflow-hidden aspect-[9/16] bg-slate-950 flex items-center justify-center shadow-inner">
                 <canvas
                   ref={canvasRef}
@@ -768,8 +763,9 @@ export default function DepoimentosTab({ showToast }) {
                 )}
               </button>
             </div>
+
             <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
-              A imagem é gerada em 1080×1920 no padrão do Instagram Stories com máxima nitidez.
+              Formato Instagram Stories 1080×1920 em alta nitidez com a logo e marcas da agência.
             </p>
           </div>
         </div>
