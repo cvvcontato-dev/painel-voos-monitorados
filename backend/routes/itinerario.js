@@ -53,6 +53,7 @@ router.get('/:token', (req, res) => {
     try { unified = JSON.parse(row.unified_json); } catch { return res.status(500).send('Erro ao ler reserva'); }
     db.get(`SELECT contact_phone, contact_email, contact_site FROM voucher_settings WHERE id = 1`, async (sErr, settingsRow) => {
       const settings = settingsRow || {};
+      settings.brand_color = process.env.BRAND_COLOR || '#00569e';
       // As URLs de check-in por grupo de reserva são derivadas dentro de
       // renderItinerarioPage (via buildReservationGroups + manageBookingUrl).
       try {
