@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera, Link2, Check, MessageCircle
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera, Link2, Check, MessageCircle, Ticket
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 import useBackClose from '../hooks/useBackClose';
 import WhatsAppMessageModal from './WhatsAppMessageModal';
 import SmartProcessingModal from './SmartProcessingModal';
 import useSmartProgress from '../hooks/useSmartProgress';
+import EmptyState from './EmptyState';
+import VoucherBoardingCard from './VoucherBoardingCard';
 
 const inputCls =
   "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -613,21 +615,21 @@ export default function VouchersTab({ showToast }) {
             </button>
           </div>
           {list.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum voucher ainda. Faça upload acima.</p>
+            <EmptyState
+              icon={Ticket}
+              title="Nenhum voucher emitido ainda"
+              description="Envie o PDF ou cole o print da confirmação de voo acima para que a inteligência artificial leia os trechos e gere o itinerário VIP."
+              hint="Dica: você também pode colar imagens direto da área de transferência (Ctrl+V)."
+            />
           ) : (
-            <div className="flex gap-2 flex-wrap">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[460px] overflow-y-auto pr-1">
               {list.map(v => (
-                <button
+                <VoucherBoardingCard
                   key={v.id}
+                  voucher={v}
+                  isSelected={selectedId === v.id}
                   onClick={() => select(v.id)}
-                  className={`px-3 py-1.5 min-h-[44px] md:min-h-0 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
-                    selectedId === v.id
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/25'
-                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700 dark:hover:border-indigo-500'
-                  }`}
-                >
-                  #{v.id} · {v.carrier || v.airline || 'sem cia'}
-                </button>
+                />
               ))}
             </div>
           )}

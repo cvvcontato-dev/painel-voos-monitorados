@@ -148,11 +148,42 @@ router.post('/combine', uploadMulti, async (req, res) => {
 
 router.get('/', (req, res) => {
   db.all(
-    `SELECT id, carrier, layout_version, created_at, updated_at FROM vouchers WHERE user_id = ? ORDER BY id DESC LIMIT 100`,
+    `SELECT id, carrier, layout_version, unified_json, created_at, updated_at FROM vouchers WHERE user_id = ? ORDER BY id DESC LIMIT 100`,
     [req.session.userId],
     (err, rows) => {
       if (err) { console.error('[VOUCHERS] erro ao listar', err.message); return res.status(500).json({ error: 'erro ao listar vouchers' }); }
-      res.json(rows);
+      const enriched = (rows || []).map(r => {
+        let meta = {};
+        try {
+          if (r.unified_json) {
+            const parsed = JSON.parse(r.unified_json);
+            const p0 = parsed.passengers?.[0]?.name || '';
+            const t0 = parsed.trips?.[0];
+            const tLast = parsed.trips?.[parsed.trips.length - 1];
+            const orig = t0?.origin || '';
+            const dest = tLast?.destination || t0?.destination || '';
+            const depDate = t0?.departureDate || (t0?.departureTime ? String(t0.departureTime).split('T')[0] : '');
+            meta = {
+              locator: parsed.reservation?.locator || '',
+              passenger: p0,
+              route: (orig && dest) ? `${orig} → ${dest}` : '',
+              origin: orig,
+              destination: dest,
+              departureDate: depDate,
+              tripsCount: parsed.trips?.length || 0
+            };
+          }
+        } catch (_) {}
+        return {
+          id: r.id,
+          carrier: r.carrier,
+          layout_version: r.layout_version,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          ...meta
+        };
+      });
+      res.json(enriched);
     }
   );
 });

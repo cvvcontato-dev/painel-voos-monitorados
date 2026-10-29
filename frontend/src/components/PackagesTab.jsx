@@ -6,6 +6,7 @@ import * as api from '../api/packageClient';
 import useBackClose from '../hooks/useBackClose';
 import SmartProcessingModal from './SmartProcessingModal';
 import useSmartProgress from '../hooks/useSmartProgress';
+import EmptyState from './EmptyState';
 
 const inputCls =
   "w-full px-3 py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -204,20 +205,28 @@ export default function PackagesTab({ showToast }) {
             <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2"><FileText className="w-4 h-4" /> Pacotes ({list.length})</h3>
             <button onClick={refresh} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white cursor-pointer" title="Atualizar"><RefreshCw className="w-4 h-4" /></button>
           </div>
-          <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto">
-            {list.length === 0 && <p className="text-xs text-slate-400">Nenhum pacote ainda.</p>}
-            {list.map(p => (
-              <div key={p.id} onClick={() => select(p.id)}
-                className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedId === p.id ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate pii">{p.title || `Pacote #${p.id}`}</div>
-                    <div className="text-[11px] text-slate-500"><span className="pii">{p.holder}</span> · {p.summary?.hotels || 0} hotel(s) · {p.summary?.addons || 0} adicional(is)</div>
+          <div className="flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-1">
+            {list.length === 0 ? (
+              <EmptyState
+                icon={PackageIcon}
+                title="Nenhum pacote montado ainda"
+                description="Crie propostas completas de viagem unindo voos, hospedagem e adicionais em um roteiro profissional."
+                hint="Faça upload dos vouchers avulsos acima para consolidar."
+              />
+            ) : (
+              list.map(p => (
+                <div key={p.id} onClick={() => select(p.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedId === p.id ? 'border-[#00569e] bg-blue-50/70 dark:bg-slate-800/90 shadow-sm ring-1 ring-[#00569e]/30' : 'border-slate-200 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 hover:border-[#3871c1]/50'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate pii">{p.title || `Pacote #${p.id}`}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5"><span className="pii font-medium">{p.holder}</span> · {p.summary?.hotels || 0} hotel(s) · {p.summary?.addons || 0} adicional(is)</div>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1.5 rounded-lg shrink-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} className="flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-1 rounded shrink-0 text-slate-400 hover:text-red-600 cursor-pointer" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -225,7 +234,11 @@ export default function PackagesTab({ showToast }) {
       {/* Coluna direita: editor + preview */}
       <div className={sectionCls}>
         {!current ? (
-          <div className="text-sm text-slate-400 text-center py-16">Selecione ou gere um pacote para ver o preview.</div>
+          <EmptyState
+            icon={PackageIcon}
+            title="Selecione um pacote"
+            description="Escolha um pacote da lista ao lado para ver o preview detalhado, editar diárias ou gerar o PDF oficial."
+          />
         ) : (
           <div className="flex flex-col gap-3">
             <div className="flex items-end gap-2">

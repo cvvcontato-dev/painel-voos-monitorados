@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, RefreshCw, Loader2, X, ArrowLeft } from 'lucide-react';
+import EmptyState from './EmptyState';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import useBackClose from '../hooks/useBackClose';
 import * as api from '../api/flightChangeClient';
@@ -213,11 +214,12 @@ export default function FlightChangesTab({ showToast }) {
           ) : items === null ? (
             <div className="p-3 text-sm text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
           ) : items.length === 0 ? (
-            <div className="p-4 text-sm text-slate-600 dark:text-slate-400 space-y-2">
-              <RefreshCw className="w-5 h-5 text-slate-400" />
-              <p className="font-medium text-slate-700 dark:text-slate-300">Nenhuma alteração de voo ainda.</p>
-              <p>Quando a companhia mudar um voo do cliente: (1) envie o voucher antigo e avise o cliente; (2) envie o voucher novo, confira as diferenças e confirme.</p>
-            </div>
+            <EmptyState
+              icon={RefreshCw}
+              title="Nenhuma alteração de voo pendente"
+              description="Quando a companhia aérea remarcar ou ajustar o voo de um passageiro, registre aqui para avisar o cliente e gerar o voucher atualizado."
+              hint="Dica: clique em 'Nova alteração' para registrar um reajuste de malha."
+            />
           ) : (
             <ul className="space-y-1">
               {items.map(it => {

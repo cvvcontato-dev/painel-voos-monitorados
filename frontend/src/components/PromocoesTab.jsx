@@ -8,6 +8,7 @@ import BackgroundPicker from './BackgroundPicker';
 import BackgroundBank from './BackgroundBank';
 import SmartProcessingModal from './SmartProcessingModal';
 import useSmartProgress from '../hooks/useSmartProgress';
+import EmptyState from './EmptyState';
 
 const fmtBRL = (v) => {
   const n = Number(v);
@@ -364,7 +365,7 @@ function ReviewStep({ promotion, meta, printUrl, loading, lowConf, setField, tog
           {printUrl ? (
             <img src={printUrl} alt="Print da promoção" className="w-full rounded-lg border border-slate-200 dark:border-slate-700/50" />
           ) : (
-            <div className="text-sm text-slate-400 dark:text-slate-500 py-8 text-center">Nenhuma imagem</div>
+            <EmptyState icon={ImageIcon} title="Nenhum print carregado" description="Envie uma imagem ou print acima para ler os dados promocionais com IA." hint="Dica: Cole um print com Ctrl+V a qualquer momento." className="py-6" />
           )}
         </div>
 
