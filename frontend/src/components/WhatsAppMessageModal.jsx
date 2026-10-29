@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Copy, Check, MessageCircle, Plus, Link as LinkIcon, User, CreditCard, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Copy, Check, MessageCircle, Plus, Link as LinkIcon, User, CreditCard, Sparkles, AlertCircle, Percent } from 'lucide-react';
 import useBackClose from '../hooks/useBackClose';
-import { getSellers, addSeller, removeSeller } from '../api/voucherClient';
+import { getSellers, addSeller } from '../api/voucherClient';
 
 function extractFirstName(fullName) {
   if (!fullName) return '';
@@ -16,12 +16,35 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
 
   // Campos do formulário
   const [clientName, setClientName] = useState('');
-  const [locator, setLocator] = useState('');
+  
+  // Modo de Localizador: 'single' | 'multiple'
+  const [locatorMode, setLocatorMode] = useState('single');
+  const [locatorSingle, setLocatorSingle] = useState('');
+  const [locatorIda, setLocatorIda] = useState('');
+  const [locatorVolta, setLocatorVolta] = useState('');
+
+  // Link do CRM
   const [crmLink, setCrmLink] = useState('');
-  const [paymentDetails, setPaymentDetails] = useState('');
+
+  // Detalhes do Pagamento
+  const [itemType, setItemType] = useState('Voo'); // 'Voo' | 'Pacote'
+  const [paxCount, setPaxCount] = useState(2);
+  const [itemAmount, setItemAmount] = useState('');
+  const [taxAmount, setTaxAmount] = useState('');
+  
+  // Desconto por forma de pagamento
+  const [hasDiscount, setHasDiscount] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState('-3%');
+  const [discountAmount, setDiscountAmount] = useState('');
+
+  // Modo livre para detalhes caso prefira editar
+  const [customDetails, setCustomDetails] = useState('');
+  const [useCustomDetails, setUseCustomDetails] = useState(false);
+
+  // Condição de Pagamento
   const [paymentStatus, setPaymentStatus] = useState('paid'); // 'paid' | 'pending'
   const [totalAmount, setTotalAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('em 4x sem juros no NuPay');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
 
   // Vendedores
@@ -48,7 +71,7 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
         }
       })
       .catch(() => {
-        // fallback silencioso
+        // fallback
       });
     return () => { active = false; };
   }, []);
@@ -62,25 +85,79 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
     const name = extractFirstName(firstPax) || 'Júnior';
     setClientName(name);
 
-    // Localizador
-    const loc = voucher?.reservation?.locator || '';
-    setLocator(loc);
+    // Quantidade de passageiros
+    const count = voucher?.passengers?.length || 2;
+    setPaxCount(count);
 
-    // Link do itinerário: começa vazio para permitir colar do CRM
+    // Identifica se há múltiplos localizadores nos trechos
+    const trips = voucher?.trips || [];
+    const tripLocators = trips.map(t => t.locator).filter(Boolean);
+    const uniqueLocs = [...new Set(tripLocators)];
+
+    if (uniqueLocs.length > 1) {
+      setLocatorMode('multiple');
+      const idaTrip = trips.find(t => t.direction === 'ida');
+      const voltaTrip = trips.find(t => t.direction === 'volta');
+      setLocatorIda(idaTrip?.locator || uniqueLocs[0] || '');
+      setLocatorVolta(voltaTrip?.locator || uniqueLocs[1] || '');
+    } else {
+      setLocatorMode('single');
+      const loc = voucher?.reservation?.locator || uniqueLocs[0] || '';
+      setLocatorSingle(loc);
+    }
+
+    // Link do itinerário
     setCrmLink('');
 
-    // Detalhes do pagamento pré-formatados com a quantidade de passageiros
-    const paxCount = voucher?.passengers?.length || 1;
-    const paxLabel = paxCount === 1 ? '1 pessoa' : `${paxCount} pessoas`;
-    setPaymentDetails(`> Voo para ${paxLabel}: R$ \n> Impostos, taxas e encargos: R$ `);
+    // Reset desconto e valores
+    setHasDiscount(false);
+    setDiscountPercent('-3%');
+    setDiscountAmount('');
+    setItemAmount('');
+    setTaxAmount('');
+    setUseCustomDetails(false);
 
     setCopied(false);
   }, [isOpen, voucher]);
 
-  // Mensagem final formatada no padrão exato solicitado
+  // Constrói as linhas de detalhes de pagamento estruturadas
+  const builtPaymentDetails = useMemo(() => {
+    if (useCustomDetails && customDetails) return customDetails;
+
+    const paxLabel = paxCount === 1 ? '1 pessoa' : `${paxCount} pessoas`;
+    const lines = [];
+
+    const itemStr = itemAmount.trim() ? `R$ ${itemAmount.trim()}` : '';
+    lines.push(`> ${itemType} para ${paxLabel}: ${itemStr}`);
+
+    const taxStr = taxAmount.trim() ? `R$ ${taxAmount.trim()}` : '';
+    lines.push(`> Impostos, taxas e encargos: ${taxStr}`);
+
+    if (hasDiscount) {
+      const pct = discountPercent.trim() ? `(${discountPercent.trim()})` : '';
+      const discVal = discountAmount.trim()
+        ? (discountAmount.trim().startsWith('-') ? discountAmount.trim() : `-R$ ${discountAmount.trim()}`)
+        : '';
+      lines.push(`> Desconto por forma de pagamento ${pct}: ${discVal}`);
+    }
+
+    return lines.join('\n');
+  }, [useCustomDetails, customDetails, itemType, paxCount, itemAmount, taxAmount, hasDiscount, discountPercent, discountAmount]);
+
+  // Constrói o bloco de localizador
+  const locatorBlock = useMemo(() => {
+    if (locatorMode === 'multiple') {
+      const ida = locatorIda.trim() || '---';
+      const volta = locatorVolta.trim() || '---';
+      return `Localizadores:\n> Ida: _${ida}_\n> Volta: _${volta}_`;
+    }
+    const single = locatorSingle.trim() || '---';
+    return `Localizador: \n> _${single}_`;
+  }, [locatorMode, locatorSingle, locatorIda, locatorVolta]);
+
+  // Mensagem final formatada no WhatsApp
   const formattedMessage = useMemo(() => {
     const name = clientName?.trim() || 'Cliente';
-    const loc = locator?.trim() || '---';
     const link = crmLink?.trim();
 
     let linkBlock = '';
@@ -88,29 +165,28 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
       linkBlock = `Para visualizar todos os detalhes da sua viagem, acesse o link:\n${link}\n\n`;
     }
 
-    let payDetailsBlock = '';
-    if (paymentDetails?.trim()) {
-      payDetailsBlock = `🏦 Detalhes do pagamento:\n${paymentDetails.trim()}\n\n`;
-    }
+    const payDetailsBlock = builtPaymentDetails.trim()
+      ? `*🏦 Detalhes do pagamento:*\n${builtPaymentDetails.trim()}\n\n`
+      : '';
 
     let payDataBlock = '';
     if (paymentStatus === 'paid') {
-      const totalStr = totalAmount?.trim() ? `Total: R$ ${totalAmount.trim()}` : 'Total pago';
+      const totalStr = totalAmount?.trim() ? `R$ ${totalAmount.trim()}` : '';
       const methodStr = paymentMethod?.trim() ? `, ${paymentMethod.trim()}` : '';
-      payDataBlock = `💰 Dados para o seu pagamento: \n${totalStr}${methodStr}.✅\n\n`;
+      const dot = totalStr.endsWith('.') ? '' : '.';
+      payDataBlock = `*💰 Dados para o seu pagamento:*\n*Total:* ${totalStr}${methodStr}${dot}✅\n\n`;
     } else {
-      const totalStr = totalAmount?.trim() ? `Total: R$ ${totalAmount.trim()}` : 'Total a pagar';
+      const totalStr = totalAmount?.trim() ? `R$ ${totalAmount.trim()}` : '';
       const linkStr = paymentLink?.trim() ? `\nLink para pagamento: ${paymentLink.trim()} 💳` : '';
-      payDataBlock = `💰 Dados para o seu pagamento: \n${totalStr}.${linkStr}\n\n`;
+      payDataBlock = `*💰 Dados para o seu pagamento:*\n*Total:* ${totalStr}.${linkStr}\n\n`;
     }
 
     const sellerName = selectedSeller?.trim() || 'Joabh Souza';
 
-    return `Pronto, ${name}! 🌟\n\n` +
+    return `*Pronto, ${name}! 🌟*\n\n` +
       `Parabéns pela sua compra!🥳 Sua reserva foi confirmada com sucesso! ✈️🧳\n\n` +
-      `✈️ Dados da reserva:\n` +
-      `Localizador: \n` +
-      `> ${loc}\n\n` +
+      `*✈️ Dados da reserva:*\n` +
+      `${locatorBlock}\n\n` +
       linkBlock +
       payDetailsBlock +
       payDataBlock +
@@ -118,7 +194,7 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
       `Atenciosamente,\n` +
       `_${sellerName}_\n` +
       `_Clube do Voo Viagens LTDA_`;
-  }, [clientName, locator, crmLink, paymentDetails, paymentStatus, totalAmount, paymentMethod, paymentLink, selectedSeller]);
+  }, [clientName, locatorBlock, crmLink, builtPaymentDetails, paymentStatus, totalAmount, paymentMethod, paymentLink, selectedSeller]);
 
   const handleSelectSeller = (e) => {
     const val = e.target.value;
@@ -179,7 +255,7 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize os dados e copie ou envie direto para o cliente.
+                Personalize os dados e copie ou envie direto para o cliente com formatação oficial.
               </p>
             </div>
           </div>
@@ -195,38 +271,96 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Coluna 1: Campos */}
           <div className="lg:col-span-6 space-y-4">
-            {/* Linha 1: Nome do Cliente + Localizador */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                  Nome do Cliente
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={clientName}
-                    onChange={e => setClientName(e.target.value)}
-                    placeholder="Ex: Júnior"
-                    className="w-full pl-9 pr-3 py-2 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                  Localizador
-                </label>
+            {/* Nome do Cliente */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
+                Nome do Cliente
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  value={locator}
-                  onChange={e => setLocator(e.target.value.toUpperCase())}
-                  placeholder="Ex: AYZEER"
-                  className="w-full px-3 py-2 text-base md:text-sm font-mono font-bold tracking-wider bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-emerald-700 dark:text-emerald-400 uppercase"
+                  value={clientName}
+                  onChange={e => setClientName(e.target.value)}
+                  placeholder="Ex: Júnior"
+                  className="w-full pl-9 pr-3 py-2 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
 
-            {/* Linha 2: Link do CRM */}
+            {/* Localizadores: Único ou Múltiplos (Ida/Volta) */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Localizador da Reserva
+                </label>
+                <div className="flex rounded-lg bg-slate-200 dark:bg-slate-700 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLocatorMode('single')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                      locatorMode === 'single'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    Único
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocatorMode('multiple')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                      locatorMode === 'multiple'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    Ida e Volta
+                  </button>
+                </div>
+              </div>
+
+              {locatorMode === 'single' ? (
+                <div>
+                  <input
+                    type="text"
+                    value={locatorSingle}
+                    onChange={e => setLocatorSingle(e.target.value.toUpperCase())}
+                    placeholder="Ex: AYZEER"
+                    className="w-full px-3 py-2 text-base md:text-sm font-mono font-bold tracking-wider bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-emerald-700 dark:text-emerald-400 uppercase"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                      Ida
+                    </label>
+                    <input
+                      type="text"
+                      value={locatorIda}
+                      onChange={e => setLocatorIda(e.target.value.toUpperCase())}
+                      placeholder="Ex: LNVZPS"
+                      className="w-full px-3 py-1.5 text-base md:text-sm font-mono font-bold tracking-wider bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-emerald-700 dark:text-emerald-400 uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                      Volta
+                    </label>
+                    <input
+                      type="text"
+                      value={locatorVolta}
+                      onChange={e => setLocatorVolta(e.target.value.toUpperCase())}
+                      placeholder="Ex: SICQVA"
+                      className="w-full px-3 py-1.5 text-base md:text-sm font-mono font-bold tracking-wider bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-emerald-700 dark:text-emerald-400 uppercase"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Link do CRM */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
@@ -252,29 +386,140 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                   className="w-full pl-9 pr-3 py-2 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 dark:text-slate-100"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                Cole o link gerado pelo seu CRM. Se deixado em branco, essa linha é omitida.
-              </p>
             </div>
 
-            {/* Linha 3: Detalhes do Pagamento */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                Detalhes do Pagamento (Discriminação)
-              </label>
-              <textarea
-                rows={3}
-                value={paymentDetails}
-                onChange={e => setPaymentDetails(e.target.value)}
-                placeholder="> Voo para 2 pessoas: R$ 2.234,16&#10;> Impostos, taxas e encargos: R$ 312,49"
-                className="w-full p-2.5 text-base md:text-sm font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 dark:text-slate-100 resize-none"
-              />
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Linhas com <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-bold">&gt;</code> viram barras de citação no WhatsApp.
-              </p>
+            {/* Detalhes do Pagamento (com Desconto Opcional) */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  🏦 Detalhes do Pagamento
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!useCustomDetails) setCustomDetails(builtPaymentDetails);
+                    setUseCustomDetails(!useCustomDetails);
+                  }}
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  {useCustomDetails ? 'Usar campos estruturados' : 'Editar texto livre'}
+                </button>
+              </div>
+
+              {!useCustomDetails ? (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                        Tipo
+                      </label>
+                      <select
+                        value={itemType}
+                        onChange={e => setItemType(e.target.value)}
+                        className="w-full px-2 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                      >
+                        <option value="Voo">Voo</option>
+                        <option value="Pacote">Pacote</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                        Qtd. Passageiros
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={paxCount}
+                        onChange={e => setPaxCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full px-2 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                        Valor Voo/Pacote (R$)
+                      </label>
+                      <input
+                        type="text"
+                        value={itemAmount}
+                        onChange={e => setItemAmount(e.target.value)}
+                        placeholder="Ex: 2.234,16"
+                        className="w-full px-2 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                      Impostos, taxas e encargos (R$)
+                    </label>
+                    <input
+                      type="text"
+                      value={taxAmount}
+                      onChange={e => setTaxAmount(e.target.value)}
+                      placeholder="Ex: 312,49"
+                      className="w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  {/* Checkbox Desconto por forma de pagamento */}
+                  <div className="pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                    <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+                      <input
+                        type="checkbox"
+                        checked={hasDiscount}
+                        onChange={e => setHasDiscount(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-700"
+                      />
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                        <Percent className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Desconto por forma de pagamento
+                      </span>
+                    </label>
+
+                    {hasDiscount && (
+                      <div className="grid grid-cols-2 gap-2 mt-2 pl-6 animate-fade-in">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                            Percentual
+                          </label>
+                          <input
+                            type="text"
+                            value={discountPercent}
+                            onChange={e => setDiscountPercent(e.target.value)}
+                            placeholder="Ex: -3%"
+                            className="w-full px-2.5 py-1 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
+                            Valor do desconto (R$)
+                          </label>
+                          <input
+                            type="text"
+                            value={discountAmount}
+                            onChange={e => setDiscountAmount(e.target.value)}
+                            placeholder="Ex: 175,35"
+                            className="w-full px-2.5 py-1 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <textarea
+                    rows={4}
+                    value={customDetails}
+                    onChange={e => setCustomDetails(e.target.value)}
+                    placeholder="> Voo para 2 pessoas: R$ 2.234,16&#10;> Impostos, taxas e encargos: R$ 312,49&#10;> Desconto por forma de pagamento (-3%): -R$ 175,35"
+                    className="w-full p-2.5 text-sm font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 resize-none"
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Linha 4: Dados para o Pagamento (Status / Condição) */}
+            {/* Dados para o Pagamento (Status / Condição) */}
             <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -315,7 +560,7 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                     type="text"
                     value={totalAmount}
                     onChange={e => setTotalAmount(e.target.value)}
-                    placeholder="Ex: 2.546,65"
+                    placeholder="Ex: 5.669,65"
                     className="w-full px-3 py-1.5 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100"
                   />
                 </div>
@@ -323,7 +568,7 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                 {paymentStatus === 'paid' ? (
                   <div>
                     <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-0.5">
-                      Forma / Condição
+                      Condição / Forma (opcional)
                     </label>
                     <input
                       type="text"
@@ -350,10 +595,10 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
               </div>
             </div>
 
-            {/* Linha 5: Vendedor no rodapé */}
+            {/* Vendedor no rodapé (sem alterar a formatação do rodapé) */}
             <div className="pt-1">
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                Vendedor / Emissor (Rodapé)
+                Vendedor / Emissor
               </label>
               <div className="flex gap-2">
                 <select
@@ -416,20 +661,32 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
             </div>
 
             {/* Container estilo WhatsApp Dark Wallpaper */}
-            <div className="flex-1 min-h-[360px] bg-[#0c1317] rounded-xl p-4 sm:p-5 overflow-y-auto border border-[#222d34] flex flex-col justify-between shadow-inner">
+            <div className="flex-1 min-h-[400px] bg-[#0c1317] rounded-xl p-4 sm:p-5 overflow-y-auto border border-[#222d34] flex flex-col justify-between shadow-inner">
               {/* Balão de mensagem verde do WhatsApp */}
               <div className="self-end max-w-full sm:max-w-[94%] bg-[#005c4b] text-[#e9edef] rounded-2xl rounded-tr-sm p-4 text-[13.5px] leading-relaxed shadow-md font-sans">
-                {/* Renderização formatada */}
+                {/* Renderização formatada com negritos e citações reais */}
                 <div className="whitespace-pre-wrap break-words space-y-3 font-normal">
-                  <p>Pronto, <strong className="font-semibold text-white">{clientName || 'Júnior'}</strong>! 🌟</p>
+                  <p><strong className="font-bold text-white">Pronto, {clientName || 'Júnior'}! 🌟</strong></p>
                   <p>Parabéns pela sua compra!🥳 Sua reserva foi confirmada com sucesso! ✈️🧳</p>
 
                   <div>
-                    <p className="font-medium text-white">✈️ Dados da reserva:</p>
-                    <p className="text-[#aebac1]">Localizador:</p>
-                    <div className="border-l-4 border-emerald-300 pl-2.5 my-1 text-emerald-200 font-mono font-bold tracking-wider">
-                      {locator || 'AYZEER'}
-                    </div>
+                    <p className="font-bold text-white">✈️ Dados da reserva:</p>
+                    {locatorMode === 'multiple' ? (
+                      <>
+                        <p className="text-[#aebac1]">Localizadores:</p>
+                        <div className="border-l-4 border-emerald-300 pl-2.5 my-1 space-y-0.5">
+                          <div>Ida: <span className="italic font-mono text-emerald-200 font-bold">{locatorIda || 'LNVZPS'}</span></div>
+                          <div>Volta: <span className="italic font-mono text-emerald-200 font-bold">{locatorVolta || 'SICQVA'}</span></div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[#aebac1]">Localizador:</p>
+                        <div className="border-l-4 border-emerald-300 pl-2.5 my-1">
+                          <span className="italic font-mono text-emerald-200 font-bold">{locatorSingle || 'AYZEER'}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {crmLink ? (
@@ -451,11 +708,11 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                     </div>
                   )}
 
-                  {paymentDetails && (
+                  {builtPaymentDetails && (
                     <div>
-                      <p className="font-medium text-white">🏦 Detalhes do pagamento:</p>
-                      <div className="border-l-4 border-emerald-300 pl-2.5 my-1 text-emerald-100 font-mono text-[13px] whitespace-pre-wrap">
-                        {paymentDetails.split('\n').map((line, idx) => (
+                      <p className="font-bold text-white">🏦 Detalhes do pagamento:</p>
+                      <div className="border-l-4 border-emerald-300 pl-2.5 my-1 text-emerald-100 font-mono text-[13px] whitespace-pre-wrap space-y-0.5">
+                        {builtPaymentDetails.split('\n').map((line, idx) => (
                           <div key={idx}>{line.replace(/^>\s*/, '')}</div>
                         ))}
                       </div>
@@ -463,14 +720,14 @@ export default function WhatsAppMessageModal({ isOpen, onClose, voucher, itinera
                   )}
 
                   <div>
-                    <p className="font-medium text-white">💰 Dados para o seu pagamento:</p>
+                    <p className="font-bold text-white">💰 Dados para o seu pagamento:</p>
                     {paymentStatus === 'paid' ? (
                       <p>
-                        Total: R$ {totalAmount || '2.546,65'}{paymentMethod ? `, ${paymentMethod}` : ''}.✅
+                        <strong className="font-bold text-white">Total:</strong> R$ {totalAmount || '5.669,65'}{paymentMethod ? `, ${paymentMethod}` : ''}.✅
                       </p>
                     ) : (
                       <p>
-                        Total: R$ {totalAmount || '---'}.
+                        <strong className="font-bold text-white">Total:</strong> R$ {totalAmount || '---'}.
                         {paymentLink && (
                           <span className="block text-[#53bdeb] underline break-all">
                             Link para pagamento: {paymentLink} 💳
