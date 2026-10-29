@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import {
-  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera
+  UploadCloud, FileText, Save, Download, Trash2, Plus, X, RefreshCw, Settings as SettingsIcon, ChevronDown, ChevronUp, Mail, Camera, Link2, Check, MessageCircle
 } from 'lucide-react';
 import * as api from '../api/voucherClient';
 import useBackClose from '../hooks/useBackClose';
@@ -36,6 +36,33 @@ export default function VouchersTab({ showToast }) {
   const [emailRecipients, setEmailRecipients] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyLink = () => {
+    const url = current?.itinerario_url;
+    if (!url) {
+      showToast('Link do itinerário ainda indisponível', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(true);
+      showToast('Link do itinerário copiado!', 'success');
+      setTimeout(() => setCopiedLink(false), 2000);
+    }).catch(() => {
+      showToast('Erro ao copiar link', 'error');
+    });
+  };
+
+  const handleShareWhatsApp = () => {
+    const url = current?.itinerario_url;
+    if (!url) {
+      showToast('Link do itinerário ainda indisponível', 'error');
+      return;
+    }
+    const loc = current?.unified?.reservation?.locator ? ` (Localizador: ${current.unified.reservation.locator})` : '';
+    const msg = `Olá! Segue o link com o itinerário e informações da sua viagem${loc}:\n\n${url}\n\nVocê também pode baixar o voucher em PDF diretamente pelo link.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
   // Modo de upload: 'single' (1 voucher) ou 'multi' (2 a 8: ida + internos + volta)
   const [uploadMode, setUploadMode] = useState('single');
   const [multiItems, setMultiItems] = useState([{ id: newItemId(), file: null, role: 'ida' }]);

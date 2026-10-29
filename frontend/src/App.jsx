@@ -24,6 +24,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import MobileNav from './components/mobile/MobileNav';
 import MobileMenu from './components/mobile/MobileMenu';
+import DashboardSummary from './components/DashboardSummary';
 
 const TABS = [
   { value: 'precos', label: 'Preços', icon: <DollarSign className="w-4 h-4" /> },
@@ -111,6 +112,7 @@ function AppShell() {
           </div>
         </header>
 
+        <DashboardSummary onTabChange={setActiveTab} />
         <div className="hidden md:block"><Tabs active={activeTab} onChange={setActiveTab} tabs={TABS} /></div>
         {activeTab === 'precos' && <PrecosTab showToast={showToast} />}
         {activeTab === 'status' && <StatusTab showToast={showToast} />}

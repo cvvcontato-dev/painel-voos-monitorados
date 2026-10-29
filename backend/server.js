@@ -46,6 +46,7 @@ const itinerarioRouter = require('./routes/itinerario');
 const pacoteRouter = require('./routes/pacote');
 const boardingPassesRouter = require('./routes/boardingPasses');
 const shortLinkRouter = require('./routes/shortLink');
+const dashboardRouter = require('./routes/dashboard');
 const { startJob: startBoardingPassRetention } = require('./services/boardingPassRetention');
 
 const app = express();
@@ -107,6 +108,7 @@ app.use('/api/boarding-passes', boardingPassesRouter);
 app.use('/api/flight-changes', flightChangesRouter);
 app.use('/api/backups', backupsRouter);
 app.use('/api/promo-backgrounds', promoBackgroundsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // Serve local static assets (e.g. background images for promo rendering)
 app.use('/static', express.static(path.join(__dirname, 'static')));

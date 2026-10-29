@@ -204,4 +204,27 @@ async function waitForDb() {
   throw new Error('waitForDb: monitored_flights_status table never appeared after 5s');
 }
 
-module.exports = { makeApp, makeAuthApp, makePromoApp, makeVoucherApp, makeFlightChangeApp, makePackageApp, makeBoardingPassApp, getCsrfFromResponse, waitForDb };
+function makeDashboardApp() {
+  const app = express();
+  app.use(cookieParser());
+  app.use(express.json());
+  app.use(session({
+    store: new SqliteStore({
+      db: 'sessions-test.sqlite',
+      dir: process.env.DB_PATH,
+      cleanupInterval: 3600
+    }),
+    name: 'cvv.sid',
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'strict', secure: false }
+  }));
+  app.use('/api', csrfMiddleware);
+  app.use('/api/auth', authRouter);
+  app.use('/api', requireAuth);
+  app.use('/api/dashboard', require('../routes/dashboard'));
+  return app;
+}
+
+module.exports = { makeApp, makeAuthApp, makePromoApp, makeVoucherApp, makeFlightChangeApp, makePackageApp, makeBoardingPassApp, makeDashboardApp, getCsrfFromResponse, waitForDb };
