@@ -52,9 +52,14 @@ function listBackups() {
     return fs.readdirSync(BACKUP_DIR)
       .filter(f => FILE_RE.test(f))
       .map(f => {
-        const st = fs.statSync(path.join(BACKUP_DIR, f));
-        return { arquivo: f, bytes: st.size, criado_em: st.mtime.toISOString(), fotos: fotosDoBackup(f) };
+        try {
+          const st = fs.statSync(path.join(BACKUP_DIR, f));
+          return { arquivo: f, bytes: st.size, criado_em: st.mtime.toISOString(), fotos: fotosDoBackup(f) };
+        } catch {
+          return null;
+        }
       })
+      .filter(Boolean)
       .sort((a, b) => b.criado_em.localeCompare(a.criado_em));
   } catch (err) {
     console.error('[BACKUP] Falha ao listar:', err.message);
@@ -118,10 +123,29 @@ function backupBackgrounds(carimbo) {
 }
 
 /** Apaga as pastas de fotos cujo backup do banco (mesmo carimbo) não existe mais. */
-function rotateBackgrounds() {
+function rotateBackgrounds(backupsConhecidos) {
   try {
-    const vivos = new Set(listBackups().map(b => b.arquivo.slice(PREFIX.length, -SUFFIX.length)));
-    for (const p of fs.readdirSync(BACKUP_DIR).filter(f => BG_RE.test(f))) {
+    let carimbos;
+    if (Array.isArray(backupsConhecidos)) {
+      carimbos = backupsConhecidos.map(b => b.arquivo.slice(PREFIX.length, -SUFFIX.length));
+    } else {
+      carimbos = fs.readdirSync(BACKUP_DIR)
+        .filter(f => FILE_RE.test(f))
+        .map(f => f.slice(PREFIX.length, -SUFFIX.length));
+    }
+
+    const pastasFundos = fs.readdirSync(BACKUP_DIR).filter(f => BG_RE.test(f));
+    if (!pastasFundos.length) return;
+
+    // Proteção: se não encontrou nenhum backup de banco, preserva os fundos para evitar
+    // deleção acidental causada por falha de leitura ou lista vazia inesperada.
+    if (!carimbos.length) {
+      console.warn('[BACKUP] Nenhum backup de banco identificado; preservando pastas de fundos.');
+      return;
+    }
+
+    const vivos = new Set(carimbos);
+    for (const p of pastasFundos) {
       if (vivos.has(p.slice(BG_PREFIX.length))) continue;
       try { fs.rmSync(path.join(BACKUP_DIR, p), { recursive: true, force: true }); }
       catch (err) { console.error(`[BACKUP] Não consegui apagar ${p}:`, err.message); }
@@ -139,7 +163,8 @@ function rotate() {
     try { fs.unlinkSync(path.join(BACKUP_DIR, b.arquivo)); apagados++; }
     catch (err) { console.error(`[BACKUP] Não consegui apagar ${b.arquivo}:`, err.message); }
   }
-  rotateBackgrounds();
+  const sobreviventes = all.slice(0, keep);
+  rotateBackgrounds(sobreviventes);
   return apagados;
 }
 
@@ -240,4 +265,4 @@ function resolveBackupPath(nome) {
   return fs.existsSync(alvo) ? alvo : null;
 }
 
-module.exports = { runBackup, listBackups, rotate, startBackupScheduler, resolveBackupPath, BACKUP_DIR, backupBackgrounds, BG_RE };
+module.exports = { runBackup, listBackups, rotate, startBackupScheduler, resolveBackupPath, BACKUP_DIR, backupBackgrounds, BG_RE, rotateBackgrounds };

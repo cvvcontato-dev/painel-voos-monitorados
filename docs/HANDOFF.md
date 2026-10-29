@@ -202,7 +202,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 - [x] `POST /api/vouchers` migrado para `helpers/voucherStore.js` (duplicação de extração/gravação eliminada; tratamento 402/503/429 alinhado).
 - [x] Vouchers da aba Vouchers geram e persistem PDF guardado via `voucherPdfStore.ensure` no envio de e-mail (`POST /:id/send-email`), exportação (`GET /:id/export?format=pdf`) e background em criação/edição. Suíte 100% verde (744/744).
 - [ ] Comparação: passageiros **homônimos** contam como um; subconjunto de nome (nome do meio omitido) pode juntar pessoas diferentes (pai/filho sem sufixo) — documentado em `helpers/flightChangeDiff.js`.
-- [ ] `listBackups()` devolvendo `[]` por erro de leitura faria a rotação apagar as pastas `fundos-*` (improvável; proteger se mexer em `services/backup.js`).
+- [x] Proteção na rotação de backups (`services/backup.js`): se a listagem de bancos falhar ou vier vazia, as pastas de fundos (`fundos-*`) são preservadas; tratamento com try/catch individual de `statSync` por arquivo. Suíte 100% verde (746/746).
 - [ ] Possível corrida teórica de `confirm`/`send-email` com um `PUT /new` simultâneo (janela de ms; uso interno).
 - [ ] `new-voucher` sempre recomeça do voucher **antigo** (decisão); se a usuária quiser acumular prints parciais, mudar para partir do `new_json` e ajustar a UI.
 - [ ] TTL do link público = 90 dias (mesmo padrão da aba Vouchers). Voo marcado para além disso teria link expirado.

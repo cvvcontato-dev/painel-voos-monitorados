@@ -146,3 +146,46 @@ test('pasta que não casa BG_RE nunca é apagada pela rotação', () => {
   backup.rotate();
   expect(fs.existsSync(lixo)).toBe(true);
 });
+
+test('se listBackups retornar vazio, rotateBackgrounds não apaga pastas de fundos existentes', () => {
+  fs.mkdirSync(backup.BACKUP_DIR, { recursive: true });
+  const pastaFundo = path.join(backup.BACKUP_DIR, 'fundos-20260101-000001');
+  fs.mkdirSync(pastaFundo, { recursive: true });
+  fs.writeFileSync(path.join(pastaFundo, 'foto-1111111111.jpg'), 'FOTO');
+
+  // Sem nenhum .sqlite (ou lista de conhecidos vazia)
+  backup.rotateBackgrounds([]);
+  expect(fs.existsSync(pastaFundo)).toBe(true);
+
+  // Também via rotate direto quando listBackups for mockado para retornar vazio
+  const listSpy = jest.spyOn(backup, 'listBackups').mockReturnValue([]);
+  try {
+    backup.rotate();
+    expect(fs.existsSync(pastaFundo)).toBe(true);
+  } finally {
+    listSpy.mockRestore();
+  }
+});
+
+test('falha de statSync em um arquivo não descarta os demais arquivos em listBackups', () => {
+  fs.mkdirSync(backup.BACKUP_DIR, { recursive: true });
+  const f1 = path.join(backup.BACKUP_DIR, 'database-20260101-000001.sqlite');
+  const f2 = path.join(backup.BACKUP_DIR, 'database-20260101-000002.sqlite');
+  fs.writeFileSync(f1, 'db1');
+  fs.writeFileSync(f2, 'db2');
+
+  const realStat = fs.statSync;
+  const statSpy = jest.spyOn(fs, 'statSync').mockImplementation((p, ...args) => {
+    if (String(p).includes('database-20260101-000001.sqlite')) {
+      throw new Error('EACCES simulado');
+    }
+    return realStat(p, ...args);
+  });
+
+  try {
+    const list = backup.listBackups();
+    expect(list.some(b => b.arquivo === 'database-20260101-000002.sqlite')).toBe(true);
+  } finally {
+    statSpy.mockRestore();
+  }
+});
