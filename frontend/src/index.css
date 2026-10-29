@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+@theme {
+  --color-indigo-50: #eef5fb;
+  --color-indigo-100: #d7e7f7;
+  --color-indigo-200: #b5d5f0;
+  --color-indigo-300: #82bee6;
+  --color-indigo-400: #3871c1;
+  --color-indigo-500: #0a73b0;
+  --color-indigo-600: #00569e;
+  --color-indigo-700: #004782;
+  --color-indigo-800: #003766;
+  --color-indigo-900: #00284d;
+  --color-indigo-950: #001933;
+
+  --color-brand: #00569e;
+  --color-brand-light: #3871c1;
+  --color-brand-dark: #004782;
+  --color-brand-accent: #0a73b0;
+}
+
+
 /* Enable .dark class-based dark mode (Tailwind v4 syntax). */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -11,8 +31,8 @@
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
-      radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.05) 0%, transparent 50%);
+      radial-gradient(circle at 15% 50%, rgba(0, 86, 158, 0.06) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(56, 113, 193, 0.06) 0%, transparent 50%);
     background-attachment: fixed;
   }
 
@@ -20,12 +40,12 @@
     background-color: theme(colors.slate.950);
     color: theme(colors.slate.100);
     background-image:
-      radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.08) 0%, transparent 50%);
+      radial-gradient(circle at 15% 50%, rgba(0, 86, 158, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(56, 113, 193, 0.08) 0%, transparent 50%);
   }
 
   ::selection {
-    background-color: rgba(99, 102, 241, 0.3);
+    background-color: rgba(0, 86, 158, 0.25);
   }
 }
 
