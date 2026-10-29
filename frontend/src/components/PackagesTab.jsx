@@ -4,6 +4,8 @@ import {
 } from 'lucide-react';
 import * as api from '../api/packageClient';
 import useBackClose from '../hooks/useBackClose';
+import SmartProcessingModal from './SmartProcessingModal';
+import useSmartProgress from '../hooks/useSmartProgress';
 
 const inputCls =
   "w-full px-3 py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -36,6 +38,7 @@ export default function PackagesTab({ showToast }) {
   const [emailTo, setEmailTo] = useState('');
   const [emailMsg, setEmailMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const smartProgress = useSmartProgress();
   const [items, setItems] = useState([
     { id: newId(), file: null, kind: 'flight', fixed: true },
     { id: newId(), file: null, kind: 'hotel', fixed: true },
@@ -74,10 +77,20 @@ export default function PackagesTab({ showToast }) {
   async function onCombine() {
     if (!valid) return;
     setCombining(true); setErrorIndex(-1);
+    smartProgress.start({
+      title: 'Montando Pacote de Viagem com IA',
+      subtitle: `Processando ${items.length} itens (voos, hotéis, passeios)...`,
+      steps: [
+        { title: 'Lendo comprovantes com IA...', desc: 'Extraindo dados de voos, reservas de hotéis e serviços' },
+        { title: 'Formatando arte e itinerário...', desc: 'Organizando cronologia, passageiros e acomodações' },
+        { title: 'Pacote completo pronto!', desc: 'Gerando itinerário oficial e link seguro' }
+      ]
+    });
     try {
       const r = await api.uploadPackage(items.map(({ file, kind }) => ({ file, kind })));
       await refresh();
       if (r?.id) await select(r.id);
+      smartProgress.complete();
       showToast?.('Pacote gerado com sucesso', 'success');
       setItems([
         { id: newId(), file: null, kind: 'flight', fixed: true },
@@ -86,6 +99,7 @@ export default function PackagesTab({ showToast }) {
     } catch (err) {
       const msg = err?.response?.data?.error || err?.response?.data?.detail;
       const m = /#(\d+)/.exec(msg || ''); if (m) setErrorIndex(parseInt(m[1], 10) - 1);
+      smartProgress.fail(msg || 'Falha ao gerar pacote');
       showToast?.(msg || 'Falha ao gerar pacote', 'error');
     } finally { setCombining(false); }
   }
@@ -250,6 +264,9 @@ export default function PackagesTab({ showToast }) {
           </div>
         </div>
       )}
+
+      {/* Indicador de Carregamento Inteligente com IA */}
+      <SmartProcessingModal {...smartProgress} />
     </div>
   );
 }

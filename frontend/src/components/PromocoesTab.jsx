@@ -6,6 +6,8 @@ import {
 import { extractPrint, renderMessage, renderImage } from '../api/promoClient';
 import BackgroundPicker from './BackgroundPicker';
 import BackgroundBank from './BackgroundBank';
+import SmartProcessingModal from './SmartProcessingModal';
+import useSmartProgress from '../hooks/useSmartProgress';
 
 const fmtBRL = (v) => {
   const n = Number(v);
@@ -42,6 +44,7 @@ export default function PromocoesTab({ showToast }) {
   const [selectedBg, setSelectedBg] = useState(null);
   const [bankOpen, setBankOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const smartProgress = useSmartProgress();
 
   const lowConf = (name) => (meta.low_confidence_fields || []).includes(name);
 
@@ -51,17 +54,28 @@ export default function PromocoesTab({ showToast }) {
     const localUrl = URL.createObjectURL(file);
     setPrintUrl(localUrl);
     setLoading(true);
+    smartProgress.start({
+      title: 'Lendo Promoção com IA',
+      subtitle: 'Extraindo detalhes de destinos, datas e tarifas...',
+      steps: [
+        { title: 'Lendo dados da promoção com IA...', desc: 'Interpretando cidades, cia aérea, datas e valores' },
+        { title: 'Formatando arte e itinerário...', desc: 'Estruturando regras de parcelamento e bagagem' },
+        { title: 'Promoção pronta para revisão!', desc: 'Preenchendo formulário inteligente' }
+      ]
+    });
     try {
       const res = await extractPrint(file);
       setPromotion(res.promotion);
       setMeta(res._meta || { low_confidence_fields: [], validation_warnings: [], agency_commission_detected: null });
+      smartProgress.complete();
       setStep('review');
     } catch (err) {
       if (err.kind === 'unprocessable') {
         // Não conseguiu ler o print: vai para revisão com formulário em branco.
         setPromotion(BLANK_PROMOTION());
         setMeta({ low_confidence_fields: [], validation_warnings: [], agency_commission_detected: null });
-        setStep('review');
+        smartProgress.complete();
+      setStep('review');
         showToast(err.message, 'error');
       } else {
         showToast(err.message, 'error');
@@ -100,6 +114,15 @@ export default function PromocoesTab({ showToast }) {
   // ── Step 2 → 3: Generate ────────────────────────────────────────
   const generate = async () => {
     setLoading(true);
+    smartProgress.start({
+      title: 'Lendo Promoção com IA',
+      subtitle: 'Extraindo detalhes de destinos, datas e tarifas...',
+      steps: [
+        { title: 'Lendo dados da promoção com IA...', desc: 'Interpretando cidades, cia aérea, datas e valores' },
+        { title: 'Formatando arte e itinerário...', desc: 'Estruturando regras de parcelamento e bagagem' },
+        { title: 'Promoção pronta para revisão!', desc: 'Preenchendo formulário inteligente' }
+      ]
+    });
     try {
       const [msgRes, imgRes] = await Promise.all([
         renderMessage(promotion),
@@ -107,6 +130,7 @@ export default function PromocoesTab({ showToast }) {
       ]);
       setMessageText(msgRes.message_text || '');
       setImageUrl(imgRes.image_url || '');
+      smartProgress.complete();
       setStep('result');
     } catch (err) {
       showToast(err.message, 'error');
@@ -123,6 +147,31 @@ export default function PromocoesTab({ showToast }) {
       showToast('Mensagem copiada', 'success');
     } catch {
       showToast('Não foi possível copiar', 'error');
+    }
+  };
+
+  const copyInstagramCaption = async () => {
+    try {
+      const dest = promotion?.destination_city || 'Destino Incrível';
+      const orig = promotion?.origin_city ? `Saindo de ${promotion.origin_city}` : '';
+      const total = promotion?.total_price ? fmtBRL(promotion.total_price) : '';
+      const parc = promotion?.installments && promotion?.installment_amount
+        ? `em até ${promotion.installments}x de ${fmtBRL(promotion.installment_amount)}`
+        : '';
+      const precoStr = total ? `A partir de ${total} ${parc}` : '';
+
+      const caption = `✈️ PROMOÇÃO IMPERDÍVEL PARA ${dest.toUpperCase()}! 🌴🌍\n\n` +
+        (orig ? `📍 ${orig}\n` : '') +
+        (precoStr ? `💰 ${precoStr.trim()}\n` : '') +
+        (promotion?.travel_month_label ? `📅 Período: ${promotion.travel_month_label}\n` : '') +
+        `\n✨ Vagas promocionais limitadas! Garanta a sua viagem sem dor de cabeça com todo o suporte da nossa assessoria.\n\n` +
+        `💬 Fale conosco agora mesmo pelo link da bio ou envie um Direct!\n\n` +
+        `#clubedovoo #promocao #passagensaereas #viagens #turismo #viajar #ferias`;
+
+      await navigator.clipboard.writeText(caption);
+      showToast('Legenda para o Instagram copiada!', 'success');
+    } catch {
+      showToast('Não foi possível copiar legenda', 'error');
     }
   };
 
@@ -183,12 +232,14 @@ export default function PromocoesTab({ showToast }) {
           messageText={messageText}
           loading={loading}
           onCopy={copyMessage}
+          onCopyInstagram={copyInstagramCaption}
           onRegenerate={regenerate}
           onReset={reset}
         />
       )}
 
       <BackgroundBank isOpen={bankOpen} onClose={() => setBankOpen(false)} showToast={showToast} />
+      <SmartProcessingModal {...smartProgress} />
     </div>
   );
 }
@@ -472,7 +523,7 @@ function Field({ label, name, lowConf, children }) {
 }
 
 // ── Step 3: Result ────────────────────────────────────────────────
-function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onReset }) {
+function ResultStep({ imageUrl, messageText, loading, onCopy, onCopyInstagram, onRegenerate, onReset }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Generated art */}
@@ -492,6 +543,16 @@ function ResultStep({ imageUrl, messageText, loading, onCopy, onRegenerate, onRe
         >
           <Download className="w-4 h-4" /> Baixar imagem
         </a>
+
+        <button
+          type="button"
+          onClick={onCopyInstagram}
+          className="mt-2 w-full flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] md:min-h-0 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-colors cursor-pointer"
+          title="Copiar legenda formatada para o Instagram"
+        >
+          <Copy className="w-4 h-4" /> Copiar Legenda Instagram
+        </button>
+
       </div>
 
       {/* WhatsApp message */}

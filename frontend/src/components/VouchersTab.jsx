@@ -6,6 +6,8 @@ import {
 import * as api from '../api/voucherClient';
 import useBackClose from '../hooks/useBackClose';
 import WhatsAppMessageModal from './WhatsAppMessageModal';
+import SmartProcessingModal from './SmartProcessingModal';
+import useSmartProgress from '../hooks/useSmartProgress';
 
 const inputCls =
   "w-full px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent border text-sm " +
@@ -39,6 +41,7 @@ export default function VouchersTab({ showToast }) {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
+  const smartProgress = useSmartProgress();
 
   const [itinerarioUrl, setItinerarioUrl] = useState('');
 
@@ -172,14 +175,24 @@ export default function VouchersTab({ showToast }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    smartProgress.start({
+      title: 'Lendo Dados da Reserva com IA',
+      subtitle: 'Analisando comprovante e gerando itinerário oficial...',
+      steps: [
+        { title: 'Lendo dados da reserva com IA...', desc: 'Interpretando localizador, passageiros e horários de voo' },
+        { title: 'Formatando arte e itinerário...', desc: 'Estruturando conexões, franquia de bagagem e valores' },
+        { title: 'Voucher pronto!', desc: 'Gerando itinerário oficial e link público seguro' }
+      ]
+    });
     try {
       const r = await api.upload(file);
       await refresh();
       if (r?.id) await select(r.id);
+      smartProgress.complete();
       showToast?.('Voucher importado com sucesso', 'success');
     } catch (err) {
-      // Prefere a mensagem do servidor (ex.: "Gemini com alta demanda…"); cai pra mensagem genérica.
       const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
+      smartProgress.fail(serverMsg || 'Falha no processamento do voucher');
       showToast?.(serverMsg || 'Falha no upload do voucher', 'error');
     } finally {
       setUploading(false);
@@ -220,20 +233,65 @@ export default function VouchersTab({ showToast }) {
     if (!multiValid) return;
     setCombining(true);
     setErrorIndex(-1);
+    smartProgress.start({
+      title: 'Combinando Multidestinos com IA',
+      subtitle: `Processando ${multiItems.length} vouchers e consolidando itinerário...`,
+      steps: [
+        { title: 'Lendo múltiplos vouchers com IA...', desc: 'Extraindo dados de cada bilhete e trecho' },
+        { title: 'Formatando arte e itinerário...', desc: 'Organizando ida, voos internos e volta' },
+        { title: 'Itinerário unificado pronto!', desc: 'Gerando documento oficial e link público seguro' }
+      ]
+    });
     try {
       const r = await api.uploadCombine(multiItems.map(({ file, role }) => ({ file, role })));
       await refresh();
       if (r?.id) await select(r.id);
+      smartProgress.complete();
       showToast?.('Vouchers combinados com sucesso', 'success');
       setMultiItems([{ id: newItemId(), file: null, role: 'ida' }]);
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.detail;
-      // Se o backend indicar o índice do arquivo culpado (ex.: "voucher #2"), destaca a linha.
       const m = /#(\d+)/.exec(serverMsg || '');
       if (m) setErrorIndex(parseInt(m[1], 10) - 1);
+      smartProgress.fail(serverMsg || 'Falha ao combinar vouchers');
       showToast?.(serverMsg || 'Falha ao combinar vouchers', 'error');
     } finally {
       setCombining(false);
+    }
+  }
+
+  async function handleExportDownload(format) {
+    if (!selectedId) return;
+    const isPdf = format === 'pdf';
+    smartProgress.start({
+      title: isPdf ? 'Gerando PDF do Itinerário' : 'Gerando Imagem PNG do Itinerário',
+      subtitle: 'Compilando documento oficial em alta resolução...',
+      steps: [
+        { title: '1/3 Formatando arte e itinerário...', desc: 'Aplicando template oficial, logo e dados dos passageiros' },
+        { title: isPdf ? '2/3 Renderizando PDF com motor de alta resolução...' : '2/3 Renderizando imagem em alta nitidez...', desc: 'Compilando páginas e QR Code de verificação' },
+        { title: `3/3 ${isPdf ? 'PDF' : 'PNG'} pronto!`, desc: 'Iniciando download automático no seu dispositivo' }
+      ]
+    });
+
+    try {
+      const res = await fetch(api.exportUrl(selectedId, format), { credentials: 'include' });
+      if (!res.ok) throw new Error('Falha ao gerar o documento');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeLoc = current?.voucher?.booking_code || current?.title || 'voucher';
+      const cleanLoc = safeLoc.replace(/[^a-zA-Z0-9_-]/g, '');
+      a.download = `Voucher-${cleanLoc}-${Date.now()}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      smartProgress.complete();
+      showToast?.(`${format.toUpperCase()} baixado com sucesso!`, 'success');
+    } catch (err) {
+      smartProgress.fail(err.message || 'Erro ao gerar documento');
+      showToast?.('Erro ao gerar exportação', 'error');
     }
   }
 
@@ -716,22 +774,22 @@ export default function VouchersTab({ showToast }) {
               >
                 <Save className="w-4 h-4" /> Salvar
               </button>
-              <a
-                href={api.exportUrl(selectedId, 'pdf')}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => handleExportDownload('pdf')}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+                title="Baixar PDF oficial com alta resolução"
               >
                 <Download className="w-4 h-4" /> PDF
-              </a>
-              <a
-                href={api.exportUrl(selectedId, 'png')}
-                target="_blank"
-                rel="noreferrer"
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportDownload('png')}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] md:min-h-0 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-lg shadow-teal-500/25 cursor-pointer transition-all"
+                title="Baixar imagem PNG de alta nitidez"
               >
                 <Download className="w-4 h-4" /> PNG
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={handleCopyLink}
@@ -854,6 +912,9 @@ export default function VouchersTab({ showToast }) {
         itinerarioUrl={itinerarioUrl}
         showToast={showToast}
       />
+
+      {/* Indicador de Carregamento Inteligente (IA e Geração de PDF) */}
+      <SmartProcessingModal {...smartProgress} />
     </div>
   );
 }
