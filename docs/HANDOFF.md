@@ -1,6 +1,6 @@
 # HANDOFF GERAL — Painel de Voos Monitorados (Clube do Voo Viagens)
 
-> Escrito em 2026-10-14. Para passar a administração das pendências e das futuras modificações a outro chat **sem perder qualidade**. Leia as seções 0 a 3 antes de tocar em qualquer coisa. O handoff específico de vouchers (esquema canônico, templates, decisões antigas) continua em `docs/vouchers-handoff.md`; este documento é o mapa geral e **o que está pendente**.
+> Atualizado em 2026-10-29 (escrito originalmente em 2026-10-14; desde então: fila de atualização de preços, otimização mobile em 4 etapas, instalação como app, mensagens de erro da IA). Para passar a administração das pendências e das futuras modificações a outro chat **sem perder qualidade**. Leia as seções 0 a 3 antes de tocar em qualquer coisa. O handoff específico de vouchers (esquema canônico, templates, decisões antigas) continua em `docs/vouchers-handoff.md`; este documento é o mapa geral e **o que está pendente**.
 
 ---
 
@@ -11,7 +11,7 @@ Você vai assumir a administração do projeto "Painel de Voos Monitorados" (Clu
 Leia, nesta ordem: docs/HANDOFF.md (inteiro), docs/vouchers-handoff.md (seções 1, 5, 6 e as seções de Cartões de Embarque e Alterações de voo no fim) e a memória em
 C:\Users\joabh\.claude\projects\E--AG-Painel-de-voos-monitorados-Painel-de-voos-monitorados\memory\MEMORY.md.
 Regras inegociáveis: responder SEMPRE em português do Brasil; não fazer push sem a confirmação explícita da usuária NAQUELE momento (push em main dispara deploy em produção); reaproveitar a stack atual (Node/Express/SQLite + React/Vite/Tailwind), sem introduzir 2º backend/linguagem.
-Comece verificando o estado do git (seção 2) e confirmando comigo qual pendência da seção 9 atacar primeiro.
+Comece verificando o estado do git (seção 2) e confirmando comigo qual pendência da seção 9 atacar primeiro. Para qualquer tela nova, siga as regras mobile da seção 5.1 (celular < 768 px sem alterar o computador; use useBackClose em modais).
 ```
 
 ---
@@ -29,7 +29,8 @@ Comece verificando o estado do git (seção 2) e confirmando comigo qual pendên
 ## 2. ⚠️ Estado do git e do deploy — verificar primeiro
 
 - Remotes: `origin` = `https://github.com/cvvcontato-dev/painel-voos-monitorados` (**dona do repositório; é daqui que o Coolify faz o deploy**, branch `main`); `fork` = `joabh11-cmyk/painel-voos-monitorados` (sem permissão de escrita em `origin`).
-- **Estado em 2026-10-14:** `origin/main` = `7e3dc1c` (tudo desta rodada está em produção/enviado). Trabalho feito no worktree `E:\AG\Painel de voos monitorados\Painel de voos monitorados\.claude\worktrees\sad-maxwell-3799cf`, branch local `feat/banco-fundos-promo` (mesmo commit que `main`). Este `docs/HANDOFF.md` pode estar **commitado localmente e não enviado** — confira `git log origin/main..HEAD`.
+- **Estado em 2026-10-29:** `origin/main` = `25f99cf` ("painel instalável como app") — tudo até a Etapa 4 mobile está enviado/em produção. Trabalho feito no worktree `E:\AG\Painel de voos monitorados\Painel de voos monitorados\.claude\worktrees\sad-maxwell-3799cf`, branch local `feat/banco-fundos-promo`, que é mantida **igual a `origin/main`** enviando com `git push origin HEAD:main` (o upstream configurado dessa branch é o remote `fork`, por isso `git status` mostra "ahead 73" — ignore). Este `docs/HANDOFF.md` atualizado pode estar **commitado localmente e não enviado**: confira `git log origin/main..HEAD`.
+- **Fim de linha (CRLF/LF):** o repositório guarda LF; o Windows (autocrlf) materializa CRLF. Se um script Python/sed reescrever arquivos e o `git diff --stat` mostrar o arquivo inteiro alterado, normalize com `sed -i 's/\r$//' arquivo` antes do `git add`, e confira `git diff --cached --numstat` (deve mostrar só as linhas realmente mudadas).
 - **Push:** `git push origin HEAD:main`. O Git Credential Manager (GCM) abre um pop-up do GitHub: a usuária escolhe a conta **`cvvcontato-dev`** (as contas `joabh11-cmyk` e `anapaula-rls` não têm escrita → 403). A configuração global foi consertada: o helper `credential.https://github.com.helper` antigo (`gh auth git-credential`) foi removido para o GCM aparecer. Se um dia der 403, rode `git credential reject` para `cvvcontato-dev` e tente de novo; confira com `git config --global --get-all credential.https://github.com.helper` (deve vir vazio) e `git config --get credential.helper` (= `manager`).
 - **Coolify:** deploy automático por webhook no push em `main` (Dockerfile na raiz). A usuária já alterou a branch/fonte no Coolify uma vez e o deploy deixou de disparar — se "não houve deploy", confira primeiro **Source/branch = main** e o webhook. Logs de runtime/build ficam no Coolify.
 - Worktrees: o `git stash` é **compartilhado entre worktrees** — nunca use `git stash`/`pop` simples. Prefira commit WIP. Para novas features, crie um worktree/branch a partir de `origin/main` atualizado (`git fetch origin`).
@@ -109,10 +110,37 @@ Specs/planos: `docs/superpowers/specs/2026-10-13-alteracao-de-voo-design.md`, `d
 
 ---
 
+## 5.1 Otimização mobile (concluída em 2026-10-26, 4 etapas, todas em produção)
+
+Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e `docs/superpowers/plans/2026-10-26-otimizacao-mobile-etapa-{1,2,3}.md`. A usuária usa o celular para **tudo** (consultar preços/status, montar e enviar mensagens, subir vouchers e prints).
+
+**Regras do design (valem para qualquer tela nova):**
+- Celular = **< 768 px** (`md` do Tailwind). **O computador (≥ 768 px) não pode mudar**: toda classe de celular precisa de contrapartida `md:` que reponha o valor anterior (ex.: `min-h-[44px] md:min-h-0`, `h-[100dvh] md:h-auto`, `hidden md:block`). Para o que o CSS não resolve (tabela → cartões), use `useIsMobile()` (`hooks/useMediaQuery.js`, `matchMedia`).
+- Alvos de toque ≥ 44 px (chips ≥ 40; mínimo absoluto 36), texto ≥ 11 px, campos com 16 px (regra global em `index.css`, evita zoom do iOS), sem rolagem horizontal, `viewport-fit=cover` e margens de área segura (`env(safe-area-inset-*)`). Checkbox/rádio: aumente a área do `<label>` (a auditoria mede pelo rótulo).
+- Navegação: barra inferior fixa (`components/mobile/MobileNav.jsx`: Preços, Status, Alterações, Vouchers + "Mais" → Promoções, Cartões de Embarque, Pacotes; o botão "Mais" mostra a aba atual quando ela está no menu e tem `aria-label="Mais opções (aba atual: …)"`); some enquanto um campo de texto está focado. Menu do usuário: `MobileMenu.jsx` (privacidade, tema, Configurações, Trocar senha, Sair). No computador continua o cabeçalho com abas (`Tabs`, `hidden md:block`).
+- Componentes reutilizáveis: `mobile/BottomSheet.jsx` (+ `SheetItem`, linhas de 52 px), `precos/FlightCard.jsx` e `status/StatusFlightCard.jsx` (um cartão por voo; a folha de ações fica **fora** do `<article>` para não herdar `opacity`), modais em tela cheia (cabeçalho/rodapé `sticky` no celular, `md:static`), `flight-changes/UploadZone.jsx` (botões **Tirar foto** — `<input capture="environment">` — e **Escolher arquivo**, só no celular; também em Promoções e Vouchers).
+- **Botão Voltar do celular:** `hooks/useBackClose.js` (`useBackClose(open, onClose)`) empilha uma entrada de histórico por camada aberta (só < 768 px); o Voltar fecha só a camada do topo; fechar por X/Esc/fundo desfaz a entrada; tolera o remount duplo do StrictMode. Já usado em `BottomSheet`, modais de Status/Configurações/Trocar senha/Usuário/E-mail/Banco de fundos, edição de voo (Preços), e-mail de Vouchers/Pacotes e no caso aberto de **Alterações** (lista → caso em tela cheia com "← Voltar"). **Todo modal novo em tela cheia deve chamar `useBackClose`.**
+- **Instalar como app (Etapa 4):** `frontend/public/manifest.webmanifest` (nome "Clube do Voo", `standalone`, `#00569e`), ícones em `frontend/public/icons/` gerados de `Logo.png` (192, 512, maskable 512, apple-touch 180) e meta tags no `index.html`. **Sem service worker e sem cache offline** (nenhum dado de cliente no aparelho). Só adicionar um service worker mínimo (sem cache) se o Android do Chrome não oferecer "Instalar app" — isso só se vê no aparelho.
+- **Auditoria:** `frontend/scripts/mobile-audit.js` (cole no console/`javascript_tool` com a aba aberta; devolve rolagem horizontal, alvos < 36/44 px, texto < 11 px, campos < 16 px). Resultado final medido em 390 px: Preços, Status, Alterações (lista/caso/nova/e-mail), Vouchers, Promoções, Cartões, Pacotes, Usuários e Configurações com 0 rolagem lateral, 0 alvos < 36 px, 0 texto < 11 px, 0 campos < 16 px (Preços: 4 chips entre 40 e 44 px, intencional).
+- **Não testado em aparelho real:** câmera ("Tirar foto"), teclado/viewport, área segura do iPhone, instalação (Android/iOS), botão Voltar físico, e o modo "Resultado" de Promoções. Pergunte à usuária como ficou no celular dela.
+- **Armadilhas do painel do navegador embutido:** `focus()` e eventos de media query não disparam sem um quadro renderizado (use `dispatchEvent`/force um screenshot); medir com `offsetWidth` (animações congeladas distorcem `getBoundingClientRect`); campos com `transition-all` mostram altura de celular em 1280 px porque a transição não termina com o painel oculto — desligue as transições antes de medir o desktop.
+
+## 5.2 Atualização de preços em fila (alterações da usuária em 14/10)
+
+`docs/atualizacao-precos-em-fila.md`: botão **Atualizar todos** (aba Preços) → `POST /api/flights/check-all` (202; 409 se já houver execução) e `GET /api/flights/check-all/status` (total, concluídos, sucessos, falhas, ignorados). Fila em memória (`services/priceQueue.js`, concorrência 1) atende cron, atualização individual e em lote; reinício/deploy interrompe e não retoma. O scraper roda sem `--single-process` no Chromium. Alertas por e-mail/Telegram mantidos.
+
+## 5.3 Erros da IA (Gemini) — lições de 2026-10-27
+
+- Os créditos pré-pagos do Google AI Studio **acabaram** e a geração de promoções falhou ("Serviço de extração indisponível"). Correções já em produção: `services/geminiExtractor.js` repete 3× (0 s, 2 s, 5 s) em erros transitórios (503/429/timeout), registra a causa real no log (`[GEMINI-PROMO]`), devolve `publicMessage` (créditos esgotados/402, chave sem acesso, modelo inexistente, limite, alta demanda) e a rota `POST /api/promotions/extract` anexa "(Detalhe técnico: …)" (chave mascarada). `routes/vouchers.js` (2 handlers) e `routes/packages.js` devolvem **402** com "Créditos da IA esgotados. Recarregue o saldo no Google AI Studio…".
+- Se algo parecido voltar: ler a mensagem/detalhe técnico antes de supor (um palpite meu de "modelo inválido" estava errado). Recarga/billing é no Google AI Studio (só a usuária). Configure **recarga automática ou alerta de saldo**.
+- Custo: página oficial de preços do Gemini (ai.google.dev/gemini-api/docs/pricing). O modelo padrão `gemini-3.5-flash` **não aparecia** na tabela consultada em 26/10 (havia 3.5 Flash-Lite, 3.6/3.8 Flash, 2.5 Flash/Flash-Lite): confirme no AI Studio se ele continua recomendado. Trocar de modelo = só a variável `GEMINI_MODEL` no Coolify, **depois de comparar com prints reais** (nome de hotel, datas, voos de conexão). Trocar de provedor (ex.: Claude Haiku) exigiria novo código/SDK/chave — não vale pela economia (centavos por leitura).
+
+---
+
 ## 6. Testes e verificação
 
-- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje: 588 passando e 19 falhando — todos em `auth.test.js` e `users.test.js` (pré-existentes: 403 de CSRF no `makeAuthApp`)**. Qualquer outra falha é nova e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
-- **Frontend:** `cd frontend && npm run build` (não há runner de teste nem lint). O aviso de chunk >500 kB já existe.
+- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje (2026-10-29): 717 passando e 19 falhando, em 61 suítes (59 passam) — as 19 falhas são todas em `auth.test.js` e `users.test.js` (pré-existentes: 403 de CSRF no `makeAuthApp`)**. Qualquer outra falha é nova e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
+- **Frontend:** `cd frontend && npm run build` (não há runner de teste nem lint). O aviso de chunk >500 kB já existe. Para telas: auditoria `frontend/scripts/mobile-audit.js` + navegador (seção 5.1).
 - **Método usado nesta fase (recomendado):** TDD + **sabotagem** (quebrar de propósito a proteção e ver o teste falhar) + revisão de conformidade e de qualidade por subagentes + **verificação no navegador** com o backend real em modo stub.
 - **Verificação E2E local (padrão que funcionou):** NÃO use a porta 3000 (outro projeto da usuária, Proagenda, usa Vite lá). Suba o backend em `PORT=3100` com `DB_PATH` temporário, `EXTRACTION_MODE=stub` (sem `GEMINI_API_KEY` o extrator devolve voucher fixo STUB01), `ADMIN_EMAIL=admin@test.com`/senha de teste só local e `BACKUP_ENABLED=0`; suba o Vite numa porta própria (5180) com um arquivo de config temporário (fora do repo) apontando o proxy `/api` para 3100. `/itinerario` e `/voucher-preview` **não** passam pelo proxy do Vite (só em produção o Express serve tudo) — para a página do itinerário abra direto `localhost:3100`. Encerre **só** os seus processos depois.
 - **Não testado localmente (sem chave):** Gemini real (prompts `PROMPT` e `FLIGHTS_PROMPT`), envio real de e-mail (SMTP) e Telegram, scraper real, AeroDataBox real. Diga isso à usuária em toda entrega que dependa deles.
@@ -154,9 +182,20 @@ Specs/planos: `docs/superpowers/specs/2026-10-13-alteracao-de-voo-design.md`, `d
 - [ ] **Envio real de e-mail** (aviso e confirmação) para o endereço da própria usuária, antes de usar com clientes. Conferir `PUBLIC_BASE_URL` e o telefone de contato em Vouchers → Configurações (sem ele, o aviso sai sem o botão de WhatsApp e o QR cai no site).
 - [ ] **Backup:** rodar "fazer backup agora" e ver "N foto(s) de fundo" na cópia; lembrar que a restauração das fotos é manual (copiar `backups/fundos-*` de volta para `<DB_PATH>/promo-backgrounds/`).
 
+### 9.1b Validações novas que só a usuária pode fazer (após o deploy da Etapa 4)
+- [ ] No celular real: instalar na tela inicial (Android Chrome "Instalar app"; iPhone Safari "Adicionar à Tela de Início") e conferir ícone/tela cheia; "Tirar foto" (voucher, print de promoção, import de voucher); teclado nos formulários; botão Voltar físico; rodapé "Salvar" das Configurações. Se o Android não oferecer instalar → service worker mínimo sem cache.
+- [ ] **Recarregar créditos do Gemini** (AI Studio) e testar de novo: gerar promoção, ler voucher. Ver seção 5.3.
+
 ### 9.2 Decisões em aberto (perguntar à usuária)
 - [ ] **Texto do e-mail de confirmação e da página do cliente:** hoje diz "RESERVA CONFIRMADA — Sua viagem está pronta" (template de reserva nova). Proposta já feita: "VOO REAJUSTADO — Seu voo foi reajustado; veja abaixo o voucher atualizado". Exige um parâmetro/variante em `buildVoucherEmailHtml` (`services/notifier.js`) e em `helpers/itinerarioPage.js`, com testes.
 - [ ] **Apagar a branch antiga `feat/banco-fundos-promo` do remote `fork`** (memória `project-fork-branch-cleanup`): `git push fork --delete feat/banco-fundos-promo` — **só com confirmação**.
+
+### 9.2b Tarefas que a usuária pediu para **deixar para depois** (não fazer sem ela pedir)
+- [ ] Alinhar os argumentos do Chromium em `backend/services/voucherRenderer.js` ao scraper (`--disable-dev-shm-usage`, `--disable-gpu`; o scraper já removeu `--single-process`).
+- [ ] Texto "RESERVA CONFIRMADA — Sua viagem está pronta" → "VOO REAJUSTADO…" (já listado em 9.2; ainda sem resposta dela).
+- [ ] Apagar a branch `feat/banco-fundos-promo` no remote `fork` (já em 9.2; só com confirmação).
+- [ ] Reduzir o `pagefile.sys` (27 GB) / decidir sobre a VM do app Claude (7,9 GB) no disco C: — assunto da máquina dela, ver memória `project_pagefile_reduzir`.
+- [ ] Melhorias de UX mobile não feitas: modo "Resultado" de Promoções não foi auditado no celular; Banco de fundos/BackgroundPicker só passaram em build; auditar a página pública `/itinerario/:token` ao vivo (já tem CSS responsivo, breakpoint 560 px).
 
 ### 9.3 Dívida técnica conhecida
 - [ ] `auth.test.js` e `users.test.js`: 19 falhas pré-existentes (403 de CSRF no `makeAuthApp` do `testApp.js`). Consertar o helper e religar os testes.
@@ -183,4 +222,4 @@ Specs/planos: `docs/superpowers/specs/2026-10-13-alteracao-de-voo-design.md`, `d
 - Variáveis: `backend/.env.example`. Banco/migrações: `backend/database.js`. Rotas montadas: `backend/server.js`.
 - Testes: `backend/__tests__/` (helper de app/sessão/CSRF em `testApp.js`). Pastas geradas ignoradas pelo git: `backend/__tests__/.tmp/`, `backend/promo-backgrounds/`, `backend/voucher-pdfs/`.
 - Memória do assistente: `C:\Users\joabh\.claude\projects\E--AG-Painel-de-voos-monitorados-Painel-de-voos-monitorados\memory\` (`MEMORY.md` + `user_role`, `feedback_stack_consistency`, `project_fork_branch_cleanup`).
-- Histórico recente (mais novos → antigos): `7e3dc1c` merge de voos robusto · `73c107a/cf898c1` voucher novo só com print de voos · `b5c779c/d6cc72c/09014fe` itinerário (QR de suporte clicável + PDF no link) · `163e935…19273b0` nomes/bagagem/link/preview do e-mail · `d3d9ced…1d25cc5` aba Alterações (frontend e backend) · `78be791/3a9c034` fotos no backup · `e75fa38` banco de fundos de promoções.
+- Histórico recente (mais novos → antigos): `25f99cf` app instalável · `a2505af/58a9131/a7a73a5` erros e retentativas do Gemini nas promoções · `28c2c95` botão Voltar (useBackClose) · `a4508c0…f978774` mobile etapa 3 (abas restantes) · `782c8d9…664594c` mobile etapa 2 (Status/Alterações) · `ce78a41…4ab17a9` mobile etapa 1 (navegação e Preços) · `13570db` lista de vouchers 500 + busca · `7e3dc1c` merge de voos robusto · `73c107a/cf898c1` voucher novo só com print de voos · `b5c779c/d6cc72c/09014fe` itinerário (QR de suporte clicável + PDF no link) · `163e935…19273b0` nomes/bagagem/link/preview do e-mail · `d3d9ced…1d25cc5` aba Alterações (frontend e backend) · `78be791/3a9c034` fotos no backup · `e75fa38` banco de fundos de promoções.
