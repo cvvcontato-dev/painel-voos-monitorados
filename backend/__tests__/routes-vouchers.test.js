@@ -1,5 +1,12 @@
 process.env.EXTRACTION_MODE = 'stub';
 delete process.env.GEMINI_API_KEY;
+jest.mock('../services/voucherRenderer', () => ({
+  renderVoucher: jest.fn(async () => {
+    const f = require('path').join(require('os').tmpdir(), `voucher-test-${Date.now()}-${Math.random()}.pdf`);
+    require('fs').writeFileSync(f, '%PDF-1.4 fake-rendered');
+    return f;
+  })
+}));
 const request = require('supertest');
 const { makeVoucherApp, waitForDb, getCsrfFromResponse } = require('./testApp');
 
@@ -114,6 +121,49 @@ test('POST /:id/send-email com email invalido retorna 400', async () => {
     .attach('file', Buffer.from('%PDF-1.4'), { filename: 'a.pdf', contentType: 'application/pdf' });
   const r = await agent.post(`/api/vouchers/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({ emails: 'naoehemail' });
   expect(r.status).toBe(400);
+});
+
+test('POST /:id/send-email com sucesso gera e preserva o PDF guardado em voucher-pdfs', async () => {
+  const { agent, csrf } = await authed();
+  const pdfStore = require('../services/voucherPdfStore');
+  const notifier = require('../services/notifier');
+  const sendEmailSpy = jest.spyOn(notifier, 'sendVoucherEmail').mockResolvedValueOnce({ sucesso: true, messageId: 'm123', subject: 'Eba!' });
+  const ensureSpy = jest.spyOn(pdfStore, 'ensure').mockResolvedValue('fake-guardado.pdf');
+
+  try {
+    const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+      .attach('file', Buffer.from('%PDF-1.4'), { filename: 'a.pdf', contentType: 'application/pdf' });
+    const res = await agent.post(`/api/vouchers/${created.body.id}/send-email`).set('X-CSRF-Token', csrf).send({ emails: 'cliente@teste.com' });
+    expect(res.status).toBe(200);
+    expect(ensureSpy).toHaveBeenCalled();
+    expect(sendEmailSpy).toHaveBeenCalled();
+    expect(sendEmailSpy.mock.calls[0][0].attachmentPath).toBe('fake-guardado.pdf');
+  } finally {
+    sendEmailSpy.mockRestore();
+    ensureSpy.mockRestore();
+  }
+});
+
+test('GET /:id/export?format=pdf usa pdfStore.ensure', async () => {
+  const { agent, csrf } = await authed();
+  const fs = require('fs');
+  const path = require('path');
+  const pdfStore = require('../services/voucherPdfStore');
+  const os = require('os');
+  const tmpFile = path.join(os.tmpdir(), 'export-test-' + Date.now() + '.pdf');
+  fs.writeFileSync(tmpFile, '%PDF-1.4 fake-export');
+  const ensureSpy = jest.spyOn(pdfStore, 'ensure').mockResolvedValue(tmpFile);
+
+  try {
+    const created = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+      .attach('file', Buffer.from('%PDF-1.4'), { filename: 'a.pdf', contentType: 'application/pdf' });
+    const res = await agent.get(`/api/vouchers/${created.body.id}/export?format=pdf`);
+    expect(res.status).toBe(200);
+    expect(ensureSpy).toHaveBeenCalled();
+  } finally {
+    ensureSpy.mockRestore();
+    try { fs.unlinkSync(tmpFile); } catch (_) {}
+  }
 });
 
 test('PUT with invalid unified returns 422', async () => {

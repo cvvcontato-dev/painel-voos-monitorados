@@ -200,7 +200,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 ### 9.3 Dívida técnica conhecida
 - [x] `auth.test.js` e `users.test.js`: 19 falhas pré-existentes resolvidas (alinhado `makeAuthApp` com `app.use('/api', csrfMiddleware)` e caminhos de exceção em `csrf.js`). Suíte 100% verde (736/736).
 - [x] `POST /api/vouchers` migrado para `helpers/voucherStore.js` (duplicação de extração/gravação eliminada; tratamento 402/503/429 alinhado).
-- [ ] Vouchers antigos da aba Vouchers **não têm PDF guardado** → página deles sem botão de download. Opção: gerar o PDF no envio de e-mail da aba Vouchers (`ensure`) ou sob demanda.
+- [x] Vouchers da aba Vouchers geram e persistem PDF guardado via `voucherPdfStore.ensure` no envio de e-mail (`POST /:id/send-email`), exportação (`GET /:id/export?format=pdf`) e background em criação/edição. Suíte 100% verde (744/744).
 - [ ] Comparação: passageiros **homônimos** contam como um; subconjunto de nome (nome do meio omitido) pode juntar pessoas diferentes (pai/filho sem sufixo) — documentado em `helpers/flightChangeDiff.js`.
 - [ ] `listBackups()` devolvendo `[]` por erro de leitura faria a rotação apagar as pastas `fundos-*` (improvável; proteger se mexer em `services/backup.js`).
 - [ ] Possível corrida teórica de `confirm`/`send-email` com um `PUT /new` simultâneo (janela de ms; uso interno).

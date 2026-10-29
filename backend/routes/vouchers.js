@@ -9,10 +9,26 @@ const { validate } = require('../services/voucherSchema');
 const { normalize } = require('../services/voucherNormalizer');
 const { renderVoucher } = require('../services/voucherRenderer');
 const { uploadsDir } = require('../helpers/voucherWorkspace');
-const { sendVoucherEmail } = require('../services/notifier');
+const notifier = require('../services/notifier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
 const { combineVouchers } = require('../services/voucherCombiner');
 const { extractAndValidate, saveVoucher } = require('../helpers/voucherStore');
+const pdfStore = require('../services/voucherPdfStore');
+
+const renderBaseUrl = () => process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+
+function storePdfInBackground(req, voucherId, userId) {
+  (async () => {
+    db.get(`SELECT unified_json FROM vouchers WHERE id = ? AND user_id = ?`, [voucherId, userId], async (err, row) => {
+      if (err || !row) return;
+      try {
+        await pdfStore.ensure({ voucherId, unifiedJson: row.unified_json, cookieHeader: req.headers.cookie, baseUrl: renderBaseUrl() });
+      } catch (e) {
+        console.error('[VOUCHERS] pdf:', e && e.message);
+      }
+    });
+  })().catch(e => console.error('[VOUCHERS] pdf:', e && e.message));
+}
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -31,6 +47,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     const unified = await extractAndValidate(req.file);
     const voucherId = await saveVoucher({ userId: req.session.userId, file: req.file, unified });
     audit(voucherId, req.session.userId, 'create', { filename: req.file.originalname }, unified.meta.sourceFileHash);
+    storePdfInBackground(req, voucherId, req.session.userId);
     res.status(201).json({ id: voucherId, unified });
   } catch (err) {
     if (err && err.status && err.body) return res.status(err.status).json(err.body);
@@ -105,6 +122,7 @@ router.post('/combine', uploadMulti, async (req, res) => {
         audit(this.lastID, req.session.userId, 'create', {
           combined: true, roles, files: files.map(f => f.originalname)
         }, composedHash);
+        storePdfInBackground(req, this.lastID, req.session.userId);
         res.status(201).json({ id: this.lastID, unified });
       }
     );
@@ -177,11 +195,23 @@ router.get('/:id', (req, res) => {
 router.get('/:id/export', async (req, res) => {
   const format = (req.query.format || 'pdf').toLowerCase();
   if (!['pdf', 'png'].includes(format)) return res.status(400).json({ error: 'format inválido' });
-  db.get(`SELECT id FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], async (err, row) => {
+  db.get(`SELECT id, unified_json FROM vouchers WHERE id = ? AND user_id = ?`, [req.params.id, req.session.userId], async (err, row) => {
     if (err) { console.error('[VOUCHERS] erro ao buscar para export', err.message); return res.status(500).json({ error: 'erro ao buscar voucher' }); }
     if (!row) return res.status(404).json({ error: 'não encontrado' });
     try {
       const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      if (format === 'pdf') {
+        const outPath = await pdfStore.ensure({
+          voucherId: req.params.id,
+          unifiedJson: row.unified_json,
+          cookieHeader: req.headers.cookie,
+          baseUrl
+        });
+        audit(req.params.id, req.session.userId, 'export', { format }, null);
+        return res.download(outPath, (err) => {
+          if (err) console.error('[VOUCHERS] erro ao enviar export', err.message);
+        });
+      }
       const outPath = await renderVoucher({
         voucherId: req.params.id, format,
         cookieHeader: req.headers.cookie, baseUrl
@@ -212,6 +242,7 @@ router.put('/:id', (req, res) => {
       if (err) { console.error('[VOUCHERS] erro ao atualizar voucher', err.message); return res.status(500).json({ error: 'erro ao atualizar voucher' }); }
       if (this.changes === 0) return res.status(404).json({ error: 'não encontrado' });
       audit(req.params.id, req.session.userId, 'update', null, null);
+      storePdfInBackground(req, req.params.id, req.session.userId);
       res.json({ id: Number(req.params.id), unified: norm });
     }
   );
@@ -263,16 +294,16 @@ router.post('/:id/send-email', async (req, res) => {
       let pdfPath = null;
       try {
         const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-        pdfPath = await renderVoucher({
+        pdfPath = await pdfStore.ensure({
           voucherId: req.params.id,
-          format: 'pdf',
+          unifiedJson: row.unified_json,
           cookieHeader: req.headers.cookie,
           baseUrl
         });
         // As URLs de check-in por grupo de reserva são derivadas dentro de
         // buildVoucherEmailHtml (via buildReservationGroups + manageBookingUrl).
         const itinerarioUrl = `${baseUrl}/itinerario/${signVoucherToken(req.params.id)}`;
-        const result = await sendVoucherEmail({
+        const result = await notifier.sendVoucherEmail({
           to: emails,
           bcc: process.env.EMAIL_USER || null,
           voucherData: unified,
@@ -292,8 +323,6 @@ router.post('/:id/send-email', async (req, res) => {
         console.error('[VOUCHERS] erro no fluxo de envio', e.message);
         audit(req.params.id, req.session.userId, 'email_failed', { to: emails, erro: e.message }, null);
         res.status(500).json({ error: 'falha ao processar envio' });
-      } finally {
-        if (pdfPath) require('fs').unlink(pdfPath, () => {});
       }
     });
   });
