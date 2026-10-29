@@ -5,7 +5,7 @@ const MUTATING = ['POST', 'PUT', 'DELETE'];
 
 // Paths exempt from CSRF validation (relative to the /api mount point).
 // Login: public endpoint. Logout: CSRF on logout is harmless (worst case: logged out).
-const EXEMPT = ['/auth/login', '/auth/logout'];
+const EXEMPT = ['/auth/login', '/auth/logout', '/api/auth/login', '/api/auth/logout'];
 
 function csrfMiddleware(req, res, next) {
   // Always ensure the csrf cookie exists

@@ -47,7 +47,7 @@ function makeAuthApp() {
     saveUninitialized: false,
     cookie: { httpOnly: true, sameSite: 'strict', secure: false }
   }));
-  app.use(csrfMiddleware);
+  app.use('/api', csrfMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api', requireAuth);
   app.use('/api/users', usersRouter);

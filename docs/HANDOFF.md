@@ -139,7 +139,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 
 ## 6. Testes e verificação
 
-- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje (2026-10-29): 717 passando e 19 falhando, em 61 suítes (59 passam) — as 19 falhas são todas em `auth.test.js` e `users.test.js` (pré-existentes: 403 de CSRF no `makeAuthApp`)**. Qualquer outra falha é nova e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
+- **Backend:** `cd backend && npx jest --runInBand` (usar `--runInBand`). **Resultado esperado hoje (2026-10-29): 736 passando em 61 suítes (100% passando — as 19 falhas de CSRF em `auth.test.js` e `users.test.js` foram corrigidas)**. Qualquer falha é regressão e deve ser investigada. Um arquivo: `npx jest __tests__/<arquivo> --runInBand`.
 - **Frontend:** `cd frontend && npm run build` (não há runner de teste nem lint). O aviso de chunk >500 kB já existe. Para telas: auditoria `frontend/scripts/mobile-audit.js` + navegador (seção 5.1).
 - **Método usado nesta fase (recomendado):** TDD + **sabotagem** (quebrar de propósito a proteção e ver o teste falhar) + revisão de conformidade e de qualidade por subagentes + **verificação no navegador** com o backend real em modo stub.
 - **Verificação E2E local (padrão que funcionou):** NÃO use a porta 3000 (outro projeto da usuária, Proagenda, usa Vite lá). Suba o backend em `PORT=3100` com `DB_PATH` temporário, `EXTRACTION_MODE=stub` (sem `GEMINI_API_KEY` o extrator devolve voucher fixo STUB01), `ADMIN_EMAIL=admin@test.com`/senha de teste só local e `BACKUP_ENABLED=0`; suba o Vite numa porta própria (5180) com um arquivo de config temporário (fora do repo) apontando o proxy `/api` para 3100. `/itinerario` e `/voucher-preview` **não** passam pelo proxy do Vite (só em produção o Express serve tudo) — para a página do itinerário abra direto `localhost:3100`. Encerre **só** os seus processos depois.
@@ -198,7 +198,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 - [ ] Melhorias de UX mobile não feitas: modo "Resultado" de Promoções não foi auditado no celular; Banco de fundos/BackgroundPicker só passaram em build; auditar a página pública `/itinerario/:token` ao vivo (já tem CSS responsivo, breakpoint 560 px).
 
 ### 9.3 Dívida técnica conhecida
-- [ ] `auth.test.js` e `users.test.js`: 19 falhas pré-existentes (403 de CSRF no `makeAuthApp` do `testApp.js`). Consertar o helper e religar os testes.
+- [x] `auth.test.js` e `users.test.js`: 19 falhas pré-existentes resolvidas (alinhado `makeAuthApp` com `app.use('/api', csrfMiddleware)` e caminhos de exceção em `csrf.js`). Suíte 100% verde (736/736).
 - [ ] `POST /api/vouchers` deveria usar `helpers/voucherStore.js` (hoje duplica extração/gravação; TODO no arquivo).
 - [ ] Vouchers antigos da aba Vouchers **não têm PDF guardado** → página deles sem botão de download. Opção: gerar o PDF no envio de e-mail da aba Vouchers (`ensure`) ou sob demanda.
 - [ ] Comparação: passageiros **homônimos** contam como um; subconjunto de nome (nome do meio omitido) pode juntar pessoas diferentes (pai/filho sem sufixo) — documentado em `helpers/flightChangeDiff.js`.
