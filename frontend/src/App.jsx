@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Settings, Activity, Megaphone, Ticket, Package, QrCode, RefreshCw } from 'lucide-react';
+import { DollarSign, Settings, Activity, Megaphone, Ticket, Package, QrCode, RefreshCw, HeartHandshake } from 'lucide-react';
 import logo from './assets/logo.png';
 import Tabs from './components/Tabs';
 import Toast from './components/Toast';
@@ -11,6 +11,7 @@ import VouchersTab from './components/VouchersTab';
 import PackagesTab from './components/PackagesTab';
 import BoardingPassesTab from './components/BoardingPassesTab';
 import FlightChangesTab from './components/FlightChangesTab';
+import DepoimentosTab from './components/DepoimentosTab';
 import VoucherPreviewPage from './components/VoucherPreviewPage';
 import PackageFlightPreviewPage from './components/PackageFlightPreviewPage';
 import LoginPage from './components/LoginPage';
@@ -33,7 +34,8 @@ const TABS = [
   { value: 'vouchers', label: 'Vouchers', icon: <Ticket className="w-4 h-4" /> },
   { value: 'cartoes', label: 'Cartões de Embarque', icon: <QrCode className="w-4 h-4" /> },
   { value: 'alteracoes', label: 'Alterações', icon: <RefreshCw className="w-4 h-4" /> },
-  { value: 'pacotes', label: 'Pacotes', icon: <Package className="w-4 h-4" /> }
+  { value: 'pacotes', label: 'Pacotes', icon: <Package className="w-4 h-4" /> },
+  { value: 'depoimentos', label: 'Depoimentos', icon: <HeartHandshake className="w-4 h-4" /> }
 ];
 
 function AppShell() {
@@ -121,6 +123,7 @@ function AppShell() {
         {activeTab === 'cartoes' && <BoardingPassesTab showToast={showToast} />}
         {activeTab === 'alteracoes' && <FlightChangesTab showToast={showToast} />}
         {activeTab === 'pacotes' && <PackagesTab showToast={showToast} />}
+        {activeTab === 'depoimentos' && <DepoimentosTab showToast={showToast} />}
 
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onToast={showToast} />
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
