@@ -12,6 +12,7 @@ const { uploadsDir } = require('../helpers/voucherWorkspace');
 const { sendVoucherEmail } = require('../services/notifier');
 const { sign: signVoucherToken } = require('../helpers/voucherToken');
 const { combineVouchers } = require('../services/voucherCombiner');
+const { extractAndValidate, saveVoucher } = require('../helpers/voucherStore');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -27,48 +28,13 @@ function audit(voucherId, userId, action, details, sourceHash) {
 router.post('/', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'arquivo obrigatório (campo "file")' });
   try {
-    const unified = await extractVoucher(req.file.buffer, req.file.mimetype);
-    const v = validate(unified);
-    if (!v.ok) return res.status(422).json({ error: 'schema inválido após extração', details: v.errors });
-
-    const hash = 'sha256:' + crypto.createHash('sha256').update(req.file.buffer).digest('hex');
-    unified.meta.sourceFileHash = hash;
-    const filename = `${Date.now()}-${hash.slice(7, 19)}${path.extname(req.file.originalname) || ''}`;
-    const filePath = path.join(uploadsDir(), filename);
-    fs.writeFileSync(filePath, req.file.buffer);
-
-    db.run(
-      `INSERT INTO vouchers (user_id, carrier, layout_version, source_file_path, source_file_hash, unified_json)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.session.userId, unified.carrier, unified.layoutVersion, filePath, hash, JSON.stringify(unified)],
-      function (err) {
-        if (err) {
-          fs.unlink(filePath, () => {}); // best-effort orphan cleanup
-          console.error('[VOUCHERS] falha ao persistir voucher', err.message);
-          return res.status(500).json({ error: 'falha ao salvar voucher' });
-        }
-        audit(this.lastID, req.session.userId, 'create', { filename: req.file.originalname }, hash);
-        res.status(201).json({ id: this.lastID, unified });
-      }
-    );
+    const unified = await extractAndValidate(req.file);
+    const voucherId = await saveVoucher({ userId: req.session.userId, file: req.file, unified });
+    audit(voucherId, req.session.userId, 'create', { filename: req.file.originalname }, unified.meta.sourceFileHash);
+    res.status(201).json({ id: voucherId, unified });
   } catch (err) {
-    console.error('[VOUCHERS] erro ao processar upload', err.message);
-    // Erros transientes do Gemini: devolve 503 com mensagem útil pro frontend.
-    if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
-      return res.status(503).json({
-        error: 'Serviço de extração (Gemini) está com alta demanda no momento. Tente novamente em alguns instantes.',
-        retryable: true
-      });
-    }
-    if (/\b402\b|payment required|credits are depleted/i.test(err.message)) {
-      return res.status(402).json({ error: 'Créditos da IA esgotados. Recarregue o saldo no Google AI Studio (ai.studio) e tente novamente.', retryable: false });
-    }
-    if (/quota|exceeded/i.test(err.message)) {
-      return res.status(429).json({
-        error: 'Cota da API Gemini esgotada. Aguarde alguns minutos e tente novamente.',
-        retryable: true
-      });
-    }
+    if (err && err.status && err.body) return res.status(err.status).json(err.body);
+    console.error('[VOUCHERS] erro ao processar upload', err && err.message);
     res.status(500).json({ error: 'erro ao processar voucher' });
   }
 });

@@ -37,6 +37,30 @@ test('POST with file creates voucher (201) and returns unified payload', async (
   expect(res.body.unified.meta.sourceFileHash).toMatch(/^sha256:/);
 });
 
+test('POST com erro 503 do extrator propaga 503 amigável com retryable', async () => {
+  const { agent, csrf } = await authed();
+  const extractor = require('../services/voucherExtractor');
+  const spy = jest.spyOn(extractor, 'extractVoucher').mockRejectedValueOnce(new Error('503 Service Unavailable: high demand'));
+  try {
+    const res = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+      .attach('file', Buffer.from('fake'), { filename: 'v.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(503);
+    expect(res.body.retryable).toBe(true);
+  } finally { spy.mockRestore(); }
+});
+
+test('POST com erro 402 (créditos esgotados) propaga 402', async () => {
+  const { agent, csrf } = await authed();
+  const extractor = require('../services/voucherExtractor');
+  const spy = jest.spyOn(extractor, 'extractVoucher').mockRejectedValueOnce(new Error('402 Payment Required: credits are depleted'));
+  try {
+    const res = await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)
+      .attach('file', Buffer.from('fake'), { filename: 'v.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain('Créditos da IA esgotados');
+  } finally { spy.mockRestore(); }
+});
+
 test('GET list returns array including the created voucher', async () => {
   const { agent, csrf } = await authed();
   await agent.post('/api/vouchers').set('X-CSRF-Token', csrf)

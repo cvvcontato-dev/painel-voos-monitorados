@@ -1,9 +1,9 @@
-// TODO: POST /api/vouchers (routes/vouchers.js) ainda duplica esta lógica de extração/gravação; migrar para este módulo.
+// Centraliza extração, validação e persistência de vouchers (usado por routes/vouchers.js e routes/flightChanges.js).
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const db = require('../database');
-const { extractVoucher, extractFlights } = require('../services/voucherExtractor');
+const voucherExtractor = require('../services/voucherExtractor');
 const { mergeNewFlights } = require('./flightChangeMerge');
 const { validate } = require('../services/voucherSchema');
 const { uploadsDir } = require('./voucherWorkspace');
@@ -12,10 +12,13 @@ const { uploadsDir } = require('./voucherWorkspace');
 function mapExtractionError(err) {
   console.error('[VOUCHER-STORE] extração falhou:', err.message);
   if (err.code === 'gemini_unavailable' || /503|service unavailable|high demand/i.test(err.message)) {
-    return { status: 503, body: { error: 'Serviço de extração (Gemini) com alta demanda. Tente novamente em instantes.', retryable: true } };
+    return { status: 503, body: { error: 'Serviço de extração (Gemini) está com alta demanda no momento. Tente novamente em alguns instantes.', retryable: true } };
+  }
+  if (/\b402\b|payment required|credits are depleted/i.test(err.message)) {
+    return { status: 402, body: { error: 'Créditos da IA esgotados. Recarregue o saldo no Google AI Studio (ai.studio) e tente novamente.', retryable: false } };
   }
   if (/quota|exceeded/i.test(err.message)) {
-    return { status: 429, body: { error: 'Cota da API Gemini esgotada. Aguarde alguns minutos.', retryable: true } };
+    return { status: 429, body: { error: 'Cota da API Gemini esgotada. Aguarde alguns minutos e tente novamente.', retryable: true } };
   }
   if (err.code === 'gemini_not_configured') {
     return { status: 503, body: { error: err.message } };
@@ -35,7 +38,7 @@ const hashOf = (file) => 'sha256:' + crypto.createHash('sha256').update(file.buf
 async function extractAndValidate(file) {
   let unified;
   try {
-    unified = await extractVoucher(file.buffer, file.mimetype);
+    unified = await voucherExtractor.extractVoucher(file.buffer, file.mimetype);
   } catch (err) {
     throw mapExtractionError(err);
   }
@@ -55,7 +58,7 @@ function referenceOf(v) {
 /** Print/PDF só com voos: extrai e normaliza os trechos ({ carrier, locator, trips }), ainda sem mesclar. */
 async function extractFlightsRaw(file, oldVoucher) {
   try {
-    return await extractFlights(file.buffer, file.mimetype, referenceOf(oldVoucher));
+    return await voucherExtractor.extractFlights(file.buffer, file.mimetype, referenceOf(oldVoucher));
   } catch (err) {
     throw mapExtractionError(err);
   }
