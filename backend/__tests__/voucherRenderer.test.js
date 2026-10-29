@@ -1,8 +1,11 @@
-// Mocka o Playwright para não abrir um browser real; captura a URL do goto.
+// Mocka o Playwright para não abrir um browser real; captura a URL do goto e opções de launch.
 let lastGotoUrl = null;
+let lastLaunchOpts = null;
 jest.mock('playwright', () => ({
   chromium: {
-    launch: async () => ({
+    launch: async (opts) => {
+      lastLaunchOpts = opts;
+      return {
       newContext: async () => ({
         addCookies: async () => {},
         newPage: async () => ({
@@ -14,14 +17,25 @@ jest.mock('playwright', () => ({
         })
       }),
       close: async () => {}
-    })
+    };
+    }
   }
 }));
 
 const { renderVoucher, renderPackageFlightPdf, renderPreviewToFile } = require('../services/voucherRenderer');
 
 describe('voucherRenderer', () => {
-  beforeEach(() => { lastGotoUrl = null; });
+  beforeEach(() => { lastGotoUrl = null; lastLaunchOpts = null; });
+
+  test('launch do Chromium inclui headless e flags de container (--disable-dev-shm-usage, --disable-gpu)', async () => {
+    await renderVoucher({ voucherId: 1, format: 'pdf', cookieHeader: 's=1', baseUrl: 'http://localhost:3000' });
+    expect(lastLaunchOpts).toBeDefined();
+    expect(lastLaunchOpts.headless).toBe(true);
+    expect(lastLaunchOpts.args).toContain('--no-sandbox');
+    expect(lastLaunchOpts.args).toContain('--disable-setuid-sandbox');
+    expect(lastLaunchOpts.args).toContain('--disable-dev-shm-usage');
+    expect(lastLaunchOpts.args).toContain('--disable-gpu');
+  });
 
   test('renderVoucher navega para /voucher-preview/:id', async () => {
     const out = await renderVoucher({ voucherId: 42, format: 'pdf', cookieHeader: 'cvv.sid=x', baseUrl: 'http://localhost:3000' });

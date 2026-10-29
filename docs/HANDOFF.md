@@ -191,7 +191,7 @@ Specs/planos: `docs/superpowers/specs/2026-10-26-otimizacao-mobile-design.md` e 
 - [x] **Apagar a branch antiga `feat/banco-fundos-promo` do remote `fork`** (memória `project-fork-branch-cleanup`): executado `git push fork --delete feat/banco-fundos-promo` com confirmação da usuária em 2026-10-29.
 
 ### 9.2b Tarefas que a usuária pediu para **deixar para depois** (não fazer sem ela pedir)
-- [ ] Alinhar os argumentos do Chromium em `backend/services/voucherRenderer.js` ao scraper (`--disable-dev-shm-usage`, `--disable-gpu`; o scraper já removeu `--single-process`).
+- [x] Argumentos do Chromium em `backend/services/voucherRenderer.js` alinhados ao scraper e promoRenderer (`--disable-dev-shm-usage`, `--disable-gpu`, `headless: true`). Suíte 100% verde (747/747).
 - [x] Texto "RESERVA CONFIRMADA — Sua viagem está pronta" → "VOO REAJUSTADO…" (concluído em 9.2).
 - [x] Apagar a branch `feat/banco-fundos-promo` no remote `fork` (concluído em 9.2).
 - [ ] Reduzir o `pagefile.sys` (27 GB) / decidir sobre a VM do app Claude (7,9 GB) no disco C: — assunto da máquina dela, ver memória `project_pagefile_reduzir`.

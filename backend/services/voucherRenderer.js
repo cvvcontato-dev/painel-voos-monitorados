@@ -13,12 +13,18 @@ const WATERMARK_CSS = `
 async function renderPreviewToFile({ previewPath, outNameBase, format, cookieHeader, baseUrl }) {
   // Em produção (Docker) usamos o Chromium do sistema apontado por env;
   // em dev, Playwright cai pro browser baixado dele mesmo.
-  const launchOpts = {};
+  const launchOpts = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
+  };
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
     launchOpts.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   }
-  // Em container sem privilégios elevados, --no-sandbox é necessário.
-  launchOpts.args = ['--no-sandbox', '--disable-setuid-sandbox'];
   const browser = await chromium.launch(launchOpts);
   try {
     const context = await browser.newContext({ viewport: { width: 820, height: 1200 }, colorScheme: 'light' });
