@@ -187,6 +187,10 @@ router.get('/:id', (req, res) => {
       row.unified = JSON.parse(row.unified_json);
       delete row.unified_json;
       delete row.source_file_path; // server-only path, não expor
+      const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+      const token = signVoucherToken(row.id);
+      row.itinerario_token = token;
+      row.itinerario_url = `${baseUrl}/itinerario/${token}`;
       res.json(row);
     }
   );

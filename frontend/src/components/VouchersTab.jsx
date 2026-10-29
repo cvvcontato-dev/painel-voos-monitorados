@@ -38,28 +38,46 @@ export default function VouchersTab({ showToast }) {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const handleCopyLink = () => {
-    const url = current?.itinerario_url;
+  const [itinerarioUrl, setItinerarioUrl] = useState('');
+
+  const resolveUrl = async () => {
+    if (itinerarioUrl) return itinerarioUrl;
+    if (!selectedId) return null;
+    try {
+      const v = await api.get(selectedId);
+      const url = v?.itinerario_token
+        ? `${window.location.origin}/itinerario/${v.itinerario_token}`
+        : (v?.itinerario_url || null);
+      if (url) {
+        setItinerarioUrl(url);
+        return url;
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const handleCopyLink = async () => {
+    const url = await resolveUrl();
     if (!url) {
-      showToast('Link do itinerário ainda indisponível', 'error');
+      showToast?.('Link do itinerário ainda indisponível', 'error');
       return;
     }
     navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
-      showToast('Link do itinerário copiado!', 'success');
+      showToast?.('Link do itinerário copiado!', 'success');
       setTimeout(() => setCopiedLink(false), 2000);
     }).catch(() => {
-      showToast('Erro ao copiar link', 'error');
+      showToast?.('Erro ao copiar link', 'error');
     });
   };
 
-  const handleShareWhatsApp = () => {
-    const url = current?.itinerario_url;
+  const handleShareWhatsApp = async () => {
+    const url = await resolveUrl();
     if (!url) {
-      showToast('Link do itinerário ainda indisponível', 'error');
+      showToast?.('Link do itinerário ainda indisponível', 'error');
       return;
     }
-    const loc = current?.unified?.reservation?.locator ? ` (Localizador: ${current.unified.reservation.locator})` : '';
+    const loc = current?.reservation?.locator ? ` (Localizador: ${current.reservation.locator})` : '';
     const msg = `Olá! Segue o link com o itinerário e informações da sua viagem${loc}:\n\n${url}\n\nVocê também pode baixar o voucher em PDF diretamente pelo link.`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
@@ -132,6 +150,10 @@ export default function VouchersTab({ showToast }) {
       const unified = v.unified || v;
       setSelectedId(id);
       setCurrent(unified);
+      const url = v?.itinerario_token
+        ? `${window.location.origin}/itinerario/${v.itinerario_token}`
+        : (v?.itinerario_url || '');
+      setItinerarioUrl(url);
       reset({
         reservation: unified.reservation || {},
         passengers: unified.passengers || [],
@@ -267,6 +289,7 @@ export default function VouchersTab({ showToast }) {
       await api.remove(selectedId);
       setSelectedId(null);
       setCurrent(null);
+      setItinerarioUrl('');
       reset({ reservation: {}, passengers: [], trips: [] });
       await refresh();
       showToast?.('Voucher excluído', 'success');
