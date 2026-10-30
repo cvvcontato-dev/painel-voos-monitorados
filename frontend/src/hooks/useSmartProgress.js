@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 export function useSmartProgress() {
   const [state, setState] = useState({
@@ -9,8 +9,10 @@ export function useSmartProgress() {
     isComplete: false,
     error: null,
   });
+  const timerRef = useRef(null);
 
   const start = useCallback((config = {}) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setState({
       isOpen: true,
       title: config.title || 'Processando com Inteligência Artificial',
@@ -25,19 +27,26 @@ export function useSmartProgress() {
     });
   }, []);
 
-  const complete = useCallback(() => {
-    setState(s => ({ ...s, isComplete: true }));
-  }, []);
-
-  const fail = useCallback((errMsg) => {
-    setState(s => ({ ...s, error: errMsg }));
-  }, []);
-
   const close = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setState(s => ({ ...s, isOpen: false }));
   }, []);
 
-  return { ...state, start, complete, fail, close };
+  const complete = useCallback(() => {
+    setState(s => ({ ...s, isComplete: true }));
+    if (timerRef.current) clearTimeout(timerRef.current);
+    // Garante fechamento automático mesmo se o consumidor não amarrar onClose
+    timerRef.current = setTimeout(() => {
+      setState(s => ({ ...s, isOpen: false }));
+    }, 850);
+  }, []);
+
+  const fail = useCallback((errMsg) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setState(s => ({ ...s, error: errMsg }));
+  }, []);
+
+  return { ...state, start, complete, fail, close, onClose: close };
 }
 
 export default useSmartProgress;

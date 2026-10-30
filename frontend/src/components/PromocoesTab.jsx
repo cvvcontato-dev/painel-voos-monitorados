@@ -76,9 +76,10 @@ export default function PromocoesTab({ showToast }) {
         setPromotion(BLANK_PROMOTION());
         setMeta({ low_confidence_fields: [], validation_warnings: [], agency_commission_detected: null });
         smartProgress.complete();
-      setStep('review');
+        setStep('review');
         showToast(err.message, 'error');
       } else {
+        smartProgress.fail(err.message || 'Erro ao processar imagem da promoção');
         showToast(err.message, 'error');
       }
     } finally {
@@ -116,12 +117,12 @@ export default function PromocoesTab({ showToast }) {
   const generate = async () => {
     setLoading(true);
     smartProgress.start({
-      title: 'Lendo Promoção com IA',
-      subtitle: 'Extraindo detalhes de destinos, datas e tarifas...',
+      title: 'Gerando Arte e Mensagens da Promoção',
+      subtitle: 'Formatando imagem profissional e textos para redes sociais...',
       steps: [
-        { title: 'Lendo dados da promoção com IA...', desc: 'Interpretando cidades, cia aérea, datas e valores' },
-        { title: 'Formatando arte e itinerário...', desc: 'Estruturando regras de parcelamento e bagagem' },
-        { title: 'Promoção pronta para revisão!', desc: 'Preenchendo formulário inteligente' }
+        { title: 'Compondo arte com fundo do destino...', desc: 'Aplicando paleta, tipografia e logo da agência' },
+        { title: 'Formatando textos de venda...', desc: 'Criando mensagem de WhatsApp e legenda para Instagram' },
+        { title: 'Material pronto para publicação!', desc: 'Finalizando arte em alta resolução' }
       ]
     });
     try {
@@ -134,6 +135,7 @@ export default function PromocoesTab({ showToast }) {
       smartProgress.complete();
       setStep('result');
     } catch (err) {
+      smartProgress.fail(err.message || 'Erro ao gerar arte da promoção');
       showToast(err.message, 'error');
     } finally {
       setLoading(false);
@@ -240,7 +242,7 @@ export default function PromocoesTab({ showToast }) {
       )}
 
       <BackgroundBank isOpen={bankOpen} onClose={() => setBankOpen(false)} showToast={showToast} />
-      <SmartProcessingModal {...smartProgress} />
+      <SmartProcessingModal {...smartProgress} onClose={smartProgress.close} />
     </div>
   );
 }

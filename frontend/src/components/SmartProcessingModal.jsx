@@ -13,10 +13,13 @@ export default function SmartProcessingModal({
   ],
   isComplete = false,
   error = null,
-  onClose
+  onClose,
+  close
 }) {
-  // Fecha no botão voltar do Android em caso de erro
-  useBackClose(isOpen && !!error, onClose);
+  const handleClose = onClose || close;
+
+  // Fecha no botão voltar do Android em caso de erro ou ao concluir
+  useBackClose(isOpen && (!!error || isComplete), handleClose);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progressPercent, setProgressPercent] = useState(15);
@@ -34,7 +37,7 @@ export default function SmartProcessingModal({
       setCurrentStepIndex(steps.length);
       setProgressPercent(100);
       const timer = setTimeout(() => {
-        onClose?.();
+        handleClose?.();
       }, 750);
       return () => clearTimeout(timer);
     }
@@ -57,16 +60,26 @@ export default function SmartProcessingModal({
       clearTimeout(timer1);
       clearTimeout(timer2);
     };
-  }, [isOpen, isComplete, error, steps.length, onClose]);
+  }, [isOpen, isComplete, error, steps.length, handleClose]);
 
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget && (error || isComplete)) {
+      handleClose?.();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-md animate-fade-in">
+    <div
+      onClick={handleBackdropClick}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-md animate-fade-in"
+    >
       <div
         className="w-full max-w-md max-h-[92dvh] overflow-y-auto bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-200 dark:border-slate-800 relative"
         role="dialog"
         aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Barra superior de gradiente decorativa */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-500" />
@@ -99,9 +112,9 @@ export default function SmartProcessingModal({
             </p>
           </div>
 
-          {error && (
+          {(error || isComplete) && (
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="w-11 h-11 -mr-2 -mt-2 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               aria-label="Fechar"
             >
@@ -195,7 +208,7 @@ export default function SmartProcessingModal({
             <div className="flex justify-end pt-1">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm cursor-pointer flex items-center justify-center"
               >
                 Fechar e tentar novamente
