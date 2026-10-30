@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   UploadCloud, Download, Copy, Check, Sparkles, Image as ImageIcon,
   Trash2, Camera, Palette, ArrowLeft, ArrowRight, Eye, Settings, Sliders,
-  MessageSquare, Heart, Bookmark, Send, User, Compass, PlaneTakeoff, Home
+  MessageSquare, Heart, Bookmark, Send, User, Compass, PlaneTakeoff, Home,
+  Maximize2, Move, RotateCcw, LayoutTemplate, Layers
 } from 'lucide-react';
 import defaultLogo from '../assets/logo-oficial.png';
 
@@ -168,25 +169,21 @@ function drawHeartPlaneTrail(ctx, startX, startY) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Desenha o laço em formato de coração
   ctx.beginPath();
   ctx.moveTo(startX, startY);
   ctx.bezierCurveTo(startX - 25, startY - 30, startX - 55, startY + 5, startX, startY + 35);
   ctx.bezierCurveTo(startX + 55, startY + 5, startX + 25, startY - 30, startX, startY);
   ctx.stroke();
 
-  // Curva elegante de decolagem saindo do coração em direção ao avião
   ctx.beginPath();
   ctx.moveTo(startX, startY + 35);
   ctx.bezierCurveTo(startX + 30, startY + 55, startX + 80, startY + 30, startX + 105, startY - 15);
   ctx.stroke();
 
-  // Desenha o aviãozinho branco no final do rastro
   const px = startX + 112;
   const py = startY - 22;
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  // Silhueta de avião estilizado
   ctx.moveTo(px + 28, py);
   ctx.lineTo(px - 14, py - 20);
   ctx.lineTo(px - 6, py - 5);
@@ -243,10 +240,16 @@ export default function DepoimentosTab({ showToast }) {
     'Boa viagem, Zélia e família! ✈️✨ Que seu destino seja repleto de momentos incríveis. Agradecemos sua confiança em nosso trabalho e por nos permitir fazer parte dessa jornada!'
   );
   const [activeCategory, setActiveCategory] = useState('embarque');
-  const [photoZoom, setPhotoZoom] = useState(105);           // Zoom na moldura: 100% a 180%
-  const [photoOffsetY, setPhotoOffsetY] = useState(0);       // Ajuste vertical: -150px a +150px
-  const [showTopTag, setShowTopTag] = useState(true);        // Exibir sticker superior
-  const [blueIntensity, setBlueIntensity] = useState(82);    // 60 a 95% de opacidade do azul sobre a foto de fundo
+
+  // Controles de Enquadramento Inteligente e Formato da Moldura
+  const [frameFormat, setFrameFormat] = useState('auto');       // 'auto' | 'landscape' (4:3) | 'square' (1:1) | 'portrait' (4:5)
+  const [fitMode, setFitMode] = useState('cover');              // 'cover' (preencher) | 'contain' (sem cortes)
+  const [photoZoom, setPhotoZoom] = useState(100);              // Zoom: 70% a 180%
+  const [photoOffsetX, setPhotoOffsetX] = useState(0);          // Ajuste Horizontal: -250px a +250px
+  const [photoOffsetY, setPhotoOffsetY] = useState(0);          // Ajuste Vertical: -250px a +250px
+  const [stickerPos, setStickerPos] = useState('auto');         // 'auto' | 'bottom-card' | 'overlay'
+  const [showTopTag, setShowTopTag] = useState(true);           // Exibir sticker superior
+  const [blueIntensity, setBlueIntensity] = useState(82);       // 60 a 95% de opacidade do azul sobre a foto de fundo
 
   const [generating, setGenerating] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
@@ -292,7 +295,7 @@ export default function DepoimentosTab({ showToast }) {
     reader.readAsDataURL(file);
   }, [showToast]);
 
-  // Carrega foto dos passageiros (Modo 2)
+  // Carrega foto dos passageiros (Modo 2) com detecção inteligente de proporção
   const handleClientPhotoFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
@@ -300,9 +303,19 @@ export default function DepoimentosTab({ showToast }) {
       const img = new Image();
       img.onload = () => {
         setClientPhoto(img);
-        // Usa automaticamente a mesma foto como fundo monocromático se ainda não houver
         if (!bgImage) setBgImage(img);
-        showToast?.('Foto dos clientes carregada na moldura!', 'success');
+
+        // Auto-detecta se a foto é horizontal ou vertical para sugerir a melhor experiência
+        const ratio = img.width / img.height;
+        if (ratio >= 1.18) {
+          showToast?.('Foto horizontal detectada! Moldura adaptada automaticamente.', 'success');
+        } else {
+          showToast?.('Foto dos clientes carregada na moldura!', 'success');
+        }
+        // Reseta offsets para centralizar
+        setPhotoOffsetX(0);
+        setPhotoOffsetY(0);
+        setPhotoZoom(100);
       };
       img.src = e.target.result;
     };
@@ -345,11 +358,6 @@ export default function DepoimentosTab({ showToast }) {
     return () => window.removeEventListener('paste', handlePaste);
   }, [storyMode, handlePrintFile, handleClientPhotoFile]);
 
-  // Atualiza mensagem ao trocar nome do cliente
-  const handleClientNameChange = (name) => {
-    setClientName(name);
-  };
-
   // Aplica preset do Modo Repost
   const applyRepostPreset = (category, msgTemplate) => {
     setActiveCategory(category.id);
@@ -368,7 +376,6 @@ export default function DepoimentosTab({ showToast }) {
     canvas.width = W;
     canvas.height = H;
 
-    // Foto a ser usada de fundo: no Modo 2 é clientPhoto ou bgImage
     const activeBg = storyMode === 'repost' ? (clientPhoto || bgImage) : bgImage;
 
     // 1. FUNDO: Foto com overlay azul escuro OU degradê institucional
@@ -390,7 +397,6 @@ export default function DepoimentosTab({ showToast }) {
       }
       ctx.drawImage(activeBg, sX, sY, sW, sH, 0, 0, W, H);
 
-      // Camada de tonalização azul da marca sobre a foto
       const alpha = blueIntensity / 100;
       const overlayGrad = ctx.createLinearGradient(0, 0, 0, H);
       overlayGrad.addColorStop(0, `rgba(0, 86, 158, ${alpha})`);
@@ -418,7 +424,6 @@ export default function DepoimentosTab({ showToast }) {
     // MODO 1: PRINT DE WHATSAPP (FEEDBACK)
     // ────────────────────────────────────────────────────────────────────────
     if (storyMode === 'feedback') {
-      // Marcas d'água FEEDBACK
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '900 115px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -426,7 +431,6 @@ export default function DepoimentosTab({ showToast }) {
       drawSpacedText(ctx, 'FEEDBACK', W / 2, 130, 24);
       drawSpacedText(ctx, 'FEEDBACK', W / 2, 1830, 24);
 
-      // Card do print
       const printTopY = 270;
       const maxCardW = 900;
       const maxCardH = 760;
@@ -493,7 +497,6 @@ export default function DepoimentosTab({ showToast }) {
         ctx.fillText('(O depoimento aparecerá nesta posição)', W / 2, py + ph / 2 + 26);
       }
 
-      // Textos humanizados
       const textStartY = Math.max(cardBottomY + 70, 1120);
       ctx.font = 'bold 44px "Georgia", "Times New Roman", serif';
       ctx.fillStyle = '#ffffff';
@@ -531,14 +534,12 @@ export default function DepoimentosTab({ showToast }) {
     const stripeY = 1180;
     const stripeH = 500;
 
-    // Fundo branco da coluna REPOST
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     drawRoundRect(ctx, stripeX, stripeY, stripeW + 10, stripeH, 20);
     ctx.fill();
 
-    // Círculo azul com ícone de aviãozinho
     const circleCenterX = stripeX + stripeW / 2;
     const circleCenterY = stripeY + 68;
     ctx.fillStyle = '#00569e';
@@ -546,7 +547,6 @@ export default function DepoimentosTab({ showToast }) {
     ctx.arc(circleCenterX, circleCenterY, 36, 0, Math.PI * 2);
     ctx.fill();
 
-    // Desenha avião branco dentro do círculo
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.moveTo(circleCenterX + 16, circleCenterY);
@@ -560,7 +560,6 @@ export default function DepoimentosTab({ showToast }) {
     ctx.closePath();
     ctx.fill();
 
-    // Texto vertical REPOST
     ctx.save();
     ctx.translate(circleCenterX, stripeY + 230);
     ctx.rotate(Math.PI / 2);
@@ -574,11 +573,38 @@ export default function DepoimentosTab({ showToast }) {
     ctx.restore();
     ctx.restore();
 
-    // 4. MOLDURA BRANCA ESTILO INSTAGRAM / POLAROID
-    const frameX = 40;
-    const frameY = 150;
+    // 4. CÁLCULO INTELIGENTE DO FORMATO DA MOLDURA (Adaptativo para fotos horizontais ou verticais)
+    const imgRatio = clientPhoto ? (clientPhoto.width / clientPhoto.height) : 1.0;
+    let effectiveFormat = frameFormat;
+    if (effectiveFormat === 'auto') {
+      if (imgRatio >= 1.18) effectiveFormat = 'landscape';      // 4:3 Horizontal
+      else if (imgRatio >= 0.92) effectiveFormat = 'square';     // 1:1 Quadrada
+      else effectiveFormat = 'portrait';                         // 4:5 Vertical
+    }
+
     const frameW = 860;
-    const frameH = 1270;
+    const frameX = 40;
+    const photoPad = 20;
+    const photoW = frameW - (photoPad * 2); // 820px
+    let photoH;
+    let frameY;
+
+    if (effectiveFormat === 'landscape') {
+      photoH = 615; // Proporção 4:3 perfeita para fotos deitadas/selfies horizontais
+      frameY = 320;
+    } else if (effectiveFormat === 'square') {
+      photoH = 820; // 1:1 Quadrada
+      frameY = 240;
+    } else {
+      photoH = 1060; // 4:5 Retrato clássico
+      frameY = 160;
+    }
+
+    const barH = 74;
+    const frameH = photoPad + photoH + barH + 16;
+    const photoX = frameX + photoPad;
+    const photoY = frameY + photoPad;
+    const photoRadius = 24;
 
     // Sombra suave sob a moldura branca
     ctx.save();
@@ -597,35 +623,42 @@ export default function DepoimentosTab({ showToast }) {
     drawRoundRect(ctx, frameX, frameY, frameW, frameH, 32);
     ctx.fill();
 
-    // Área interna da foto dos passageiros
-    const photoPad = 20;
-    const photoX = frameX + photoPad;
-    const photoY = frameY + photoPad;
-    const photoW = frameW - (photoPad * 2); // 820px
-    const photoH = 1110;                   // Altura da foto dentro da moldura
-    const photoRadius = 24;
-
+    // 5. DESENHO DA FOTO NA MOLDURA (com suporte a Fit/Cover, Zoom e Deslocamento X e Y)
     if (clientPhoto) {
       ctx.save();
       ctx.beginPath();
       drawRoundRect(ctx, photoX, photoY, photoW, photoH, photoRadius);
       ctx.clip();
 
-      // Ajustes de Zoom e Posição Vertical
-      const zoom = photoZoom / 100;
+      // Fundo branco interno da moldura
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(photoX, photoY, photoW, photoH);
+
       const targetRatio = photoW / photoH;
-      const imgRatio = clientPhoto.width / clientPhoto.height;
+      const zoom = photoZoom / 100;
       let dW, dH;
 
-      if (imgRatio > targetRatio) {
-        dH = photoH * zoom;
-        dW = (clientPhoto.width / clientPhoto.height) * dH;
+      if (fitMode === 'contain') {
+        // Modo Foto Completa (Sem Cortes)
+        if (imgRatio > targetRatio) {
+          dW = photoW * zoom;
+          dH = (clientPhoto.height / clientPhoto.width) * dW;
+        } else {
+          dH = photoH * zoom;
+          dW = (clientPhoto.width / clientPhoto.height) * dH;
+        }
       } else {
-        dW = photoW * zoom;
-        dH = (clientPhoto.height / clientPhoto.width) * dW;
+        // Modo Preencher (Cover)
+        if (imgRatio > targetRatio) {
+          dH = photoH * zoom;
+          dW = (clientPhoto.width / clientPhoto.height) * dH;
+        } else {
+          dW = photoW * zoom;
+          dH = (clientPhoto.height / clientPhoto.width) * dW;
+        }
       }
 
-      const dX = photoX + (photoW - dW) / 2;
+      const dX = photoX + (photoW - dW) / 2 + photoOffsetX;
       const dY = photoY + (photoH - dH) / 2 + photoOffsetY;
 
       ctx.drawImage(clientPhoto, dX, dY, dW, dH);
@@ -653,12 +686,12 @@ export default function DepoimentosTab({ showToast }) {
       ctx.fillText('Envie a foto dos passageiros aqui', photoX + photoW / 2, photoY + photoH / 2 - 25);
       ctx.font = '24px -apple-system, sans-serif';
       ctx.fillStyle = '#64748b';
-      ctx.fillText('(No avião, no aeroporto ou no destino)', photoX + photoW / 2, photoY + photoH / 2 + 25);
+      ctx.fillText('(Vertical ou horizontal — adaptamos automaticamente)', photoX + photoW / 2, photoY + photoH / 2 + 25);
       ctx.restore();
     }
 
-    // 5. BARRA DE ENGAJAMENTO INFERIOR (Estilo Instagram)
-    const barY = frameY + frameH - 74;
+    // 6. BARRA DE ENGAJAMENTO INFERIOR (Estilo Instagram)
+    const barY = frameY + frameH - 48;
     ctx.save();
     ctx.strokeStyle = '#00569e';
     ctx.fillStyle = '#00569e';
@@ -666,16 +699,10 @@ export default function DepoimentosTab({ showToast }) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Coração preenchido azul
     drawHeart(ctx, frameX + 68, barY - 14, 32, true);
-
-    // Balão de comentário
     drawChatBubble(ctx, frameX + 138, barY - 2, 32);
-
-    // Aviãozinho de compartilhar
     drawPaperPlane(ctx, frameX + 210, barY - 2, 34);
 
-    // Nome da família / cliente na barra
     if (clientName) {
       ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'left';
@@ -683,11 +710,10 @@ export default function DepoimentosTab({ showToast }) {
       ctx.fillText(clientName.trim(), frameX + 265, barY - 2);
     }
 
-    // Ícone de Bookmark (Salvar) à direita
     drawBookmark(ctx, frameX + frameW - 65, barY - 2, 32);
     ctx.restore();
 
-    // 6. STICKERS / ADESIVOS DE TEXTO FLUTUANTES (Estilo Instagram Story)
+    // 7. STICKERS / ADESIVOS DE TEXTO FLUTUANTES (Estilo Instagram Story)
 
     // A) STICKER SUPERIOR (Tag de Destaque / Embarque)
     if (showTopTag && repostTag.trim()) {
@@ -698,26 +724,25 @@ export default function DepoimentosTab({ showToast }) {
       const tagPadY = 16;
       const tagW = ctx.measureText(tagText).width + tagPadX * 2;
       const tagH = 58;
-      const tagX = frameX + 35;
-      const tagY = frameY + 35;
 
-      // Sombra suave do sticker
+      // Se a moldura for horizontal, a tag fica elegante no topo do Story (y: 220px)
+      // Se for vertical, sobrepõe no topo da moldura
+      let tagX = frameX + 35;
+      let tagY = effectiveFormat === 'landscape' ? (frameY - tagH - 25) : (frameY + 35);
+
       ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
       ctx.shadowBlur = 16;
       ctx.shadowOffsetY = 6;
 
-      // Fundo azul clarinho suave
       ctx.fillStyle = '#e8f2fc';
       ctx.beginPath();
       drawRoundRect(ctx, tagX, tagY, tagW, tagH, 16);
       ctx.fill();
 
-      // Borda sutil
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Texto em azul marinho forte
       ctx.shadowColor = 'transparent';
       ctx.fillStyle = '#004782';
       ctx.textAlign = 'left';
@@ -726,63 +751,111 @@ export default function DepoimentosTab({ showToast }) {
       ctx.restore();
     }
 
-    // B) STICKER PRINCIPAL DE MENSAGEM (Sobreposto no canto inferior da foto)
+    // B) STICKER PRINCIPAL DE MENSAGEM
     if (repostMessage.trim()) {
       ctx.save();
-      const msgPadX = 28;
-      const msgPadY = 22;
-      const maxMsgW = 540; // Largura confortável do sticker
-      ctx.font = 'bold 26px "Georgia", "Times New Roman", serif';
 
-      const msgLines = wrapText(ctx, repostMessage, maxMsgW);
-      const lineH = 38;
-      const boxH = (msgLines.length * lineH) + (msgPadY * 2);
-
-      // Calcula a largura real do texto mais largo
-      let actualMaxTextW = 0;
-      for (let l of msgLines) {
-        const lw = ctx.measureText(l).width;
-        if (lw > actualMaxTextW) actualMaxTextW = lw;
+      // Posição inteligente:
+      // Se a moldura for horizontal (landscape) ou quadrada (square), posiciona ABAIXO da moldura
+      // para NUNCA tampar o rosto de quem está na foto!
+      // Se for vertical (portrait), posiciona sobreposto no canto inferior da foto.
+      let effectiveStickerPos = stickerPos;
+      if (effectiveStickerPos === 'auto') {
+        effectiveStickerPos = effectiveFormat === 'portrait' ? 'overlay' : 'bottom-card';
       }
-      const boxW = actualMaxTextW + (msgPadX * 2);
 
-      // Posição: canto inferior direito da moldura
-      const boxX = frameX + frameW - boxW - 25;
-      const boxY = (photoY + photoH) - boxH - 15;
+      if (effectiveStickerPos === 'bottom-card') {
+        // Card amplo e elegante ABAIXO da moldura
+        const msgPadX = 36;
+        const msgPadY = 28;
+        const maxMsgW = 780; // Largura nobre
+        ctx.font = 'bold 27px "Georgia", "Times New Roman", serif';
 
-      // Sombra realista do sticker
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
+        const msgLines = wrapText(ctx, repostMessage, maxMsgW);
+        const lineH = 42;
+        const boxH = (msgLines.length * lineH) + (msgPadY * 2);
 
-      // Fundo azul clarinho do adesivo
-      ctx.fillStyle = '#e3effa';
-      ctx.beginPath();
-      drawRoundRect(ctx, boxX, boxY, boxW, boxH, 20);
-      ctx.fill();
+        let actualMaxTextW = 0;
+        for (let l of msgLines) {
+          const lw = ctx.measureText(l).width;
+          if (lw > actualMaxTextW) actualMaxTextW = lw;
+        }
+        const boxW = Math.min(Math.max(actualMaxTextW + (msgPadX * 2), 680), 860);
+        const boxX = frameX + (frameW - boxW) / 2;
+        const boxY = frameY + frameH + 30; // 30px abaixo da moldura
 
-      // Borda branca do sticker
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.28)';
+        ctx.shadowBlur = 28;
+        ctx.shadowOffsetY = 10;
 
-      // Texto do sticker em azul escuro nítido
-      ctx.shadowColor = 'transparent';
-      ctx.fillStyle = '#003d73';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
+        ctx.fillStyle = '#e3effa';
+        ctx.beginPath();
+        drawRoundRect(ctx, boxX, boxY, boxW, boxH, 24);
+        ctx.fill();
 
-      msgLines.forEach((line, idx) => {
-        ctx.fillText(line, boxX + msgPadX, boxY + msgPadY + (idx * lineH));
-      });
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#003d73';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        msgLines.forEach((line, idx) => {
+          ctx.fillText(line, boxX + boxW / 2, boxY + msgPadY + (idx * lineH));
+        });
+      } else {
+        // Card sobreposto no canto inferior direito da foto
+        const msgPadX = 28;
+        const msgPadY = 22;
+        const maxMsgW = 540;
+        ctx.font = 'bold 26px "Georgia", "Times New Roman", serif';
+
+        const msgLines = wrapText(ctx, repostMessage, maxMsgW);
+        const lineH = 38;
+        const boxH = (msgLines.length * lineH) + (msgPadY * 2);
+
+        let actualMaxTextW = 0;
+        for (let l of msgLines) {
+          const lw = ctx.measureText(l).width;
+          if (lw > actualMaxTextW) actualMaxTextW = lw;
+        }
+        const boxW = actualMaxTextW + (msgPadX * 2);
+
+        const boxX = frameX + frameW - boxW - 25;
+        const boxY = (photoY + photoH) - boxH - 15;
+
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 8;
+
+        ctx.fillStyle = '#e3effa';
+        ctx.beginPath();
+        drawRoundRect(ctx, boxX, boxY, boxW, boxH, 20);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#003d73';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        msgLines.forEach((line, idx) => {
+          ctx.fillText(line, boxX + msgPadX, boxY + msgPadY + (idx * lineH));
+        });
+      }
+
       ctx.restore();
     }
 
-    // 7. LOGO OFICIAL DA AGÊNCIA (Centralizada na base)
+    // 8. LOGO OFICIAL DA AGÊNCIA (Centralizada na base)
     const logoY = 1620;
     const logoSize = 145;
     if (logoImgObj && logoImgObj.complete) {
-      // Centralizado em relação à moldura principal
       const logoX = (frameX + frameW) / 2 - logoSize / 2;
       ctx.drawImage(logoImgObj, logoX, logoY, logoSize, logoSize);
     } else {
@@ -795,7 +868,8 @@ export default function DepoimentosTab({ showToast }) {
   }, [
     storyMode, printImage, bgImage, clientPhoto, logoImgObj,
     storyTitle, storyMessage, imageScale,
-    clientName, repostTag, repostMessage, photoZoom, photoOffsetY, showTopTag, blueIntensity
+    clientName, repostTag, repostMessage,
+    frameFormat, fitMode, photoZoom, photoOffsetX, photoOffsetY, stickerPos, showTopTag, blueIntensity
   ]);
 
   useEffect(() => {
@@ -827,7 +901,7 @@ export default function DepoimentosTab({ showToast }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const tag = storyMode === 'repost' ? 'Embarque-Clientes' : 'Feedback';
-        a.download = `Story-${tag}-${clientName.replace(/\s+/g, '-') || 'ClubeDoVoo'}-${Date.now()}.png`;
+        a.download = `Story-${tag}-${(clientName || 'ClubeDoVoo').replace(/\s+/g, '-')}-${Date.now()}.png`;
         a.href = url;
         document.body.appendChild(a);
         a.click();
@@ -885,7 +959,7 @@ export default function DepoimentosTab({ showToast }) {
             <Camera className="w-4 h-4 shrink-0" />
             <div className="text-left">
               <span className="block leading-tight">📸 Foto no Aeroporto / Voo</span>
-              <span className="text-[10px] opacity-80 font-normal hidden sm:block">Moldura Instagram + Repost</span>
+              <span className="text-[10px] opacity-80 font-normal hidden sm:block">Moldura Adaptativa (Vertical ou Horizontal)</span>
             </div>
           </button>
 
@@ -953,7 +1027,7 @@ export default function DepoimentosTab({ showToast }) {
              ═══════════════════════════════════════════════════════════════════ */}
           {storyMode === 'repost' ? (
             <>
-              {/* Bloco 1: Foto do Cliente */}
+              {/* Bloco 1: Foto do Cliente & Enquadramento */}
               <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 bg-white dark:bg-slate-900 shadow-sm space-y-4">
                 <div className="flex items-center justify-between min-h-[44px]">
                   <div>
@@ -962,7 +1036,7 @@ export default function DepoimentosTab({ showToast }) {
                       1. Foto dos Passageiros
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Foto enviada pelo cliente no avião, aeroporto ou destino
+                      Suporta fotos em pé, deitadas (selfies horizontais) ou quadradas
                     </p>
                   </div>
                   {clientPhoto && (
@@ -984,7 +1058,7 @@ export default function DepoimentosTab({ showToast }) {
                     <div className="flex items-center justify-center gap-3">
                       <Check className="w-5 h-5 text-emerald-600 shrink-0" />
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                        Foto carregada! Clique para trocar ou cole com Ctrl+V.
+                        Foto carregada ({clientPhoto.width}×{clientPhoto.height}px)! Clique para trocar.
                       </span>
                     </div>
                   ) : (
@@ -1007,36 +1081,166 @@ export default function DepoimentosTab({ showToast }) {
                   />
                 </div>
 
-                {/* Ajustes de Enquadramento e Zoom */}
+                {/* Seletor de Formato da Moldura */}
+                <div className="pt-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <LayoutTemplate className="w-3.5 h-3.5" /> Formato da Moldura do Instagram
+                    </span>
+                    {clientPhoto && (
+                      <span className="text-[10px] font-normal text-slate-400 font-mono">
+                        Foto: {clientPhoto.width > clientPhoto.height ? 'Horizontal' : 'Vertical'}
+                      </span>
+                    )}
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFrameFormat('auto')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        frameFormat === 'auto'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <span>⚡ Auto (Ideal)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFrameFormat('landscape')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        frameFormat === 'landscape'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="text-base leading-none">📷</span>
+                      <span>Horizontal (4:3)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFrameFormat('square')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        frameFormat === 'square'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="text-base leading-none">⬛</span>
+                      <span>Quadrada (1:1)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFrameFormat('portrait')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        frameFormat === 'portrait'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="text-base leading-none">📱</span>
+                      <span>Vertical (4:5)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modo de Encaixe (Preencher vs Sem Cortes) */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                    <Maximize2 className="w-3.5 h-3.5" /> Encaixe da Foto
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFitMode('cover')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        fitMode === 'cover'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 font-bold'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>🖼️ Preencher Moldura</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFitMode('contain')}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        fitMode === 'contain'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 dark:bg-indigo-950/70 dark:border-indigo-500 dark:text-indigo-200 font-bold'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>🔍 Foto Inteira (Sem Cortes)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ajustes Finos de Posição e Zoom */}
                 {clientPhoto && (
-                  <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3 rounded-xl">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                        <Move className="w-3.5 h-3.5 text-indigo-500" /> Ajuste Fino de Enquadramento
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoOffsetX(0);
+                          setPhotoOffsetY(0);
+                          setPhotoZoom(100);
+                        }}
+                        className="text-[11px] text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1 cursor-pointer"
+                        title="Resetar enquadramento"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Centralizar
+                      </button>
+                    </div>
+
+                    {/* Deslocamento Horizontal X */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                          <Sliders className="w-3.5 h-3.5" /> Posição Vertical (Enquadrar Rosto)
-                        </label>
-                        <span className="text-xs font-mono text-indigo-600">{photoOffsetY}px</span>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-600 dark:text-slate-300">Posição Horizontal (Esquerda / Direita)</span>
+                        <span className="font-mono text-indigo-600 font-semibold">{photoOffsetX}px</span>
                       </div>
                       <input
                         type="range"
-                        min={-150}
-                        max={150}
+                        min={-250}
+                        max={250}
+                        value={photoOffsetX}
+                        onChange={e => setPhotoOffsetX(parseInt(e.target.value, 10))}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Deslocamento Vertical Y */}
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-600 dark:text-slate-300">Posição Vertical (Cima / Baixo)</span>
+                        <span className="font-mono text-indigo-600 font-semibold">{photoOffsetY}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-250}
+                        max={250}
                         value={photoOffsetY}
                         onChange={e => setPhotoOffsetY(parseInt(e.target.value, 10))}
                         className="w-full accent-indigo-600 cursor-pointer"
                       />
                     </div>
 
+                    {/* Zoom */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                          <Sliders className="w-3.5 h-3.5" /> Zoom da Foto na Moldura
-                        </label>
-                        <span className="text-xs font-mono text-indigo-600">{photoZoom}%</span>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-slate-600 dark:text-slate-300">Zoom da Imagem</span>
+                        <span className="font-mono text-indigo-600 font-semibold">{photoZoom}%</span>
                       </div>
                       <input
                         type="range"
-                        min={100}
+                        min={70}
                         max={180}
                         value={photoZoom}
                         onChange={e => setPhotoZoom(parseInt(e.target.value, 10))}
@@ -1062,7 +1266,7 @@ export default function DepoimentosTab({ showToast }) {
                   <input
                     type="text"
                     value={clientName}
-                    onChange={e => handleClientNameChange(e.target.value)}
+                    onChange={e => setClientName(e.target.value)}
                     placeholder="Ex: Zélia e família, Jonatas, Ane, Vanessa..."
                     className="w-full px-3.5 py-2.5 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
                   />
@@ -1117,7 +1321,7 @@ export default function DepoimentosTab({ showToast }) {
                 {/* Sticker Principal (Edição Livre) */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
-                    Texto do Adesivo Principal (Sobre a foto)
+                    Texto do Adesivo Principal
                   </label>
                   <textarea
                     rows={3}
@@ -1125,6 +1329,48 @@ export default function DepoimentosTab({ showToast }) {
                     onChange={e => setRepostMessage(e.target.value)}
                     className="w-full p-3 text-base md:text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed min-h-[80px]"
                   />
+                </div>
+
+                {/* Posicionamento do Sticker de Mensagem */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" /> Posição do Adesivo de Mensagem
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStickerPos('auto')}
+                      className={`p-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                        stickerPos === 'auto'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 font-bold'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      ⚡ Auto (Inteligente)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStickerPos('bottom-card')}
+                      className={`p-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                        stickerPos === 'bottom-card'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 font-bold'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      📜 Abaixo da Moldura
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStickerPos('overlay')}
+                      className={`p-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                        stickerPos === 'overlay'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-900 font-bold'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      🏷️ Sobre a Foto
+                    </button>
+                  </div>
                 </div>
 
                 {/* Sticker Superior Opcional (Tag) */}
